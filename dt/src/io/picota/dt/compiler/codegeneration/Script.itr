@@ -1,0 +1,39 @@
+rule type(kan)
+	from torch import nn
+    from torch.utils.data import DataLoader
+
+    from DatasetLoader import DatasetLoader
+    from InputDataset import InputDataset
+    from kan.KanTrainer import KanTrainer
+    from mappers.NormalizationMapper import NormalizationMapper
+
+    path = "$sourceFile"
+    col_sep = "$separator"
+    variables = [$variables+format+quoted...[, ]]
+    cyclicVariables = [$cyclic+quoted...[, ]]
+    normalizedVariables = [$normalized+quoted...[, ]]
+    output_variable = "watts"
+    device = "cpu"
+    batch_size = 2
+    experiments = 20
+    epochs = 5
+    lr = 0.001
+    loss_fn = nn.MSELoss()
+    validation_loss_fn = nn.L1Loss()
+    test_proportion = 0.2
+    validation_proportion = 0.16
+
+    dt = DatasetLoader(path, col_sep, variables).load()
+    dt = NormalizationMapper(normalizedVariables).map(dt)
+    dt = CyclicMapper(cyclicVariables).map(dt)
+    dataset = InputDataset(dt, output_variable)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    (KanTrainer(variables, experiments, batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
+                .train(dataset))
+
+
+rule type(cyclic) and trigger(format)
+	$name~_sin, $name~_cos
+
+rule trigger(quoted)
+	"$name"

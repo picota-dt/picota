@@ -1,0 +1,21 @@
+dsl Legio
+
+Artifact("io.picota", "1.0.0") dt
+	Dsl("Proteo", "1.0.4")
+		Builder("io.intino.magritte", "builder", "7.0.7", "dsl")
+		OutputDsl(name = "Picota")
+			Builder("io.intino", "picota") as ArtifactVersionFollower
+			Runtime(empty, empty, empty)
+	Imports
+		Compile("io.intino", "builder-interface", "2.2.0")
+		Compile("io.intino.itrules", "engine", "2.0.0")
+		Compile("io.intino.magritte", "builder", "7.0.7")
+		Compile("tara.dsl", "Picota") as ArtifactVersionFollower
+		Compile("io.intino.alexandria", "logger", "2.1.0")
+		Compile("commons-io","commons-io","2.18.0")
+		Test("junit", "junit", "4.13")
+	Package(mode = ModulesAndLibrariesLinkedByManifest) as Runnable("io.picota.dt.compiler.PicotacRunner")
+RunConfiguration local
+
+
+Repository("intino-maven") > Release("https://artifactory.intino.io/artifactory/releases")

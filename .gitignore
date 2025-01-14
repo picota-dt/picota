@@ -1,0 +1,7 @@
+# Project exclude paths
+/out/
+/.idea/libraries
+.intino/
+.idea/uiDesigner.xml
+.idea/workspace.xml
+gen/
