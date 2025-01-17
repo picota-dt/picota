@@ -1,8 +1,7 @@
-package io.picota.dt.compiler;
+package io.picota.language.compiler;
 
 import io.intino.builder.CompilerMessage;
 import io.intino.builder.OutputItem;
-import io.intino.tara.builder.TaraCompiler;
 import io.intino.tara.builder.core.CompilerConfiguration;
 
 import java.io.File;

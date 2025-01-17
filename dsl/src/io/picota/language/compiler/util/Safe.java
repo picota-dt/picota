@@ -1,4 +1,4 @@
-package io.picota.dt.compiler.util;
+package io.picota.language.compiler.util;
 
 import java.util.Collections;
 import java.util.List;

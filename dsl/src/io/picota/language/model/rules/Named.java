@@ -1,4 +1,4 @@
-package io.picota.dt.dsl.rules;
+package io.picota.language.model.rules;
 
 import io.intino.tara.language.model.Mogram;
 import io.intino.tara.language.model.rules.MogramRule;

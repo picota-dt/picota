@@ -1,13 +1,16 @@
-package io.picota.dt.compiler;
+package io.picota.language.compiler;
 
 import io.intino.builder.BuildConstants;
 import io.intino.builder.OutputItem;
 import io.intino.magritte.builder.StashBuilder;
+import io.intino.magritte.framework.stores.FileSystemStore;
+import io.intino.magritte.io.model.Stash;
 import io.intino.tara.builder.CompilationInfoExtractor;
 import io.intino.tara.builder.core.CompilerConfiguration;
 import io.intino.tara.builder.core.errorcollection.TaraException;
-import io.picota.dt.compiler.codegeneration.ScriptGenerationOperation;
-import io.picota.dt.dsl.PicotaGraph;
+import io.picota.language.compiler.codegeneration.PicotaSetupGenerationOperation;
+import io.picota.language.compiler.codegeneration.ScriptGenerationOperation;
+import io.picota.language.model.PicotaGraph;
 import tara.dsl.Picota;
 
 import java.io.File;
@@ -23,9 +26,7 @@ import static io.intino.builder.BuildConstants.MESSAGES_END;
 import static io.intino.builder.BuildConstants.MESSAGES_START;
 import static io.intino.builder.BuildConstants.Mode.Build;
 
-
 public class PicotacRunner {
-
 	private static final Logger LOG = Logger.getGlobal();
 
 	private PicotacRunner() {
@@ -42,9 +43,10 @@ public class PicotacRunner {
 			final Map<File, Boolean> sources = new LinkedHashMap<>();
 			CompilationInfoExtractor.getInfoFromArgsFile(argsFile, config, sources);
 			if (sources.isEmpty() || !config.mode().equals(Build)) return;
-			PicotaGraph graph = loadGraph(sourcesMap(sources));
+			PicotaGraph graph = loadGraph(config, sourcesMap(sources));
 			if (graph == null) return;
-			List<OutputItem> outputs = new ScriptGenerationOperation(config, graph).call();
+			List<OutputItem> outputs = new PicotaSetupGenerationOperation(config, sources,graph).call();
+			outputs.addAll(new ScriptGenerationOperation(config, sources, graph).call());
 			new CompilationReporter(config).report(sources, outputs);
 		} catch (Exception e) {
 			LOG.log(Level.SEVERE, e.getMessage() == null ? e.getStackTrace()[0].toString() : e.getMessage());
@@ -57,8 +59,10 @@ public class PicotacRunner {
 		return sources.keySet().stream().collect(Collectors.toMap(f -> f, f -> Charset.defaultCharset()));
 	}
 
-	private static PicotaGraph loadGraph(Map<File, Charset> map) {
-		return PicotaGraph.load(new StashBuilder(map, new Picota(), "dt", System.out).build());
+	private static PicotaGraph loadGraph(CompilerConfiguration config, Map<File, Charset> map) {
+		Stash[] build = new StashBuilder(map, new Picota(), "dsl", System.out).build();
+		if (build.length == 0) return null;
+		return PicotaGraph.load(new FileSystemStore(config.resourcesDirectory()), build);
 	}
 
 	private static File checkConfigurationFile(String arg) {

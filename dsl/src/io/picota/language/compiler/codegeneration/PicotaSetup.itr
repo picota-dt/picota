@@ -1,0 +1,23 @@
+rule type(setup)
+	package $package;
+
+	import io.intino.alexandria.core.Box;
+	import io.intino.alexandria.logger4j.Logger;
+	import io.intino.datahub.box.DataHubBox;
+	import io.intino.datahub.box.DataHubConfiguration;
+	import org.apache.log4j.Level;
+
+	public class Main {
+		public static void main(String[] args) {
+			DataHubConfiguration configuration = new DataHubConfiguration(args);
+			Box box = new DataHubBox(args).put(GraphLoader.load(configuration).core$$());
+			Logger.setLevel(Level.ERROR);
+			box.start();
+			Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
+		}
+	}
+
+
+
+	
+	

@@ -1,0 +1,26 @@
+dsl Proteo
+
+Concept:Named Variable is component
+	var Variable dependsOf = empty
+	Facet Cyclic > var integer cycle
+	Facet Numeric
+	Concept:Named Attribute
+		var string value
+Concept Environment
+	Concept Sensor
+		var integer period
+		var word:Scale periodScale
+		has Variable
+
+Concept:Named PhysicalObject
+	has Variable
+
+Concept:Named DigitalTwin
+	var PhysicalObject po
+	Concept Interface
+		var Variable:BelongsToPO physicVariable
+		var Variable[] causedBy
+	//Concept CausalRelation
+		//var Variable:BelongsToPO variable
+		//var Variable[] causedBy
+

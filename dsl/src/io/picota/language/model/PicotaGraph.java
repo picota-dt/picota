@@ -1,8 +1,8 @@
-package io.picota.dt.dsl;
+package io.picota.language.model;
 
 import io.intino.magritte.framework.Graph;
 
-public class PicotaGraph extends io.picota.dt.dsl.AbstractGraph {
+public class PicotaGraph extends io.picota.language.model.AbstractGraph {
 
 	public PicotaGraph(Graph graph) {
 		super(graph);

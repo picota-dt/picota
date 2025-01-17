@@ -1,0 +1,47 @@
+rule type(graphloader)
+	package $package;
+
+	import io.intino.alexandria.logger.Logger;
+	import io.intino.datahub.box.DataHubConfiguration;
+	import io.intino.datahub.model.*;
+	import io.intino.datahub.model.rules.Scale;
+
+	import java.io.File;
+    import java.io.IOException;
+    import java.nio.file.Files;
+
+	public class GraphLoader {
+		public static NessGraph load(DataHubConfiguration configuration) {
+			NessGraph ness = NessGraph.load();
+			ness.create().broker().port(Integer.parseInt(configuration.brokerPort())).secondaryPort(Integer.parseInt(configuration.brokerSecondaryPort()));
+			Datalake datalake = ness.create().datalake(Scale.$scale);
+			datalake.create().seal().create().cron("0 0 4 1/1 * ? *", null);
+			$environment...[$NL]
+			loadUsers(configuration.home(), ness);
+			return ness;
+		}
+
+		private static void loadUsers(File workspace, NessGraph nessGraph) {
+			try {
+				File file = new File(workspace, "datahub/config/users.bin");
+				if (!file.exists()) return;
+				nessGraph.broker().clear().user(u -> true);
+				String[] users = new String(Files.readAllBytes(file.toPath())).split("\\n");
+				for (String user : users) nessGraph.broker().create().user(user.split("::")[0], user.split("::")[1]);
+			} catch (IOException e) {
+				Logger.error(e);
+			}
+		}
+	}
+
+rule trigger(environment)
+	Namespace $name = ness.create("misc", "$name").namespace();
+	$sensor...[$NL]
+
+rule trigger(sensor)
+	Sensor $name = $<container>name.create("$name").sensor();
+	$variable...[$NL]
+
+rule trigger(variable)
+	$<container>name.create("$name").magnitude("$name");
+	datalake.create().tank().asMeasurement($<container>name, $<container>period, Scale.$<container>scale);
