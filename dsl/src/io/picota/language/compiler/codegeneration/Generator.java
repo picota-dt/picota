@@ -1,7 +1,7 @@
 package io.picota.language.compiler.codegeneration;
 
+import io.intino.builder.CompilerConfiguration;
 import io.intino.builder.OutputItem;
-import io.intino.tara.builder.core.CompilerConfiguration;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -32,7 +32,6 @@ public class Generator {
 	}
 
 	protected String prefix() {
-		return PRESENTABLE_MESSAGE + "[" + conf.getModule() + " - " + conf.model().outDsl() + "]";
+		return PRESENTABLE_MESSAGE + "[" + conf.module() + " - " + conf.dsl().outDsl() + "]";
 	}
-
 }

@@ -5,7 +5,7 @@ Artifact("io.picota", "1.0.0") language
 		Builder("io.intino.magritte", "builder", "7.0.7", "model")
 		OutputDsl(name = "Picota")
 			Builder("io.picota", "language") as ArtifactVersionFollower
-			Runtime(empty, empty, empty)
+			Runtime("io.picota", "runtime", "1.0.0")
 	Imports
 		Compile("io.intino", "builder-interface", "2.2.0")
 		Compile("io.intino.itrules", "engine", "2.0.2")

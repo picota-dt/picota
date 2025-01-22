@@ -1,0 +1,23 @@
+dsl Picota
+
+Environment e1
+	Sensor(period = 1, periodScale = Minute) weather
+		Variable temperature as Numeric
+		Variable humidity as Numeric
+
+PhysicalObject elEspino
+	Sensor(period = 1, periodScale = Hour) sensor
+		Variable watts as Numeric
+
+DigitalTwin(po = elEspino, env = e1) elEspinoDT
+	Interface(physicVariable = elEspino.sensor.watts, causedBy = e1.weather.temperature e1.weather.humidity)
+
+
+PhysicalObject ball
+	Sensor(period = 1, periodScale = Hour)sensor
+		Variable speed as Numeric
+		Variable height as Numeric
+
+DigitalTwin(po = ball, env = empty) p1
+	Interface(physicVariable  = ball.sensor.speed, causedBy = ball.sensor.height)
+	Interface(physicVariable  = ball.sensor.height, causedBy = ball.sensor.speed)

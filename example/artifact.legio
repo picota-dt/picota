@@ -1,0 +1,21 @@
+dsl Legio
+
+Artifact("io.picota", "1.0.0") example
+	Dsl("Picota", "1.0.0")
+	Imports
+		Compile("io.intino", "data-hub", "12.0.7")
+		Test("junit", "junit", "4.13")
+	Package(mode = ModulesAndLibrariesLinkedByManifest) as Runnable(mainClass = "io.picota.example.picota.Main")
+	Parameter("home")
+	Parameter("backup_directory")
+	Parameter("datalake_directory")
+	Parameter("broker_port")
+	Parameter("broker_secondary_port")
+
+RunConfiguration local
+	Argument("broker_port", "63000")
+	Argument("broker_secondary_port", "1884")
+	Argument("home", "./temp")
+	Argument("venv", "/Users/oroncal/workspace/picota/example/venv")
+	Argument("backup_directory", "./temp/backup")
+	Argument("datalake_directory", "./temp/datalake")

@@ -1,8 +1,8 @@
 package io.picota.language.compiler;
 
+import io.intino.builder.CompilerConfiguration;
 import io.intino.builder.CompilerMessage;
 import io.intino.builder.OutputItem;
-import io.intino.tara.builder.core.CompilerConfiguration;
 
 import java.io.File;
 import java.io.PrintStream;
@@ -10,11 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 public class CompilationReporter {
-	private final CompilerConfiguration config;
 	private final PrintStream out;
 
 	public CompilationReporter(CompilerConfiguration config) {
-		this.config = config;
 		this.out = config.out();
 	}
 

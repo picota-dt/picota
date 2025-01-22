@@ -1,12 +1,12 @@
 package io.picota.language.compiler;
 
 import io.intino.builder.BuildConstants;
+import io.intino.builder.CompilationInfoExtractor;
+import io.intino.builder.CompilerConfiguration;
 import io.intino.builder.OutputItem;
 import io.intino.magritte.builder.StashBuilder;
 import io.intino.magritte.framework.stores.FileSystemStore;
 import io.intino.magritte.io.model.Stash;
-import io.intino.tara.builder.CompilationInfoExtractor;
-import io.intino.tara.builder.core.CompilerConfiguration;
 import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.compiler.codegeneration.PicotaSetupGenerationOperation;
 import io.picota.language.compiler.codegeneration.ScriptGenerationOperation;
@@ -62,7 +62,7 @@ public class PicotacRunner {
 	private static PicotaGraph loadGraph(CompilerConfiguration config, Map<File, Charset> map) {
 		Stash[] build = new StashBuilder(map, new Picota(), "dsl", System.out).build();
 		if (build.length == 0) return null;
-		return PicotaGraph.load(new FileSystemStore(config.resourcesDirectory()), build);
+		return PicotaGraph.load(new FileSystemStore(config.resDirectory()), build);
 	}
 
 	private static File checkConfigurationFile(String arg) {

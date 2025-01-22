@@ -1,18 +1,15 @@
-rule type(variable)
+rule type(digitalTwinVariable)
+	import sys
+	import torch
 	from torch import nn
     from torch.utils.data import DataLoader
 
     from DatasetLoader import DatasetLoader
     from InputDataset import InputDataset
     from kan.KanTrainer import KanTrainer
-    from mappers.CyclicMapper import CyclicMapper
-    from mappers.NormalizationMapper import NormalizationMapper
 
-    path = "$sourceFile"
-    col_sep = "$separator"
-    variables = [$variables+quoted...[, ], "$output"]
-    transformedvariables = [$variables+format...[, ], "$output"]
-    normalizedVariables = [$normalized+quoted...[, ], "$output"]
+    source = sys.argv[1]
+    model_path = sys.argv[2]
     output_variable = "$output"
     device = "cpu"
     batch_size = 2
@@ -23,26 +20,12 @@ rule type(variable)
     validation_loss_fn = nn.L1Loss()
     test_proportion = 0.2
     validation_proportion = 0.16
-
-    dt = DatasetLoader(path, col_sep, variables).load()
-    dt = NormalizationMapper(normalizedVariables).map(dt)
-    $cyclicVariables+map...[$NL]
+    dt = DatasetLoader(source, ",").load()
     dataset = InputDataset(dt, output_variable)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    (KanTrainer(transformedvariables, experiments, batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
+    model = (KanTrainer(dt.keys(), experiments, batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
                 .train(dataset))
-
-rule type(cyclic) and trigger(map)
-	dt = CyclicMapper(["$name"], $cycle).map(dt)
-
-rule type(cyclic) and trigger(format)
-	"$name~_sin", "$name~_cos"
-
-rule type(variable) and trigger(format)
-	"$name"
-
-rule type(variable) and trigger(quoted)
-	"$name"
+	torch.save(model.state_dict(), model_path)
 
 rule trigger(quoted)
 	"$this"

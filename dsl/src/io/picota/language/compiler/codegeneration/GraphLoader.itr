@@ -7,19 +7,22 @@ rule type(graphloader)
 	import io.intino.datahub.model.rules.Scale;
 
 	import java.io.File;
-    import java.io.IOException;
-    import java.nio.file.Files;
+	import java.io.IOException;
+	import java.nio.file.Files;
 
 	public class GraphLoader {
 		public static NessGraph load(DataHubConfiguration configuration) {
 			NessGraph ness = NessGraph.load();
 			ness.create().broker().port(Integer.parseInt(configuration.brokerPort())).secondaryPort(Integer.parseInt(configuration.brokerSecondaryPort()));
 			Datalake datalake = ness.create().datalake(Scale.$scale);
+			Datamart master = ness.create("master", "master").datamart();
 			datalake.create().seal().create().cron("0 0 4 1/1 * ? *", null);
-			$environment...[$NL]
+			$digitalTwin+call...[$NL]
 			loadUsers(configuration.home(), ness);
 			return ness;
 		}
+
+		$digitalTwin+method...[$NL]
 
 		private static void loadUsers(File workspace, NessGraph nessGraph) {
 			try {
@@ -34,14 +37,17 @@ rule type(graphloader)
 		}
 	}
 
-rule trigger(environment)
-	Namespace $name = ness.create("misc", "$name").namespace();
-	$sensor...[$NL]
+rule type(digitalTwin) and trigger(call)
+	$name(datalake, master);
 
-rule trigger(sensor)
-	Sensor $name = $<container>name.create("$name").sensor();
-	$variable...[$NL]
+rule type(digitalTwin) and trigger(method)
+	private static void $name(Datalake datalake, Datamart master) {
+		Sensor $name~_Sensor = datalake.graph().create("$name").sensor();
+		<<$variable...[$NL]>>
+		Entity $name~_Entity = master.create("$name").entity();
+		Datalake.Tank.Measurement $name~_Tank = datalake.create().tank().asMeasurement($name~_Sensor, $period, Scale.$scale+firstUpperCase);
+		master.create("$name~_Timeline").timeline($name~_Entity).asRaw($name~_Tank);
+	}
 
 rule trigger(variable)
-	$<container>name.create("$name").magnitude("$name");
-	datalake.create().tank().asMeasurement($<container>name, $<container>period, Scale.$<container>scale);
+	$<container>name~_Sensor.create("$this").magnitude("$this");

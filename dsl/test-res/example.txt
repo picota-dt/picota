@@ -1,5 +1,5 @@
 def.file
-/Users/oroncal/workspace/picota/example/src/elespino.tara#true
+/Users/oroncal/workspace/picota/example/src/io/picota/example/picota/elespino.tara#true
 
 project
 picota

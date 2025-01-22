@@ -13,10 +13,14 @@ Concept Environment
 		has Variable
 
 Concept:Named PhysicalObject
-	has Variable
+	Concept Sensor
+		var integer period
+		var word:Scale periodScale
+		has Variable
 
 Concept:Named DigitalTwin
 	var PhysicalObject po
+	var Environment env
 	Concept Interface
 		var Variable:BelongsToPO physicVariable
 		var Variable[] causedBy
