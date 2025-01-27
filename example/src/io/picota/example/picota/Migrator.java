@@ -16,7 +16,7 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 
 public class Migrator {
-	public static final String Tank = "DigitalTwin";
+	public static final String Tank = "elEspinoDT";
 	public static final String SS = "elEspinoDT";
 	private final FileDatalake datalake;
 	private final File stageDir;

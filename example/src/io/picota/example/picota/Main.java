@@ -11,12 +11,12 @@ import java.io.File;
 public class Main {
 	public static void main(String[] args) {
 		DataHubConfiguration configuration = new DataHubConfiguration(args);
-		DataHubBox box = (DataHubBox) new DataHubBox(args).put(GraphLoader.load(configuration));
+		DataHubBox box = (DataHubBox) new DataHubBox(args).put(GraphLoader.load(configuration).core$());
 		Logger.setLevel(Level.ERROR);
-		new Migrator(box.datalake(),box.stageDirectory(), Main.class.getResourceAsStream("/bolivia.csv")).run();
-		box.seal();
-		new DigitalTwinBuilder(box, new File(configuration.home(), "digital-twins"), new File(configuration.args().get("venv")), Main.class.getResourceAsStream("/scripts.tar")).build();
 		box.start();
+		File digitalTwinsDir = new File(configuration.home(), "digital-twins");
+		File venv = new File(configuration.args().get("venv"));
+		box.graph().sensorList().forEach(s-> new DigitalTwinBuilder(box, digitalTwinsDir, venv, Main.class.getResourceAsStream("/scripts.tar")).build(s.name$()));
 		Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
 	}
 }

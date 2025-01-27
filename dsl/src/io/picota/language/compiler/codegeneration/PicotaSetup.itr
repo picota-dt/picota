@@ -15,7 +15,9 @@ rule type(setup)
 			DataHubBox box = (DataHubBox) new DataHubBox(args).put(GraphLoader.load(configuration).core$$());
 			Logger.setLevel(Level.ERROR);
 			box.start();
-			new DigitalTwinBuilder(box, new File(configuration.home(), "digital-twins"), new File(configuration.args().get("venv")), Main.class.getResourceAsStream("/scripts.tar")).build();
+			File digitalTwinsDir = new File(configuration.home(), "digital-twins");
+			File venv = new File(configuration.args().get("venv"));
+			box.graph().sensorList().forEach(s -> new DigitalTwinBuilder(box, digitalTwinsDir, venv, Main.class.getResourceAsStream("/scripts.tar")).build(s.name$$()));
 			Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
 		}
 	}

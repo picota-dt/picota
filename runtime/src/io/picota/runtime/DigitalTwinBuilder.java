@@ -39,16 +39,21 @@ public class DigitalTwinBuilder {
 
 	public void build(String name) {
 		try {
+			Logger.info("Building digital twin " + name + "...");
 			TimelineStore dt = digitalTwin(name);
 			Tar.extractTarFile(scripts, workingDir);
-			trainWith(csvOf(dt));
+			trainWith(name, csvOf(dt));
 			clean();
 		} catch (IOException | InterruptedException e) {
 			Logger.error(e);
 		}
 	}
 
-	private void trainWith(File csv) throws IOException, InterruptedException {
+	private void trainWith(String name, File csv) throws IOException, InterruptedException {
+		if (csv == null || !csv.exists()) {
+			Logger.warn("No digital twin data found for " + name);
+			return;
+		}
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
 		File scriptPath = new File(workingDir, "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
@@ -60,10 +65,11 @@ public class DigitalTwinBuilder {
 	}
 
 	private TimelineStore digitalTwin(String name) {
-		return box.datamarts().get("master").timelineStore().get("DigitalTwin", name);
+		return box.datamarts().get("master").timelineStore().get(name, name);
 	}
 
 	private File csvOf(TimelineStore tl) throws IOException {
+		if (tl == null) return null;
 		File file = new File(workingDir, tl.id() + ".csv");
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
 			writer.write(header(tl));
