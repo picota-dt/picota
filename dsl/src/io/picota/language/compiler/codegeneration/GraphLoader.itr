@@ -42,10 +42,10 @@ rule type(digitalTwin) and trigger(call)
 
 rule type(digitalTwin) and trigger(method)
 	private static void $name(Datalake datalake, Datamart master) {
-		Sensor $name~_Sensor = datalake.graph().create("$name").sensor();
+		Sensor $name~_Sensor = datalake.graph().create("sensors","DigitalTwin").sensor();
 		<<$variable...[$NL]>>
 		Entity $name~_Entity = master.create("$name").entity();
-		Datalake.Tank.Measurement $name~_Tank = datalake.create().tank().asMeasurement($name~_Sensor, $period, Scale.$scale+firstUpperCase);
+		Datalake.Tank.Measurement $name~_Tank = datalake.create("DigitalTwin").tank().asMeasurement($name~_Sensor, $period, Scale.$scale+firstUpperCase);
 		master.create("$name~_Timeline").timeline($name~_Entity).asRaw($name~_Tank);
 	}
 

@@ -2,9 +2,10 @@ dsl Legio
 
 Artifact("io.picota", "1.0.0") runtime
 	Imports
-		Compile("io.intino", "data-hub", "12.0.7")
+		Compile("io.intino", "data-hub", "12.0.8")
 		Compile("io.intino.sumus", "chronos", "2.4.3")
 		Compile("org.apache.commons", "commons-compress", "1.23.0")
+		Compile("commons-io", "commons-io", "2.18.0")
 		Test("junit", "junit", "4.13")
 	Package(mode = ModulesAndLibrariesLinkedByManifest)
 RunConfiguration local

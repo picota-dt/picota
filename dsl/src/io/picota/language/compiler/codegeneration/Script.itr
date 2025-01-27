@@ -1,31 +1,47 @@
-rule type(digitalTwinVariable)
+rule type(main)
 	import sys
+	$dt+import...[$NL]
+
+	$dt+call...[$NL$NL]
+
+rule type(digitalTwinVariable)
 	import torch
 	from torch import nn
-    from torch.utils.data import DataLoader
+	from torch.utils.data import DataLoader
 
-    from DatasetLoader import DatasetLoader
-    from InputDataset import InputDataset
-    from kan.KanTrainer import KanTrainer
+	from DatasetLoader import DatasetLoader
+	from InputDataset import InputDataset
+	from kan.KanTrainer import KanTrainer
 
-    source = sys.argv[1]
-    model_path = sys.argv[2]
-    output_variable = "$output"
-    device = "cpu"
-    batch_size = 2
-    experiments = 20
-    epochs = 5
-    lr = 0.001
-    loss_fn = nn.MSELoss()
-    validation_loss_fn = nn.L1Loss()
-    test_proportion = 0.2
-    validation_proportion = 0.16
-    dt = DatasetLoader(source, ",").load()
-    dataset = InputDataset(dt, output_variable)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    model = (KanTrainer(dt.keys(), experiments, batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
-                .train(dataset))
-	torch.save(model.state_dict(), model_path)
+	def train(source, modeldir):
+		model_path = modeldir + "/$output.bin"
+		output_variable = "$output"
+		device = "cpu"
+		batch_size = 2
+		epochs = 5
+		lr = 0.001
+		loss_fn = nn.MSELoss()
+		validation_loss_fn = nn.L1Loss()
+		test_proportion = 0.2
+		validation_proportion = 0.16
+		dt = DatasetLoader(source, ",").load()
+		dataset = InputDataset(dt, output_variable)
+		dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+		model = (KanTrainer(dt.keys(), batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
+					.train(dataset))
+		torch.save(model.state_dict(), model_path)
 
 rule trigger(quoted)
 	"$this"
+
+rule trigger(call)
+	$variable+callVariable...[$NL]
+
+rule trigger(importVariable)
+	import $<container>name.$name
+
+rule trigger(import)
+	$variable+importVariable...[$NL]
+
+rule trigger(callVariable)
+	$<container>name.$name.train(sys.argv[1], sys.argv[2])

@@ -15,6 +15,7 @@ import io.picota.language.model.PicotaGraph;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,11 +60,15 @@ public class ScriptGenerationOperation extends Generator {
 	}
 
 	private void createScripts() throws IOException {
+		List<Frame> dtFrames = new ArrayList<>();
 		for (var dt : model.digitalTwinList()) {
-			File dir = new File(tempDir, dt.po().name$().toLowerCase() + "_" + dt.name$());
+			File dir = new File(tempDir, dt.name$());
 			dir.mkdirs();
 			renderInterface(dt, dir);
+			dtFrames.add(frameOf(dt));
 		}
+		File main = new File(tempDir, "main.py");
+		renderMain(dtFrames.toArray(new Frame[0]), main);
 	}
 
 	private void renderInterface(DigitalTwin dt, File dir) throws IOException {
@@ -72,6 +77,17 @@ public class ScriptGenerationOperation extends Generator {
 			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i)));
 			put(sources.keySet().iterator().next().getAbsolutePath(), file.getAbsolutePath());
 		}
+	}
+
+	private void renderMain(Frame[] dtFrames, File file) throws IOException {
+		Frame frame = new FrameBuilder("main").add("dt", dtFrames).toFrame();
+		Files.writeString(file.toPath(), new Engine(template).render(frame));
+	}
+
+	private Frame frameOf(DigitalTwin dt) {
+		FrameBuilder builder = new FrameBuilder("dt").add("name", dt.name$());
+		dt.interfaceList().forEach(i -> builder.add("variable", new FrameBuilder("variable").add("name", i.physicVariable().name$())));
+		return builder.toFrame();
 	}
 
 	private Frame frameOf(DigitalTwin.Interface i) {
