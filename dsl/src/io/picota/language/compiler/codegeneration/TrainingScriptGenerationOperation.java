@@ -1,0 +1,131 @@
+package io.picota.language.compiler.codegeneration;
+
+import io.intino.builder.CompilerConfiguration;
+import io.intino.builder.OutputItem;
+import io.intino.itrules.Engine;
+import io.intino.itrules.Frame;
+import io.intino.itrules.FrameBuilder;
+import io.intino.itrules.template.Template;
+import io.intino.magritte.framework.Layer;
+import io.intino.tara.builder.core.errorcollection.TaraException;
+import io.picota.language.compiler.util.Tar;
+import io.picota.language.model.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Logger;
+import java.util.stream.Stream;
+
+import static java.util.logging.Level.SEVERE;
+
+@SuppressWarnings("resource")
+public class TrainingScriptGenerationOperation extends Generator {
+	private static final Logger LOG = Logger.getGlobal();
+	private final Map<File, Boolean> sources;
+	private final PicotaGraph model;
+	private final Template template;
+	private final Map<String, List<String>> outMap = new LinkedHashMap<>();
+	private final File tempDir;
+	private final File outDir;
+
+	public TrainingScriptGenerationOperation(CompilerConfiguration conf, Map<File, Boolean> sources, PicotaGraph model) {
+		super(conf);
+		this.outDir = conf.outDirectory();
+		this.sources = sources;
+		this.model = model;
+		this.template = new TrainingScriptsTemplate();
+		this.tempDir = new File(conf.getTempDirectory(), conf.module());
+//		this.tempDir = conf.genDirectory(); //FIXME
+	}
+
+	public List<OutputItem> call() throws TaraException {
+		try {
+			if (conf.isVerbose()) conf.out().println(prefix() + " Generating Script...");
+			createDigitalTwinScripts();
+			createMainScript();
+			extractLibs();
+			Tar.createTarFile(tempDir, new File(outDir, "scripts.tar"));
+			return toOutputList(outMap);
+		} catch (Throwable e) {
+			LOG.log(SEVERE, "Error during script generation: " + e.getMessage(), e);
+			throw new TaraException(e.getMessage());
+		}
+	}
+
+	private void extractLibs() throws IOException {
+		Tar.extractTarFile(this.getClass().getResourceAsStream("/libs.tar"), tempDir);
+	}
+
+	private void createMainScript() throws IOException {
+		File main = new File(tempDir, "main.py");
+		FrameBuilder frame = new FrameBuilder("main");
+		frame.add("dt", model.digitalTwinList().stream().map(Layer::name$).toArray(String[]::new));
+		Files.writeString(main.toPath(), new Engine(template).render(frame));
+	}
+
+	private void createDigitalTwinScripts() throws IOException {
+		for (var dt : model.digitalTwinList()) {
+			File dtDir = new File(tempDir, dt.name$());
+			dtDir.mkdirs();
+			if (dt.isPredictive()) renderPredictiveModels(dt, dtDir);
+			renderInferences(dt, dtDir);
+			renderDtMain(dt, new File(dtDir, "main.py"));
+		}
+	}
+
+	private void renderPredictiveModels(DigitalTwin dt, File dir) throws IOException {
+		for (ViewPoint vp : dt.entity().core$().ownerAs(Reality.class).viewPointList()) renderViewPoint(dir, vp);
+		for (ViewPoint vp : dt.entity().viewPointList()) renderViewPoint(dir, vp);
+	}
+
+	private void renderViewPoint(File dir, ViewPoint viewPoint) throws IOException {
+		File vpDir = new File(dir, viewPoint.name$());
+		vpDir.mkdirs();
+		for (Variable variable : viewPoint.variableList()) {
+			File file = new File(vpDir, variable.name$() + ".py");
+			Files.writeString(file.toPath(), new Engine(template).render(frameOf(variable, "viewPoint")));
+		}
+	}
+
+	private void renderInferences(DigitalTwin dt, File dir) throws IOException {
+		for (DigitalTwin.Infer i : dt.inferList()) {
+			File vpDir = new File(dir, viewPoint(i.variable()).name$());
+			vpDir.mkdirs();
+			File file = new File(vpDir, i.variable().name$() + ".py");
+			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i.variable(), "inference")));
+			put(sources.keySet().iterator().next().getAbsolutePath(), file.getAbsolutePath());
+		}
+	}
+
+	private void renderDtMain(DigitalTwin dt, File file) throws IOException {
+		Files.writeString(file.toPath(), new Engine(template).render(frameOf(dt)));
+	}
+
+	private Frame frameOf(DigitalTwin dt) {
+		FrameBuilder builder = new FrameBuilder("digitalTwin").add("name", dt.name$());
+		List<DigitalTwin.Infer> infers = dt.inferList();
+		Reality reality = dt.entity().core$().ownerAs(Reality.class);
+		Stream.concat(reality.viewPointList().stream(), dt.entity().viewPointList().stream())
+				.flatMap(vp -> vp.variableList().stream())
+				.filter(v -> infers.stream().noneMatch(i -> i.variable().equals(v)))
+				.forEach(v -> builder.add("variable", frameOf(v, "entity")));
+		infers.forEach(i -> builder.add("variable", frameOf(i.variable(), "inference")));
+
+		return builder.toFrame();
+	}
+
+	private Frame frameOf(Variable v, String tag) {
+		return new FrameBuilder(tag, "variable")
+				.add("viewPoint", viewPoint(v).name$())
+				.add("name", v.name$())
+				.toFrame();
+	}
+
+	private static ViewPoint viewPoint(Variable v) {
+		return v.core$().ownerAs(ViewPoint.class);
+	}
+}

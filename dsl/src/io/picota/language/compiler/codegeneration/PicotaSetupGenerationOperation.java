@@ -4,7 +4,6 @@ import io.intino.builder.CompilerConfiguration;
 import io.intino.builder.OutputItem;
 import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
-import io.intino.magritte.framework.Layer;
 import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.model.*;
 import io.picota.language.model.rules.Scale;
@@ -34,6 +33,7 @@ public class PicotaSetupGenerationOperation extends Generator {
 		this.srcFolder = conf.srcDirectory();
 		this.sources = sources;
 		this.model = model;
+		sources.keySet().forEach(k -> outMap.put(k.getAbsolutePath(), new ArrayList<>()));
 	}
 
 	public List<OutputItem> call() throws TaraException {
@@ -58,43 +58,49 @@ public class PicotaSetupGenerationOperation extends Generator {
 	}
 
 	private void graphLoader() throws IOException {
-		Frame[] environments = model.environmentList().stream().map(this::frameOf).toArray(Frame[]::new);
+		Frame[] reality = model.realityList().stream().map(this::frameOf).toArray(Frame[]::new);
 		Frame[] digitalTwins = model.digitalTwinList().stream().map(this::frameOf).toArray(Frame[]::new);
-		Frame frame = new FrameBuilder("graphloader").add("package", conf.generationPackage()).add("scale", "Hour").add("environment", environments).add("digitalTwin", digitalTwins).toFrame();
+		Frame frame = new FrameBuilder("graphloader").add("package", conf.generationPackage()).add("scale", "Hour").add("environment", reality).add("digitalTwin", digitalTwins).toFrame();
 		String content = new GraphLoaderTemplate().render(frame);
 		File dir = new File(outFolder, conf.generationPackage().replace(".", File.separator));
 		dir.mkdirs();
-		Files.writeString(new File(dir, "GraphLoader.java").toPath(), content);
+		File target = new File(dir, "GraphLoader.java");
+		Files.writeString(target.toPath(), content);
+		sources.keySet().forEach(file -> outMap.get(file.getAbsolutePath()).add(target.getAbsolutePath()));
+
 	}
 
 	private Frame frameOf(DigitalTwin digitalTwin) {
 		FrameBuilder builder = new FrameBuilder("digitalTwin").add("name", digitalTwin.name$());
 		List<String> variables = new ArrayList<>();
 		Duration duration = null;
-		if (digitalTwin.env() != null) {
-			List<Environment.Sensor> sensors = digitalTwin.env().sensorList();
-			variables.addAll(sensors.stream().flatMap(s -> s.variableList().stream()).map(Layer::name$).toList());
-			duration = sensors.stream().map(s -> Duration.of(s.period(), s.periodScale().chronoUnit())).max(Duration::compareTo).get();
-		}
-		if (digitalTwin.po() != null) {
-			List<PhysicalObject.Sensor> sensors = digitalTwin.po().sensorList();
-			variables.addAll(sensors.stream().flatMap(s -> s.variableList().stream()).map(Layer::name$).toList());
-			Duration poDuration = sensors.stream().map(s -> Duration.of(s.period(), s.periodScale().chronoUnit())).max(Duration::compareTo).get();
-			if (duration == null || poDuration.compareTo(duration) > 0) duration = poDuration;
+		if (digitalTwin.entity() != null) {
+			Reality reality = digitalTwin.entity().core$().ownerAs(Reality.class);
+			List<ViewPoint> viewPoints = reality.viewPointList();
+			variables.addAll(viewPoints.stream().flatMap(vp -> vp.variableList().stream()).map(v -> vpOf(v).name$() + "_" + v.name$()).toList());
+			duration = viewPoints.stream().map(s -> Duration.of(s.period(), s.periodScale().chronoUnit())).max(Duration::compareTo).orElse(null);
+			List<ViewPoint> entityVP = digitalTwin.entity().viewPointList();
+			variables.addAll(entityVP.stream().flatMap(vp -> vp.variableList().stream()).map(v -> vpOf(v).name$() + "_" + v.name$()).toList());
+			Duration entityPeriod = entityVP.stream().map(s -> Duration.of(s.period(), s.periodScale().chronoUnit())).max(Duration::compareTo).get();
+			if (duration == null || entityPeriod.compareTo(duration) > 0) duration = entityPeriod;
 		}
 		builder.add("period", duration.toMinutes()).add("scale", Scale.Minute.name());
 		builder.add("variable", variables.toArray(new String[0]));
 		return builder.toFrame();
 	}
 
+	private ViewPoint vpOf(Variable v) {
+		return v.core$().ownerAs(ViewPoint.class);
+	}
 
-	private Frame frameOf(Environment e) {
+
+	private Frame frameOf(Reality e) {
 		FrameBuilder builder = new FrameBuilder("environment").add("name", e.name$());
-		e.sensorList().forEach(s -> builder.add("sensor", frameOf(s)));
+		e.viewPointList().forEach(s -> builder.add("sensor", frameOf(s)));
 		return builder.toFrame();
 	}
 
-	private Frame frameOf(Environment.Sensor s) {
+	private Frame frameOf(ViewPoint s) {
 		FrameBuilder builder = new FrameBuilder("sensor").add("name", s.name$());
 		builder.add("period", s.period()).add("scale", s.periodScale());
 		s.variableList().forEach(variable -> builder.add("variable", frameOf(variable)));

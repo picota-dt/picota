@@ -55,11 +55,11 @@ public class DigitalTwinBuilder {
 			return;
 		}
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
-		File scriptPath = new File(workingDir, "main.py");
+		File dtDir = new File(workingDir, name);
+		File scriptPath = new File(dtDir,  "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
 		ProcessBuilder pb = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), csv.getAbsolutePath(), modelsDir.getAbsolutePath());
-		pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-		pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+		pb.directory(workingDir).redirectOutput(ProcessBuilder.Redirect.INHERIT).redirectError(ProcessBuilder.Redirect.INHERIT);
 		Process process = pb.start();
 		System.out.println("Exit code: " + process.waitFor());
 	}

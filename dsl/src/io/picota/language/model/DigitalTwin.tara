@@ -4,27 +4,25 @@ Concept:Named Variable is component
 	var Variable dependsOf = empty
 	Facet Cyclic > var integer cycle
 	Facet Numeric
+	Facet Inferred
 	Concept:Named Attribute
 		var string value
-Concept Environment
-	Concept Sensor
-		var integer period
-		var word:Scale periodScale
-		has Variable
 
-Concept:Named PhysicalObject
-	Concept Sensor
-		var integer period
-		var word:Scale periodScale
-		has Variable
+Concept Reality
+	has ViewPoint
+	Concept:Named Entity
+		has ViewPoint
+
+Concept ViewPoint is component
+	var integer period
+	var word:Scale periodScale
+	has Variable
 
 Concept:Named DigitalTwin
-	var PhysicalObject po
-	var Environment env
-	Concept Interface
-		var Variable:BelongsToPO physicVariable
-		var Variable[] causedBy
-	//Concept CausalRelation
-		//var Variable:BelongsToPO variable
-		//var Variable[] causedBy
-
+	var Reality.Entity entity
+	Concept Infer
+		var Variable variable
+	Facet Predictive
+		var integer timeHorizon
+		var word:Scale timeHorizonScale
+	Facet Estimate

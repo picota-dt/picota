@@ -1,0 +1,20 @@
+dsl Picota
+
+Reality Infecar
+	ViewPoint(5, Minute) weather
+		Variable temperature as Numeric
+		Variable humidity as Numeric
+		Variable radiation as Numeric
+	Entity SolarPlant
+		ViewPoint(5, Minute) operational
+			Variable temperature as Numeric
+		ViewPoint(5, Minute) generation
+			Variable reactivePower as Numeric
+			Variable activePower as Numeric
+		ViewPoint(5, Minute) consumption
+			Variable reactivePower as Numeric
+			Variable activePower as Numeric
+
+DigitalTwin(entity = Infecar.SolarPlant) predictiveEnergyGeneration as Predictive(timeHorizon = 1, Hour)
+	Infer(Infecar.SolarPlant.generation.activePower)
+	Infer(Infecar.SolarPlant.generation.reactivePower)

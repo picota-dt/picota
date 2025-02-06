@@ -1,5 +1,7 @@
 def.file
 /Users/oroncal/workspace/picota/example/src/io/picota/example/picota/elespino.tara#true
+/Users/oroncal/workspace/picota/example/src/io/picota/example/picota/ball.tara#true
+/Users/oroncal/workspace/picota/example/src/io/picota/example/picota/Infecar.tara#true
 
 project
 picota
