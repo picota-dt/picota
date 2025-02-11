@@ -62,7 +62,7 @@ public class TrainingScriptGenerationOperation extends Generator {
 
 	private void createMainScript() throws IOException {
 		File main = new File(tempDir, "main.py");
-		FrameBuilder frame = new FrameBuilder("main");
+		FrameBuilder frame = new FrameBuilder("supermain");
 		frame.add("dt", model.digitalTwinList().stream().map(Layer::name$).toArray(String[]::new));
 		Files.writeString(main.toPath(), new Engine(template).render(frame));
 	}
@@ -71,6 +71,7 @@ public class TrainingScriptGenerationOperation extends Generator {
 		for (var dt : model.digitalTwinList()) {
 			File dtDir = new File(tempDir, dt.name$());
 			dtDir.mkdirs();
+			createPackage(dtDir);
 			if (dt.isPredictive()) renderPredictiveModels(dt, dtDir);
 			renderInferences(dt, dtDir);
 			renderDtMain(dt, new File(dtDir, "main.py"));
@@ -85,6 +86,7 @@ public class TrainingScriptGenerationOperation extends Generator {
 	private void renderViewPoint(File dir, ViewPoint viewPoint) throws IOException {
 		File vpDir = new File(dir, viewPoint.name$());
 		vpDir.mkdirs();
+		createPackage(vpDir);
 		for (Variable variable : viewPoint.variableList()) {
 			File file = new File(vpDir, variable.name$() + ".py");
 			Files.writeString(file.toPath(), new Engine(template).render(frameOf(variable, "viewPoint")));
@@ -95,10 +97,16 @@ public class TrainingScriptGenerationOperation extends Generator {
 		for (DigitalTwin.Infer i : dt.inferList()) {
 			File vpDir = new File(dir, viewPoint(i.variable()).name$());
 			vpDir.mkdirs();
+			createPackage(vpDir);
 			File file = new File(vpDir, i.variable().name$() + ".py");
 			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i.variable(), "inference")));
 			put(sources.keySet().iterator().next().getAbsolutePath(), file.getAbsolutePath());
 		}
+	}
+
+	private static void createPackage(File dir) throws IOException {
+		File file = new File(dir, "__init__.py");
+		if (!file.exists()) Files.createFile(file.toPath());
 	}
 
 	private void renderDtMain(DigitalTwin dt, File file) throws IOException {

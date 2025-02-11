@@ -15,52 +15,54 @@ import java.time.temporal.ChronoField;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.lang.ProcessBuilder.Redirect.INHERIT;
 import static java.time.temporal.ChronoField.*;
 import static java.util.Arrays.stream;
 
 public class DigitalTwinBuilder {
 	public static final String SEPARATOR = ",";
 	private final DataHubBox box;
-	private final File workingDir;
+	private final File sourcesDir;
 	private final File pythonVenv;
-	private final InputStream scripts;
 	private final File modelsDir;
+	private final File dataDir;
+	private final InputStream scripts;
 
 	public DigitalTwinBuilder(DataHubBox box, File workingDir, File pythonVenv, InputStream scripts) {
 		this.box = box;
 		this.modelsDir = new File(workingDir, "models");
-		this.workingDir = new File(workingDir, "sources");
+		this.sourcesDir = new File(workingDir, "sources");
+		this.dataDir = new File(workingDir, "data");
 		this.pythonVenv = pythonVenv;
 		this.scripts = scripts;
-		if (this.workingDir.exists()) clean();
-		this.workingDir.mkdirs();
+		if (this.sourcesDir.exists()) clean();
+		this.sourcesDir.mkdirs();
 		this.modelsDir.mkdirs();
+		this.dataDir.mkdirs();
 	}
 
-	public void build(String name) {
+	public void build(String... digitalTwins) {
 		try {
-			Logger.info("Building digital twin " + name + "...");
-			TimelineStore dt = digitalTwin(name);
-			Tar.extractTarFile(scripts, workingDir);
-			trainWith(name, csvOf(dt));
-			clean();
+			for (String digitalTwin : digitalTwins) {
+				Logger.info("Preparing data for " + digitalTwin + "...");
+				prepareData(digitalTwin(digitalTwin));
+			}
+			Tar.extractTarFile(scripts, sourcesDir);
+			train();
+//			clean();
 		} catch (IOException | InterruptedException e) {
 			Logger.error(e);
 		}
 	}
 
-	private void trainWith(String name, File csv) throws IOException, InterruptedException {
-		if (csv == null || !csv.exists()) {
-			Logger.warn("No digital twin data found for " + name);
-			return;
-		}
+	private void train() throws IOException, InterruptedException {
+		System.out.println("Training data...");
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
-		File dtDir = new File(workingDir, name);
-		File scriptPath = new File(dtDir,  "main.py");
+		File scriptPath = new File(sourcesDir, "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
-		ProcessBuilder pb = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), csv.getAbsolutePath(), modelsDir.getAbsolutePath());
-		pb.directory(workingDir).redirectOutput(ProcessBuilder.Redirect.INHERIT).redirectError(ProcessBuilder.Redirect.INHERIT);
-		Process process = pb.start();
+		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), dataDir.getAbsolutePath(), modelsDir.getAbsolutePath())
+				.directory(sourcesDir).redirectOutput(INHERIT).redirectError(INHERIT)
+				.start();
 		System.out.println("Exit code: " + process.waitFor());
 	}
 
@@ -68,9 +70,9 @@ public class DigitalTwinBuilder {
 		return box.datamarts().get("master").timelineStore().get(name, name);
 	}
 
-	private File csvOf(TimelineStore tl) throws IOException {
+	private File prepareData(TimelineStore tl) throws IOException {
 		if (tl == null) return null;
-		File file = new File(workingDir, tl.id() + ".csv");
+		File file = new File(dataDir, tl.id() + ".csv");
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
 			writer.write(header(tl));
 			for (Timeline.Point p : tl.timeline()) writer.write(mapRow(p));
@@ -127,7 +129,7 @@ public class DigitalTwinBuilder {
 
 	private void clean() {
 		try {
-			FileUtils.deleteDirectory(this.workingDir);
+			FileUtils.deleteDirectory(this.sourcesDir);
 		} catch (IOException e) {
 			Logger.error(e);
 		}

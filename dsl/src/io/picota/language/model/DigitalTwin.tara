@@ -14,15 +14,14 @@ Concept Reality
 		has ViewPoint
 
 Concept ViewPoint is component
-	var integer period
-	var word:Scale periodScale
 	has Variable
 
 Concept:Named DigitalTwin
 	var Reality.Entity entity
+	var word:Scale resolution
+	var integer memory = 0
 	Concept Infer
 		var Variable variable
 	Facet Predictive
 		var integer timeHorizon
-		var word:Scale timeHorizonScale
 	Facet Estimate

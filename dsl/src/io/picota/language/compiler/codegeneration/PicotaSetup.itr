@@ -2,6 +2,7 @@ rule type(setup)
 	package $package;
 
 	import io.intino.alexandria.logger4j.Logger;
+	import io.intino.magritte.framework.Layer;
 	import io.intino.datahub.box.DataHubBox;
 	import io.intino.datahub.box.DataHubConfiguration;
 	import io.picota.runtime.DigitalTwinBuilder;
@@ -17,7 +18,8 @@ rule type(setup)
 			box.start();
 			File digitalTwinsDir = new File(configuration.home(), "digital-twins");
 			File venv = new File(configuration.args().get("venv"));
-			box.graph().sensorList().forEach(s -> new DigitalTwinBuilder(box, digitalTwinsDir, venv, Main.class.getResourceAsStream("/scripts.tar")).build(s.name$$()));
+			DigitalTwinBuilder builder = new DigitalTwinBuilder(box, digitalTwinsDir, venv, Main.class.getResourceAsStream("/scripts.tar"));
+			builder.build(box.graph().sensorList().stream().map(Layer::name$$).toArray(String[]::new));
 			Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
 		}
 	}

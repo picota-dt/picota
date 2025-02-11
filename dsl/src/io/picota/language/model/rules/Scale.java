@@ -9,8 +9,7 @@ public enum Scale implements Rule<Enum> {
 	Month(ChronoUnit.MONTHS),
 	Day(ChronoUnit.DAYS),
 	Hour(ChronoUnit.HOURS),
-	Minute(ChronoUnit.MINUTES),
-	None(ChronoUnit.FOREVER);
+	Minute(ChronoUnit.MINUTES);
 
 	private final ChronoUnit chronoUnit;
 
