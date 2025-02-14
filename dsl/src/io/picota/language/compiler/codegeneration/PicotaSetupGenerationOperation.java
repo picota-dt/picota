@@ -58,9 +58,11 @@ public class PicotaSetupGenerationOperation extends Generator {
 	}
 
 	private void graphLoader() throws IOException {
-		Frame[] reality = model.realityList().stream().map(this::frameOf).toArray(Frame[]::new);
 		Frame[] digitalTwins = model.digitalTwinList().stream().map(this::frameOf).toArray(Frame[]::new);
-		Frame frame = new FrameBuilder("graphloader").add("package", conf.generationPackage()).add("scale", "Hour").add("environment", reality).add("digitalTwin", digitalTwins).toFrame();
+		Frame frame = new FrameBuilder("graphloader")
+				.add("package", conf.generationPackage())
+				.add("scale", "Hour")
+				.add("digitalTwin", digitalTwins).toFrame();
 		String content = new GraphLoaderTemplate().render(frame);
 		File dir = new File(outFolder, conf.generationPackage().replace(".", File.separator));
 		dir.mkdirs();
@@ -72,50 +74,29 @@ public class PicotaSetupGenerationOperation extends Generator {
 
 	private Frame frameOf(DigitalTwin digitalTwin) {
 		FrameBuilder builder = new FrameBuilder("digitalTwin").add("name", digitalTwin.name$());
-		List<String> variables = new ArrayList<>();
-		Duration duration = null;
+		List<Frame> variables = new ArrayList<>();
 		if (digitalTwin.entity() != null) {
 			Reality reality = digitalTwin.entity().core$().ownerAs(Reality.class);
 			List<ViewPoint> viewPoints = reality.viewPointList();
-			variables.addAll(viewPoints.stream().flatMap(vp -> vp.variableList().stream()).map(v -> vpOf(v).name$() + "_" + v.name$()).toList());
-			duration = viewPoints.stream().map(s -> Duration.of(s.period(), s.periodScale().chronoUnit())).max(Duration::compareTo).orElse(null);
+			variables.addAll(viewPoints.stream().flatMap(vp -> vp.variableList().stream())
+					.map(this::frameOf).toList());
 			List<ViewPoint> entityVP = digitalTwin.entity().viewPointList();
-			variables.addAll(entityVP.stream().flatMap(vp -> vp.variableList().stream()).map(v -> vpOf(v).name$() + "_" + v.name$()).toList());
-			Duration entityPeriod = entityVP.stream().map(s -> Duration.of(s.period(), s.periodScale().chronoUnit())).max(Duration::compareTo).get();
-			if (duration == null || entityPeriod.compareTo(duration) > 0) duration = entityPeriod;
+			variables.addAll(entityVP.stream().flatMap(vp -> vp.variableList().stream()).map(this::frameOf).toList());
 		}
+		Duration duration = Duration.of(digitalTwin.resolution().value(), digitalTwin.resolution().scale().chronoUnit());
 		builder.add("period", duration.toMinutes()).add("scale", Scale.Minute.name());
-		builder.add("variable", variables.toArray(new String[0]));
+		builder.add("variable", variables.toArray(new Frame[0]));
+		return builder.toFrame();
+	}
+
+	private Frame frameOf(Variable v) {
+		FrameBuilder builder = new FrameBuilder("variable").add("name", vpOf(v).name$() + "_" + v.name$());
+		if (v.isCyclic()) builder.add("cyclic");
+		if (v.isNumeric()) builder.add("numeric");
 		return builder.toFrame();
 	}
 
 	private ViewPoint vpOf(Variable v) {
 		return v.core$().ownerAs(ViewPoint.class);
-	}
-
-
-	private Frame frameOf(Reality e) {
-		FrameBuilder builder = new FrameBuilder("environment").add("name", e.name$());
-		e.viewPointList().forEach(s -> builder.add("sensor", frameOf(s)));
-		return builder.toFrame();
-	}
-
-	private Frame frameOf(ViewPoint s) {
-		FrameBuilder builder = new FrameBuilder("sensor").add("name", s.name$());
-		builder.add("period", s.period()).add("scale", s.periodScale());
-		s.variableList().forEach(variable -> builder.add("variable", frameOf(variable)));
-		return builder.toFrame();
-	}
-
-	private Frame frameOf(Variable v) {
-		FrameBuilder builder = new FrameBuilder("variable").add("name", v.name$());
-		v.attributeList().forEach(a -> builder.add("attribute", frameOf(a)));
-		return builder.toFrame();
-	}
-
-	private static FrameBuilder frameOf(Variable.Attribute a) {
-		return new FrameBuilder("attribute")
-				.add("name", a.name$())
-				.add("value", a.value());
 	}
 }

@@ -18,7 +18,9 @@ Concept ViewPoint is component
 
 Concept:Named DigitalTwin
 	var Reality.Entity entity
-	var word:Scale resolution
+	Concept:{1..1} Resolution
+		var integer value
+		var word:Scale scale
 	var integer memory = 0
 	Concept Infer
 		var Variable variable

@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 
-public class Migrator {
+public class ElEspinoDataPreparer {
 	public static final String Tank = "elEspinoDT";
 	public static final String SS = "elEspinoDT";
 	private final FileDatalake datalake;
@@ -23,7 +23,7 @@ public class Migrator {
 	private final InputStream source;
 	private final int[] magnitudesIndices = new int[]{3, 5, 6};
 
-	public Migrator(FileDatalake datalake, File stageDir, InputStream source) {
+	public ElEspinoDataPreparer(FileDatalake datalake, File stageDir, InputStream source) {
 		this.datalake = datalake;
 		this.stageDir = stageDir;
 		this.source = source;

@@ -49,5 +49,11 @@ rule type(digitalTwin) and trigger(method)
 		master.create("$name~_Timeline").timeline($name~_Entity).asRaw($name~_Tank);
 	}
 
+rule type(numeric) and trigger(variable)
+	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Numeric");
+
+rule type(numeric) and trigger(variable)
+	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Cyclic");
+
 rule trigger(variable)
-	$<container>name~_Sensor.create("$this").magnitude("$this");
+	$<container>name~_Sensor.create("$name").magnitude("$name");

@@ -12,12 +12,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
-import java.util.stream.Collectors;
+import java.util.Objects;
 import java.util.stream.Stream;
 
-import static java.lang.ProcessBuilder.Redirect.INHERIT;
 import static java.time.temporal.ChronoField.*;
 import static java.util.Arrays.stream;
+import static java.util.stream.Collectors.joining;
 
 public class DigitalTwinBuilder {
 	public static final String SEPARATOR = ",";
@@ -56,41 +56,44 @@ public class DigitalTwinBuilder {
 	}
 
 	private void train() throws IOException, InterruptedException {
-		System.out.println("Training data...");
+		Logger.info("Training digital twins...");
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
 		File scriptPath = new File(sourcesDir, "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
 		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), dataDir.getAbsolutePath(), modelsDir.getAbsolutePath())
-				.directory(sourcesDir).redirectOutput(INHERIT).redirectError(INHERIT)
+				.directory(sourcesDir).redirectOutput(new File(sourcesDir, "output.log"))
 				.start();
-		System.out.println("Exit code: " + process.waitFor());
+		Logger.info("Finished training of digital twins. Code: " + process.waitFor());
 	}
 
 	private TimelineStore digitalTwin(String name) {
 		return box.datamarts().get("master").timelineStore().get(name, name);
 	}
 
-	private File prepareData(TimelineStore tl) throws IOException {
-		if (tl == null) return null;
+	private void prepareData(TimelineStore tl) throws IOException {
+		if (tl == null) return;
 		File file = new File(dataDir, tl.id() + ".csv");
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
 			writer.write(header(tl));
-			for (Timeline.Point p : tl.timeline()) writer.write(mapRow(p));
+			Timeline timeline = tl.timeline();
+			for (Magnitude m : timeline.magnitudes())
+				if (m.model.attribute("type").equals("Numeric"))
+					timeline = timeline.add(m, timeline.get(m).normalize());
+			for (Timeline.Point p : timeline) writer.write(mapPoint(p));
 		} catch (IOException e) {
 			Logger.error(e);
 		}
-		return file;
 	}
 
 	private String header(TimelineStore tl) {
 		String datetimeLabels = dateTimeLabels();
-		String magnitudes = stream(tl.sensorModel().magnitudes()).flatMap(this::labelOf).collect(Collectors.joining(SEPARATOR));
+		String magnitudes = stream(tl.sensorModel().magnitudes()).flatMap(this::labelOf).collect(joining(SEPARATOR));
 		return datetimeLabels + "," + magnitudes + "\n";
 	}
 
 	private Stream<String> labelOf(Magnitude m) {
 		return "Cyclic".equals(m.model().attribute("type")) ?
-				Stream.of("cos_" + m.label, "sin_" + m.label) :
+				cyclicLabels(m.label) :
 				Stream.of(m.label);
 	}
 
@@ -99,32 +102,33 @@ public class DigitalTwinBuilder {
 	private String dateTimeLabels() {
 		return stream(chronoFields)
 				.map(f -> f.name().toLowerCase())
-				.collect(Collectors.joining(SEPARATOR));
+				.flatMap(DigitalTwinBuilder::cyclicLabels)
+				.collect(joining(SEPARATOR));
 	}
 
-	private String mapRow(Timeline.Point p) {
+	private static Stream<String> cyclicLabels(String m) {
+		return Stream.of("cos_" + m, "sin_" + m);
+	}
+
+	private String mapPoint(Timeline.Point p) {
 		String magnitudeColumns = p.magnitudes().stream()
 				.flatMap(m -> normalize(p.value(m), m))
 				.map(Object::toString)
-				.collect(Collectors.joining(SEPARATOR));
+				.collect(joining(SEPARATOR));
 		return dateTimeColumns(p.instant()) + SEPARATOR + magnitudeColumns + "\n";
 	}
 
 	private String dateTimeColumns(Instant instant) {
 		ZonedDateTime dateTime = instant.atZone(ZoneId.of("UTC"));
-		return stream(chronoFields).map(dateTime::get).map(Object::toString).collect(Collectors.joining(SEPARATOR));
+		return stream(chronoFields).flatMap(f->cyclicValues(dateTime.get(f),f.range().getMaximum())).map(Objects::toString).collect(joining(SEPARATOR));
 	}
 
 	private Stream<Double> normalize(double v, Magnitude magnitude) {
-		String type = magnitude.model().attribute("type");
-		if ("Cyclic".equals(type))
-			return Stream.of(Math.cos(Math.cos(2 * Math.PI * v / magnitude.max())), Math.sin(Math.cos(2 * Math.PI * v / magnitude.max())));
-		else if ("Numeric".equals(type)) {
-			double max = magnitude.max();
-			double min = magnitude.min();
-			return Stream.of((v - min) / (max - min));
-		}
-		return Stream.of(v);
+		return "Cyclic".equals(magnitude.model().attribute("type")) ? cyclicValues(v, magnitude.max()) : Stream.of(v);
+	}
+
+	private static Stream<Double> cyclicValues(double v, double max) {
+		return Stream.of(Math.cos(Math.cos(2 * Math.PI * v / max)), Math.sin(Math.cos(2 * Math.PI * v / max)));
 	}
 
 	private void clean() {

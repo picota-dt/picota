@@ -28,6 +28,7 @@ rule trigger(importVariable)
 	import $<container>name.$viewPoint.$name
 
 rule trigger(callVariable)
+	print("Training $<container>name.$viewPoint.$name~...")
 	$<container>name.$viewPoint.$name.train(source, modeldir)
 
 rule type(variable)
