@@ -4,6 +4,8 @@ Concept:Named Variable is component
 	var Variable dependsOf = empty
 	Facet Cyclic > var integer cycle
 	Facet Numeric
+	Facet Enumerated
+		var string[] values
 	Facet Inferred
 	Concept:Named Attribute
 		var string value

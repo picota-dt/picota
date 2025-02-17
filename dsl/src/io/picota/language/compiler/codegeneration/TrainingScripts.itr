@@ -18,8 +18,9 @@ rule type(digitalTwin)
 		if not os.path.exists(source):
 			print("Training $name: Data not present.")
 			return
-		print("Training $name~...")
+		print('$name	', end='')
 		$variable+callVariable...[$NL]
+		print('')
 
 rule trigger(quoted)
 	"$this"

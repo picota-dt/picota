@@ -34,6 +34,7 @@ class KanTrainer:
         architecture = KAN(len(self.variables) - 1, 1)
         architecture.to(self.device)
         optimizer = torch.optim.Adam(architecture.parameters(), lr=self.lr)
+        avg_loss = 0
         for epoch in range(self.epochs):
             architecture.train()
             epoch_loss = 0.0
@@ -46,7 +47,6 @@ class KanTrainer:
                 optimizer.step()
                 epoch_loss += loss.item()
             avg_loss = epoch_loss / len(train_loader)
-            print(f"Epoch {epoch + 1}/{self.epochs} - Loss: {avg_loss:.4f}")
         architecture.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -55,5 +55,6 @@ class KanTrainer:
                 predictions = architecture(inputs)
                 loss = self.validation_loss_fn(predictions, targets)
                 val_loss += loss.item()
-        print("Training complete!")
+        print(f"{avg_loss:.4f}")
+        print("")
         return architecture

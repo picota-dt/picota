@@ -2,17 +2,24 @@ package io.picota.runtime;
 
 import io.intino.alexandria.logger.Logger;
 import io.intino.datahub.box.DataHubBox;
+import io.intino.magritte.framework.Layer;
 import io.intino.sumus.chronos.Magnitude;
 import io.intino.sumus.chronos.Timeline;
 import io.intino.sumus.chronos.TimelineStore;
 import org.apache.commons.io.FileUtils;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Stream;
 
 import static java.time.temporal.ChronoField.*;
@@ -24,11 +31,13 @@ public class DigitalTwinBuilder {
 	private final DataHubBox box;
 	private final File sourcesDir;
 	private final File pythonVenv;
+	private final File scripts;
 	private final File modelsDir;
 	private final File dataDir;
-	private final InputStream scripts;
+	private final ExecutorService executor;
+	private Future<?> current;
 
-	public DigitalTwinBuilder(DataHubBox box, File workingDir, File pythonVenv, InputStream scripts) {
+	public DigitalTwinBuilder(DataHubBox box, File workingDir, File pythonVenv, File scripts) {
 		this.box = box;
 		this.modelsDir = new File(workingDir, "models");
 		this.sourcesDir = new File(workingDir, "sources");
@@ -39,19 +48,30 @@ public class DigitalTwinBuilder {
 		this.sourcesDir.mkdirs();
 		this.modelsDir.mkdirs();
 		this.dataDir.mkdirs();
+		this.executor = Executors.newSingleThreadExecutor();
 	}
 
-	public void build(String... digitalTwins) {
-		try {
-			for (String digitalTwin : digitalTwins) {
-				Logger.info("Preparing data for " + digitalTwin + "...");
-				prepareData(digitalTwin(digitalTwin));
+	public void start() {
+		if (current != null && !current.isDone()) throw new IllegalStateException("Executor is not terminated");
+		current = this.executor.submit(() -> {
+			try {
+				for (String digitalTwin : box.graph().sensorList().stream().map(Layer::name$).toList()) {
+					Logger.info("Preparing data for " + digitalTwin + "...");
+					prepareData(digitalTwin(digitalTwin));
+				}
+				FileUtils.copyDirectory(scripts, sourcesDir);
+				train();
+				clean();
+			} catch (IOException | InterruptedException e) {
+				Logger.error(e);
 			}
-			Tar.extractTarFile(scripts, sourcesDir);
-			train();
-//			clean();
-		} catch (IOException | InterruptedException e) {
-			Logger.error(e);
+		});
+	}
+
+	public void stop() {
+		if (current != null) {
+			current.cancel(true);
+			clean();
 		}
 	}
 
@@ -61,9 +81,11 @@ public class DigitalTwinBuilder {
 		File scriptPath = new File(sourcesDir, "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
 		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), dataDir.getAbsolutePath(), modelsDir.getAbsolutePath())
-				.directory(sourcesDir).redirectOutput(new File(sourcesDir, "output.log"))
+				.directory(sourcesDir)
 				.start();
 		Logger.info("Finished training of digital twins. Code: " + process.waitFor());
+		String report = new String(process.getInputStream().readAllBytes());
+		System.out.println(report);
 	}
 
 	private TimelineStore digitalTwin(String name) {
@@ -120,7 +142,7 @@ public class DigitalTwinBuilder {
 
 	private String dateTimeColumns(Instant instant) {
 		ZonedDateTime dateTime = instant.atZone(ZoneId.of("UTC"));
-		return stream(chronoFields).flatMap(f->cyclicValues(dateTime.get(f),f.range().getMaximum())).map(Objects::toString).collect(joining(SEPARATOR));
+		return stream(chronoFields).flatMap(f -> cyclicValues(dateTime.get(f), f.range().getMaximum())).map(Objects::toString).collect(joining(SEPARATOR));
 	}
 
 	private Stream<Double> normalize(double v, Magnitude magnitude) {
