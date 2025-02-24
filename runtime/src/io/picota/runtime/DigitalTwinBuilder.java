@@ -2,48 +2,39 @@ package io.picota.runtime;
 
 import io.intino.alexandria.logger.Logger;
 import io.intino.datahub.box.DataHubBox;
-import io.intino.magritte.framework.Layer;
+import io.intino.datahub.model.Sensor;
 import io.intino.sumus.chronos.Magnitude;
 import io.intino.sumus.chronos.Timeline;
 import io.intino.sumus.chronos.TimelineStore;
 import org.apache.commons.io.FileUtils;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.temporal.ChronoField;
-import java.util.Objects;
+import java.io.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static java.time.temporal.ChronoField.*;
+import static io.picota.runtime.Utils.*;
+import static java.lang.String.format;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.joining;
 
 public class DigitalTwinBuilder {
-	public static final String SEPARATOR = ",";
 	private final DataHubBox box;
 	private final File sourcesDir;
 	private final File pythonVenv;
-	private final File scripts;
 	private final File modelsDir;
 	private final File dataDir;
 	private final ExecutorService executor;
 	private Future<?> current;
 
-	public DigitalTwinBuilder(DataHubBox box, File workingDir, File pythonVenv, File scripts) {
+	public DigitalTwinBuilder(DataHubBox box, File workingDir, File pythonVenv) {
 		this.box = box;
 		this.modelsDir = new File(workingDir, "models");
 		this.sourcesDir = new File(workingDir, "sources");
 		this.dataDir = new File(workingDir, "data");
 		this.pythonVenv = pythonVenv;
-		this.scripts = scripts;
 		if (this.sourcesDir.exists()) clean();
 		this.sourcesDir.mkdirs();
 		this.modelsDir.mkdirs();
@@ -55,24 +46,17 @@ public class DigitalTwinBuilder {
 		if (current != null && !current.isDone()) throw new IllegalStateException("Executor is not terminated");
 		current = this.executor.submit(() -> {
 			try {
-				for (String digitalTwin : box.graph().sensorList().stream().map(Layer::name$).toList()) {
-					Logger.info("Preparing data for " + digitalTwin + "...");
-					prepareData(digitalTwin(digitalTwin));
+				for (Sensor dt : box.graph().sensorList()) {
+					Logger.info("Preparing data for " + dt + "...");
+					prepareData(dt, timeline(dt));
 				}
-				FileUtils.copyDirectory(scripts, sourcesDir);
+				untar(this.getClass().getResourceAsStream("trainer.tar"));
 				train();
 				clean();
 			} catch (IOException | InterruptedException e) {
 				Logger.error(e);
 			}
 		});
-	}
-
-	public void stop() {
-		if (current != null) {
-			current.cancel(true);
-			clean();
-		}
 	}
 
 	private void train() throws IOException, InterruptedException {
@@ -88,29 +72,82 @@ public class DigitalTwinBuilder {
 		System.out.println(report);
 	}
 
-	private TimelineStore digitalTwin(String name) {
-		return box.datamarts().get("master").timelineStore().get(name, name);
+	public void stop() {
+		if (current != null) {
+			current.cancel(true);
+			clean();
+		}
 	}
 
-	private void prepareData(TimelineStore tl) throws IOException {
+	private TimelineStore timeline(Sensor dt) {
+		return box.datamarts().get("master").timelineStore().get(dt.name$(), dt.name$());
+	}
+
+	private void prepareData(Sensor dt, TimelineStore tl) throws IOException {
 		if (tl == null) return;
-		File file = new File(dataDir, tl.id() + ".csv");
-		try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
-			writer.write(header(tl));
-			Timeline timeline = tl.timeline();
-			for (Magnitude m : timeline.magnitudes())
-				if (m.model.attribute("type").equals("Numeric"))
-					timeline = timeline.add(m, timeline.get(m).normalize());
-			for (Timeline.Point p : timeline) writer.write(mapPoint(p));
+		try (BufferedWriter writer = new BufferedWriter(new FileWriter(new File(dataDir, tl.id() + ".csv")))) {
+			writer.write(header(dt, tl));
+			writeValues(dt, tl, writer);
 		} catch (IOException e) {
 			Logger.error(e);
 		}
 	}
 
-	private String header(TimelineStore tl) {
-		String datetimeLabels = dateTimeLabels();
-		String magnitudes = stream(tl.sensorModel().magnitudes()).flatMap(this::labelOf).collect(joining(SEPARATOR));
-		return datetimeLabels + "," + magnitudes + "\n";
+	private String header(Sensor dt, TimelineStore tl) {
+		StringBuilder header = new StringBuilder();
+		header.append(dateTimeLabels());
+		header.append(SEPARATOR).append(stream(tl.sensorModel().magnitudes())
+				.flatMap(this::labelOf)
+				.collect(joining(SEPARATOR)));
+		int timeHorizon = timeHorizon(dt);
+		if (timeHorizon > 0) header.append(SEPARATOR).append(stream(tl.sensorModel().magnitudes())
+				.flatMap(this::labelOf)
+				.map(label -> format("%s+%d", label, timeHorizon))
+				.collect(joining(SEPARATOR)));
+		IntStream.range(0, lag(dt)).forEach(i ->
+				header.append(SEPARATOR).append(stream(tl.sensorModel().magnitudes())
+						.flatMap(this::labelOf)
+						.map(label -> format("%s-%d", label, i))
+						.collect(joining(SEPARATOR))));
+		return header + "\n";
+	}
+
+	private void writeValues(Sensor dt, TimelineStore tl, BufferedWriter writer) throws IOException {
+		int lag = lag(dt);
+		int timeHorizon = timeHorizon(dt);
+		Timeline timeline = tl.timeline();
+		for (Magnitude m : timeline.magnitudes())
+			if (m.model.attribute("type").equals("Numeric"))
+				timeline = timeline.add(m, timeline.get(m).normalize());
+		timeline.stream().skip(lag).forEach(p -> {
+			StringBuilder builder = new StringBuilder();
+			builder.append(dateTimeColumns(p.instant()));
+			builder.append(SEPARATOR).append(magnitudeColumns(p));
+			if (timeHorizon > 0) builder.append(SEPARATOR).append(magnitudeColumns(p.step(timeHorizon)));
+			if (lag != 0) {
+				String prefix = builder.toString();
+				StringBuilder lagBuilder = new StringBuilder();
+				IntStream.range(0, lag + 1).forEach(i -> {
+					lagBuilder.append(prefix);
+					IntStream.range(0, lag).forEach(j -> {
+						if (j < lag - i) lagBuilder.append("0");
+						else lagBuilder.append(magnitudeColumns(p.step(-(j + 1))));
+						if (j < lag - 1) lagBuilder.append(SEPARATOR);
+					});
+					lagBuilder.append("\n");
+				});
+				write(writer, lagBuilder.toString());
+			} else write(writer, builder.toString());
+		});
+	}
+
+
+	private void write(BufferedWriter writer, String row) {
+		try {
+			writer.write(row);
+		} catch (IOException e) {
+			Logger.error(e);
+		}
 	}
 
 	private Stream<String> labelOf(Magnitude m) {
@@ -119,10 +156,8 @@ public class DigitalTwinBuilder {
 				Stream.of(m.label);
 	}
 
-	private static final ChronoField[] chronoFields = new ChronoField[]{HOUR_OF_DAY, DAY_OF_WEEK, DAY_OF_MONTH, MONTH_OF_YEAR};
-
 	private String dateTimeLabels() {
-		return stream(chronoFields)
+		return stream(ChronoFields)
 				.map(f -> f.name().toLowerCase())
 				.flatMap(DigitalTwinBuilder::cyclicLabels)
 				.collect(joining(SEPARATOR));
@@ -132,25 +167,12 @@ public class DigitalTwinBuilder {
 		return Stream.of("cos_" + m, "sin_" + m);
 	}
 
-	private String mapPoint(Timeline.Point p) {
-		String magnitudeColumns = p.magnitudes().stream()
-				.flatMap(m -> normalize(p.value(m), m))
-				.map(Object::toString)
-				.collect(joining(SEPARATOR));
-		return dateTimeColumns(p.instant()) + SEPARATOR + magnitudeColumns + "\n";
-	}
-
-	private String dateTimeColumns(Instant instant) {
-		ZonedDateTime dateTime = instant.atZone(ZoneId.of("UTC"));
-		return stream(chronoFields).flatMap(f -> cyclicValues(dateTime.get(f), f.range().getMaximum())).map(Objects::toString).collect(joining(SEPARATOR));
-	}
-
-	private Stream<Double> normalize(double v, Magnitude magnitude) {
-		return "Cyclic".equals(magnitude.model().attribute("type")) ? cyclicValues(v, magnitude.max()) : Stream.of(v);
-	}
-
-	private static Stream<Double> cyclicValues(double v, double max) {
-		return Stream.of(Math.cos(Math.cos(2 * Math.PI * v / max)), Math.sin(Math.cos(2 * Math.PI * v / max)));
+	private void untar(InputStream trainer) {
+		try {
+			Tar.extractTarFile(trainer, this.sourcesDir);
+		} catch (IOException e) {
+			Logger.error(e);
+		}
 	}
 
 	private void clean() {

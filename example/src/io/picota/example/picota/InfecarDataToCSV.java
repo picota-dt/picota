@@ -3,13 +3,6 @@ package io.picota.example.picota;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.intino.alexandria.Json;
-import io.intino.alexandria.Scale;
-import io.intino.alexandria.Timetag;
-import io.intino.alexandria.datalake.file.FileDatalake;
-import io.intino.alexandria.event.Event;
-import io.intino.alexandria.event.message.MessageEvent;
-import io.intino.alexandria.ingestion.EventSession;
-import io.intino.alexandria.ingestion.SessionHandler;
 import io.intino.alexandria.logger.Logger;
 
 import java.io.*;
@@ -17,25 +10,25 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.DoubleStream;
 import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.toList;
+import static java.lang.String.format;
+import static java.util.stream.Collectors.*;
 
-public class InfecarDataPreparer {
+public class InfecarDataToCSV {
 	public static final String Tank = "predictiveEnergyGeneration";
 	public static final String SS = "predictiveEnergyGeneration";
-	private final FileDatalake datalake;
-	private final File stageDir;
 	private final InputStream source;
 	private final Map<String, String> magnitudes = new LinkedHashMap<>();
+	private final File target;
 
 
-	public InfecarDataPreparer(FileDatalake datalake, File stageDir, InputStream source) {
-		this.datalake = datalake;
-		this.stageDir = stageDir;
+	public InfecarDataToCSV(InputStream source, File target) {
 		this.source = source;
+		this.target = target;
 		magnitudes.put("temp_cell", "operational_cellTemperature");
 		magnitudes.put("temp_envi", "weather_temperature");
 		magnitudes.put("radiation", "weather_radiation");
@@ -48,30 +41,28 @@ public class InfecarDataPreparer {
 	}
 
 	public void run() throws IOException {
-		if (datalake.measurementStore().tank(Tank).content().iterator().hasNext()) return;
+		if (target.exists()) return;
 		Logger.info("Importing infecar data...");
-		SessionHandler handler = new SessionHandler(stageDir);
-		EventSession session = handler.createEventSession();
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(source))) {
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(source)); BufferedWriter writer = new BufferedWriter(new FileWriter(target))) {
+			writer.write("ts," + magnitudes.values().stream().distinct().collect(joining(",")) + "\n");
 			List<JsonObject> objects = filterAndGroupMeasures(reader);
 			JsonObject current = null;
-			for (JsonObject o : objects) current = mergeToHaveCompleteEvent(o, current, session);
+			for (JsonObject o : objects) current = mergeToHaveCompleteEvent(o, current, writer);
 		}
-		session.close();
 	}
 
-	private JsonObject mergeToHaveCompleteEvent(JsonObject o, JsonObject current, EventSession session) {
+	private JsonObject mergeToHaveCompleteEvent(JsonObject o, JsonObject current, BufferedWriter writer) {
 		if (current == null) {
-			if (o.size() == 8) save(o, session);
+			if (o.size() == 8) save(o, writer);
 			else current = o;
 		} else {
 			if (o.size() == 8) {
-				save(o, session);
+				save(o, writer);
 				current = null;
 			} else {
 				current = merge(tsFrom(o), List.of(current, o));
 				if (current.size() == 8) {
-					save(current, session);
+					save(current, writer);
 					current = null;
 				}
 			}
@@ -81,7 +72,7 @@ public class InfecarDataPreparer {
 
 	private List<JsonObject> filterAndGroupMeasures(BufferedReader reader) {
 		return reader.lines().map(l -> Json.fromJson(l, JsonObject.class))
-				.filter(InfecarDataPreparer::consFvMet)
+				.filter(InfecarDataToCSV::consFvMet)
 				.map(this::extractInfo)
 				.collect(groupingBy(this::tsOf, LinkedHashMap::new, toList())).entrySet().stream()
 				.map(e -> merge(e.getKey(), e.getValue()))
@@ -125,13 +116,15 @@ public class InfecarDataPreparer {
 		return result;
 	}
 
-	private void save(JsonObject measure, EventSession session) {
+	private void save(JsonObject measure, BufferedWriter writer) {
 		try {
-			MessageEvent event = new MessageEvent(Tank, SS);
 			Instant ts = tsFrom(measure);
-			double[] measurements = valuesOf(measure);
-			event.ts(ts).toMessage().set("values", measurements).set("magnitudes", magnitudes.values());
-			session.put(Tank, SS, new Timetag(ts, Scale.Day), Event.Format.Message, event);
+			StringBuilder result = new StringBuilder();
+			String measurements = valuesOf(measure)
+					.mapToObj(d -> format(Locale.ENGLISH, "%.2f", d))
+					.collect(joining(","));
+			result.append(String.join(",", ts.toString(), measurements)).append("\n");
+			writer.write(result.toString());
 		} catch (IOException e) {
 			Logger.error(e);
 		}
@@ -141,8 +134,8 @@ public class InfecarDataPreparer {
 		return Instant.ofEpochSecond(measure.getAsJsonPrimitive("ts").getAsLong());
 	}
 
-	private double[] valuesOf(JsonObject measure) {
-		return magnitudes.values().stream().distinct().mapToDouble(m -> measure.getAsJsonPrimitive(m).getAsDouble()).toArray();
+	private DoubleStream valuesOf(JsonObject measure) {
+		return magnitudes.values().stream().distinct().mapToDouble(m -> measure.getAsJsonPrimitive(m).getAsDouble());
 	}
 
 	private static String alias(JsonObject o2) {
@@ -157,6 +150,6 @@ public class InfecarDataPreparer {
 	private static double meteoValue(JsonObject o, String f) {
 		JsonElement extras = o.get("extras").getAsJsonObject().get(f);
 		if (extras.getAsString().startsWith("%")) return 0;
-		return extras.getAsDouble();
+		return extras.getAsDouble() / 10.;
 	}
 }

@@ -6,12 +6,10 @@ import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.model.*;
-import io.picota.language.model.rules.Scale;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -79,20 +77,26 @@ public class PicotaSetupGenerationOperation extends Generator {
 			Reality reality = digitalTwin.entity().core$().ownerAs(Reality.class);
 			List<ViewPoint> viewPoints = reality.viewPointList();
 			variables.addAll(viewPoints.stream().flatMap(vp -> vp.variableList().stream())
-					.map(this::frameOf).toList());
+					.map(v -> frameOf(v, digitalTwin.inferList())).toList());
 			List<ViewPoint> entityVP = digitalTwin.entity().viewPointList();
-			variables.addAll(entityVP.stream().flatMap(vp -> vp.variableList().stream()).map(this::frameOf).toList());
+			variables.addAll(entityVP.stream().flatMap(vp -> vp.variableList().stream()).map(v -> frameOf(v, digitalTwin.inferList())).toList());
 		}
-		Duration duration = Duration.of(digitalTwin.resolution().value(), digitalTwin.resolution().scale().chronoUnit());
-		builder.add("period", duration.toMinutes()).add("scale", Scale.Minute.name());
+		builder.add("period", digitalTwin.resolution().value()).add("scale", digitalTwin.resolution().scale().name());
 		builder.add("variable", variables.toArray(new Frame[0]));
+		builder.add("moment", digitalTwin.isEstimate() ? "Current" : "Future");
+		if (digitalTwin.isPredictive()) {
+			builder.add("timeHorizon", digitalTwin.asPredictive().timeHorizon());
+			builder.add("lag", digitalTwin.asPredictive().lag());
+		}
 		return builder.toFrame();
 	}
 
-	private Frame frameOf(Variable v) {
+	private Frame frameOf(Variable v, List<DigitalTwin.Infer> infers) {
 		FrameBuilder builder = new FrameBuilder("variable").add("name", vpOf(v).name$() + "_" + v.name$());
 		if (v.isCyclic()) builder.add("cyclic");
 		if (v.isNumeric()) builder.add("numeric");
+		if (infers.stream().anyMatch(i -> i.variable().equals(v)))
+			builder.add("inference", infers.getFirst().core$().ownerAs(DigitalTwin.class).isEstimate() ? "Current" : "Future");
 		return builder.toFrame();
 	}
 

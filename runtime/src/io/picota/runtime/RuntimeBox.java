@@ -1,11 +1,9 @@
 package io.picota.runtime;
 
-import io.intino.alexandria.logger.Logger;
 import io.intino.datahub.box.DataHubBox;
+import io.intino.datahub.model.Sensor;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 
 public class RuntimeBox extends AbstractBox {
 	public enum State {Waiting, Training, Prepared, Operating;}
@@ -13,19 +11,17 @@ public class RuntimeBox extends AbstractBox {
 	private DataHubBox datahub;
 	private File workingDir;
 	private File pythonVenv;
-	private File scripts;
 	private DigitalTwinBuilder dtBuilder;
+	private DigitalTwinEvaluator dtEvaluator;
 	private State state = State.Waiting;
 
-	public RuntimeBox(String[] args, DataHubBox box, File workingDir, File pythonVenv, InputStream scripts) {
+	public RuntimeBox(RuntimeConfiguration args, DataHubBox datahub, File workingDir, File pythonVenv) {
 		super(args);
-		this.datahub = box;
+		this.datahub = datahub;
 		this.workingDir = workingDir;
 		this.pythonVenv = pythonVenv;
-		this.scripts = new File(workingDir, "scripts");
-		this.scripts.mkdirs();
-		untar(scripts);
-		this.dtBuilder = new DigitalTwinBuilder(box, workingDir, pythonVenv, this.scripts);
+		this.dtBuilder = new DigitalTwinBuilder(datahub, workingDir, pythonVenv);
+		this.dtEvaluator = new DigitalTwinEvaluator(datahub, workingDir, pythonVenv);
 	}
 
 	public RuntimeBox(String[] args) {
@@ -43,6 +39,12 @@ public class RuntimeBox extends AbstractBox {
 		return this;
 	}
 
+	public Sensor entity(String name) {
+		return datahub().graph()
+				.sensorList(s -> s.name$().equalsIgnoreCase(name))
+				.findFirst().orElse(null);
+	}
+
 	public State state() {
 		return state;
 	}
@@ -51,16 +53,12 @@ public class RuntimeBox extends AbstractBox {
 		return dtBuilder;
 	}
 
+	public DigitalTwinEvaluator dtEvaluator() {
+		return dtEvaluator;
+	}
+
 	public DataHubBox datahub() {
 		return datahub;
-	}
-
-	public File workingDir() {
-		return workingDir;
-	}
-
-	public File pythonVenv() {
-		return pythonVenv;
 	}
 
 	public RuntimeBox state(State state) {
@@ -69,6 +67,7 @@ public class RuntimeBox extends AbstractBox {
 	}
 
 	public void beforeStart() {
+		datahub().start();
 	}
 
 	public void afterStart() {
@@ -78,13 +77,6 @@ public class RuntimeBox extends AbstractBox {
 	}
 
 	public void afterStop() {
-	}
-
-	private void untar(InputStream scripts) {
-		try {
-			Tar.extractTarFile(scripts, this.scripts);
-		} catch (IOException e) {
-			Logger.error(e);
-		}
+		datahub().stop();
 	}
 }

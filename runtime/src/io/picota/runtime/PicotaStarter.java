@@ -1,29 +1,21 @@
 package io.picota.runtime;
 
+import io.intino.alexandria.logger4j.Logger;
 import io.intino.datahub.box.DataHubBox;
+import io.intino.datahub.model.NessGraph;
+import org.apache.log4j.Level;
 
 import java.io.File;
-import java.io.InputStream;
 
 public class PicotaStarter {
-	private final String[] args;
-	private final DataHubBox box;
-	private final File workingDir;
-	private final File pythonVenv;
-	private final InputStream scripts;
 
-	public PicotaStarter(String[] args, DataHubBox box, File workingDir, File pythonVenv, InputStream scripts) {
-		this.args = args;
-		this.box = box;
-		this.workingDir = workingDir;
-		this.pythonVenv = pythonVenv;
-		this.scripts = scripts;
+	public static RuntimeBox start(String[] args, NessGraph graph) {
+		var configuration = new RuntimeConfiguration(args);
+		var workingDir = new File(configuration.home(), "digital-twins");
+		var pythonVenv = new File(configuration.args().get("venv"));
+		RuntimeBox runtimeBox = new RuntimeBox(configuration, (DataHubBox) new DataHubBox(args).put(graph), workingDir, pythonVenv);
+		Logger.setLevel(Level.ERROR);
+		runtimeBox.start();
+		return runtimeBox;
 	}
-
-	public void start() {
-		RuntimeBox box = new RuntimeBox(args, this.box, workingDir, pythonVenv, scripts);
-		box.start();
-	}
-
-
 }

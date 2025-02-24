@@ -11,7 +11,8 @@ rule type(graphloader)
 	import java.nio.file.Files;
 
 	public class GraphLoader {
-		public static NessGraph load(DataHubConfiguration configuration) {
+		public static NessGraph load(String[] args) {
+			DataHubConfiguration configuration = new DataHubConfiguration(args);
 			NessGraph ness = NessGraph.load();
 			ness.create().broker().port(Integer.parseInt(configuration.brokerPort())).secondaryPort(Integer.parseInt(configuration.brokerSecondaryPort()));
 			Datalake datalake = ness.create().datalake(Scale.$scale);
@@ -43,17 +44,35 @@ rule type(digitalTwin) and trigger(call)
 rule type(digitalTwin) and trigger(method)
 	private static void $name(Datalake datalake, Datamart master) {
 		Sensor $name~_Sensor = datalake.graph().create("sensors","$name").sensor();
+		$name~_Sensor.create("resolution").attribute("$period");
+		$name~_Sensor.create("resolutionScale").attribute("$scale");
+		$name~_Sensor.create("inference").attribute("$moment");
+		<<$lag>>
+		<<$timeHorizon>>
+		<<$timeHorizonScale>>
 		<<$variable...[$NL]>>
 		Entity $name~_Entity = master.create("$name").entity();
 		Datalake.Tank.Measurement $name~_Tank = datalake.create("$name").tank().asMeasurement($name~_Sensor, $period, Scale.$scale+firstUpperCase);
 		master.create("$name~_Timeline").timeline($name~_Entity).asRaw($name~_Tank);
 	}
 
-rule type(numeric) and trigger(variable)
-	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Numeric");
+rule trigger(lag)
+	$<container>name~_Sensor.create("lag").attribute("$this");
+
+rule trigger(timeHorizon)
+	$<container>name~_Sensor.create("timeHorizon").attribute("$this");
+
+rule trigger(timeHorizonScale)
+	$<container>name~_Sensor.create("timeHorizonScale").attribute("$this");
 
 rule type(numeric) and trigger(variable)
-	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Cyclic");
+	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Numeric")<<$inference>>;
+
+rule type(numeric) and trigger(variable)
+	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Cyclic")<<$inference>>;
 
 rule trigger(variable)
-	$<container>name~_Sensor.create("$name").magnitude("$name");
+	$<container>name~_Sensor.create("$name").magnitude("$name")<<$inference>>;
+
+rule trigger(inference)
+	.core$$().ownerAs(Sensor.Magnitude.class).create("inference").attribute("$this")

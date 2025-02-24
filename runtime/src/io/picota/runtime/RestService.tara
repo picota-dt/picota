@@ -16,5 +16,6 @@ Service Api as REST(host = empty, port = "{api_port}")
 			Exception(code = BadRequest)
 	Resource("/status") status
 		Get
+			Parameter(in = query) moment as Word("Current" "Future")
 			Parameter(in = query) entity as Text
 			Response as Text

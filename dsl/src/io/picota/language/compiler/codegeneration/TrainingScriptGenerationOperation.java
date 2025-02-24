@@ -10,6 +10,7 @@ import io.intino.magritte.framework.Layer;
 import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.compiler.util.Tar;
 import io.picota.language.model.*;
+import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,8 +48,12 @@ public class TrainingScriptGenerationOperation extends Generator {
 			if (conf.isVerbose()) conf.out().println(prefix() + " Generating Script...");
 			createDigitalTwinScripts();
 			createMainScript();
-			extractLibs();
-			Tar.createTarFile(tempDir, new File(outDir, "scripts.tar"));
+			extract("trainer");
+			Tar.createTarFile(tempDir, new File(outDir, "trainer.tar"));
+			FileUtils.cleanDirectory(tempDir);
+			createEvaluatorScripts();
+			extract("evaluator");
+			Tar.createTarFile(tempDir, new File(outDir, "evaluators.tar"));
 			return toOutputList(outMap);
 		} catch (Throwable e) {
 			LOG.log(SEVERE, "Error during script generation: " + e.getMessage(), e);
@@ -56,8 +61,17 @@ public class TrainingScriptGenerationOperation extends Generator {
 		}
 	}
 
-	private void extractLibs() throws IOException {
-		Tar.extractTarFile(this.getClass().getResourceAsStream("/libs.tar"), tempDir);
+	private void createEvaluatorScripts() throws IOException {
+		for (DigitalTwin digitalTwin : model.digitalTwinList()) {
+			File file = new File(tempDir, digitalTwin.name$() + ".py");
+			FrameBuilder frame = new FrameBuilder("evaluator");
+			digitalTwin.inferList().forEach(i -> frame.add("variable", frameBuilderOf(i.variable(), "inference")));
+			Files.writeString(file.toPath(), new Engine(template).render(frame));
+		}
+	}
+
+	private void extract(String lib) throws IOException {
+		Tar.extractTarFile(this.getClass().getResourceAsStream("/" + lib + ".tar"), tempDir);
 	}
 
 	private void createMainScript() throws IOException {
@@ -127,10 +141,14 @@ public class TrainingScriptGenerationOperation extends Generator {
 	}
 
 	private Frame frameOf(Variable v, String tag) {
+		return frameBuilderOf(v, tag)
+				.toFrame();
+	}
+
+	private static FrameBuilder frameBuilderOf(Variable v, String tag) {
 		return new FrameBuilder(tag, "variable")
 				.add("viewPoint", viewPoint(v).name$())
-				.add("name", v.name$())
-				.toFrame();
+				.add("name", v.name$());
 	}
 
 	private static ViewPoint viewPoint(Variable v) {

@@ -10,6 +10,7 @@ Artifact("io.picota", "1.0.0") example
 	Parameter("datalake_directory")
 	Parameter("broker_port")
 	Parameter("broker_secondary_port")
+	Parameter("api_port")
 
 RunConfiguration local
 	Argument("broker_port", "63000")
@@ -18,3 +19,4 @@ RunConfiguration local
 	Argument("venv", "/Users/oroncal/workspace/picota/example/venv")
 	Argument("backup_directory", "./temp/backup")
 	Argument("datalake_directory", "./temp/datalake")
+	Argument("api_port", "9000")

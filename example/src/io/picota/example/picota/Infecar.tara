@@ -14,7 +14,7 @@ Reality Infecar
 			Variable reactivePower as Numeric
 			Variable activePower as Numeric
 
-DigitalTwin(Infecar.SolarPlant) predictiveEnergyGeneration as Predictive(timeHorizon = 1)
+DigitalTwin(Infecar.SolarPlant) predictiveEnergyGeneration as Predictive(timeHorizon = 6, lag = 0)
 	Resolution(5, Minute)
 	Infer(Infecar.SolarPlant.generation.activePower)
 	Infer(Infecar.SolarPlant.generation.reactivePower)

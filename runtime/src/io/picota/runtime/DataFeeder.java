@@ -14,8 +14,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Stream;
 
 import static io.intino.alexandria.event.Event.Format.Message;
 import static java.util.Collections.addAll;
@@ -35,10 +35,11 @@ public class DataFeeder {
 		EventSession session = handler.createEventSession();
 		List<String> header = new ArrayList<>();
 		String separator = separator(contentType);
-		Stream<String> lines = new BufferedReader(new InputStreamReader(stream)).lines();
-		lines.limit(1).forEach(l -> addAll(header, l.split(separator)));
-		lines.map(l -> l.split(separator)).forEach(fields -> {
+		Iterator<String> lines = new BufferedReader(new InputStreamReader(stream)).lines().iterator();
+		addAll(header, lines.next().split(separator));
+		lines.forEachRemaining(l -> {
 			try {
+				String[] fields = l.split(separator);
 				if (!exceptions.isEmpty()) return;
 				save(entity, header, ts(fields), map(sensor, fields, header), session);
 			} catch (Exception e) {
@@ -56,7 +57,7 @@ public class DataFeeder {
 
 	private static double[] map(Sensor sensor, String[] values, List<String> header) throws Exception {
 		double[] doubleValues = new double[values.length];
-		for (int i = 0; i < header.size(); i++) {
+		for (int i = 1; i < header.size(); i++) {
 			String h = header.get(i);
 			Sensor.Magnitude magnitude = sensor.magnitude(m -> m.name$().equals(h));
 			if (magnitude == null) throw new Exception("Column not found: " + h);

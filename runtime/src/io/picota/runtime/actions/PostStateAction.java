@@ -30,7 +30,7 @@ public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHa
 			if (box.state() == State.Operating) throw new BadRequest("Already operating");
 			if (box.state() == State.Training) throw new BadRequest("Currently training");
 			if (box.state() == State.Prepared) box.datahub().start();
-			//TODO start inferential endpoint
+			box.dtEvaluator().start();
 		}
 	}
 

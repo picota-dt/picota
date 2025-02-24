@@ -1,3 +1,12 @@
+rule type(evaluator)
+	import sys
+	import torch
+	import evaluator.KanEvaluator
+
+	dt = DatasetLoader(sys.argv[2] + "/$name.csv", ",").load()
+	row = torch.tensor(dt, dtype=torch.float32)
+	$variable+evaluate...[$NL]
+
 rule type(supermain)
 	import sys
 	$dt+import...[$NL]
@@ -29,8 +38,10 @@ rule trigger(importVariable)
 	import $<container>name.$viewPoint.$name
 
 rule trigger(callVariable)
-	print("Training $<container>name.$viewPoint.$name~...")
 	$<container>name.$viewPoint.$name.train(source, modeldir)
+
+rule trigger(evaluate)
+	print("$viewPoint~_$name	{}".format(KanEvaluator.evaluate(sys.argv[1] + "/$viewPoint/$name.bin", row)))
 
 rule type(variable)
 	import torch

@@ -6,10 +6,6 @@ Concept:Named Variable is component
 	Facet Numeric
 	Facet Enumerated
 		var string[] values
-	Facet Inferred
-	Concept:Named Attribute
-		var string value
-
 Concept Reality
 	has ViewPoint
 	Concept:Named Entity
@@ -28,4 +24,5 @@ Concept:Named DigitalTwin
 		var Variable variable
 	Facet Predictive
 		var integer timeHorizon
+		var integer lag
 	Facet Estimate
