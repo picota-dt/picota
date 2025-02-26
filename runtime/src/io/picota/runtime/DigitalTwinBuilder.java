@@ -7,11 +7,13 @@ import io.intino.sumus.chronos.Magnitude;
 import io.intino.sumus.chronos.Timeline;
 import io.intino.sumus.chronos.TimelineStore;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -39,37 +41,48 @@ public class DigitalTwinBuilder {
 		this.sourcesDir.mkdirs();
 		this.modelsDir.mkdirs();
 		this.dataDir.mkdirs();
-		this.executor = Executors.newSingleThreadExecutor();
-	}
+		this.executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+			int counter = 0;
 
-	public void start() {
-		if (current != null && !current.isDone()) throw new IllegalStateException("Executor is not terminated");
-		current = this.executor.submit(() -> {
-			try {
-				for (Sensor dt : box.graph().sensorList()) {
-					Logger.info("Preparing data for " + dt + "...");
-					prepareData(dt, timeline(dt));
-				}
-				untar(this.getClass().getResourceAsStream("trainer.tar"));
-				train();
-				clean();
-			} catch (IOException | InterruptedException e) {
-				Logger.error(e);
+			@Override
+			public Thread newThread(@NotNull Runnable r) {
+				Thread thread = new Thread(r, "Trainer-" + counter++);
+				thread.setDaemon(true);
+				return thread;
 			}
 		});
 	}
 
-	private void train() throws IOException, InterruptedException {
+	public Future<?> start(OnFinished onFinished) {
+		if (current != null && !current.isDone()) throw new IllegalStateException("Executor is not terminated");
+		current = this.executor.submit(() -> {
+			try {
+				for (Sensor dt : box.graph().sensorList()) {
+					Logger.info("Preparing data for " + dt.name$() + "...");
+					prepareData(dt, timeline(dt));
+				}
+				untar(this.getClass().getResourceAsStream("/trainer.tar"));
+				String report = train();
+//				clean();
+				onFinished.onFinished(report);
+			} catch (IOException | InterruptedException e) {
+				Logger.error(e);
+			}
+		});
+		return current;
+	}
+
+	private String train() throws IOException, InterruptedException {
 		Logger.info("Training digital twins...");
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
 		File scriptPath = new File(sourcesDir, "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
 		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), dataDir.getAbsolutePath(), modelsDir.getAbsolutePath())
+				.redirectErrorStream(true)
 				.directory(sourcesDir)
 				.start();
 		Logger.info("Finished training of digital twins. Code: " + process.waitFor());
-		String report = new String(process.getInputStream().readAllBytes());
-		System.out.println(report);
+		return new String(process.getInputStream().readAllBytes());
 	}
 
 	public void stop() {
@@ -123,7 +136,11 @@ public class DigitalTwinBuilder {
 			StringBuilder builder = new StringBuilder();
 			builder.append(dateTimeColumns(p.instant()));
 			builder.append(SEPARATOR).append(magnitudeColumns(p));
-			if (timeHorizon > 0) builder.append(SEPARATOR).append(magnitudeColumns(p.step(timeHorizon)));
+			if (timeHorizon > 0) {
+				Timeline.Point pointOnHorizon = p.step(timeHorizon);
+				if (pointOnHorizon == null) return;
+				builder.append(SEPARATOR).append(magnitudeColumns(pointOnHorizon));
+			}
 			if (lag != 0) {
 				String prefix = builder.toString();
 				StringBuilder lagBuilder = new StringBuilder();
@@ -137,7 +154,7 @@ public class DigitalTwinBuilder {
 					lagBuilder.append("\n");
 				});
 				write(writer, lagBuilder.toString());
-			} else write(writer, builder.toString());
+			} else write(writer, builder + "\n");
 		});
 	}
 
@@ -181,5 +198,10 @@ public class DigitalTwinBuilder {
 		} catch (IOException e) {
 			Logger.error(e);
 		}
+	}
+
+	public static interface OnFinished {
+
+		void onFinished(String report);
 	}
 }

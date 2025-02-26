@@ -12,7 +12,7 @@ Artifact("io.picota", "1.0.0") runtime
 		Test("junit", "junit", "4.13")
 		Compile("io.intino.alexandria", "core-framework", "2.2.2")
 		Compile("io.intino.alexandria", "logger4j", "1.1.0")
-	Package(mode = ModulesAndLibrariesLinkedByManifest, attachSources = true) as Runnable(mainClass = "io.picota.runtime.konos.Main")
+	Package(mode = ModulesAndLibrariesLinkedByManifest, attachSources = true) as Runnable("io.picota.runtime.Main")
 	Parameter("api_port")
 
 RunConfiguration local

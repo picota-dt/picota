@@ -21,15 +21,16 @@ rule trigger(call)
 
 rule type(digitalTwin)
 	import os
+	from DatasetLoader import DatasetLoader
 	$variable+importVariable...[$NL]
 
 	def train(source, modeldir):
 		if not os.path.exists(source):
-			print("Training $name: Data not present.")
+			print("$name	No data")
 			return
-		print('$name	', end='')
+		print('$name~...')
+		dt = DatasetLoader(source, ",").load()
 		$variable+callVariable...[$NL]
-		print('')
 
 rule trigger(quoted)
 	"$this"
@@ -38,7 +39,7 @@ rule trigger(importVariable)
 	import $<container>name.$viewPoint.$name
 
 rule trigger(callVariable)
-	$<container>name.$viewPoint.$name.train(source, modeldir)
+	$<container>name.$viewPoint.$name.train(dt, modeldir)
 
 rule trigger(evaluate)
 	print("$viewPoint~_$name	{}".format(KanEvaluator.evaluate(sys.argv[1] + "/$viewPoint/$name.bin", row)))
@@ -53,9 +54,9 @@ rule type(variable)
 	from InputDataset import InputDataset
 	from kan.KanTrainer import KanTrainer
 
-	def train(source, modeldir):
-		model_path = modeldir + "/$viewPoint/$name.bin"
-		output_variable = "$viewPoint~_$name"
+	def train(dt, modeldir):
+		model_path = modeldir + "/$viewPoint/$name~$timeHorizon.bin"
+		output_variable = "$viewPoint~_$name~$timeHorizon"
 		os.makedirs(modeldir + "/$viewPoint/", exist_ok=True)
 		device = "cpu"
 		batch_size = 2
@@ -65,9 +66,9 @@ rule type(variable)
 		validation_loss_fn = nn.L1Loss()
 		test_proportion = 0.2
 		validation_proportion = 0.16
-		dt = DatasetLoader(source, ",").load()
 		dataset = InputDataset(dt, output_variable)
 		dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-		model = (KanTrainer(dt.keys(), batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
+		model, loss = (KanTrainer(dt.keys(), batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
 					.train(dataset))
 		torch.save(model.state_dict(), model_path)
+		print(f"$viewPoint~_$name	{loss}")

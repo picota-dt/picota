@@ -1,6 +1,8 @@
 from torch.utils.data import DataLoader, random_split
 import torch
 from kan.KAN import KAN
+import shap
+import numpy as np
 from torch import nn
 from torch.utils.data import random_split
 from torch.utils.data import DataLoader
@@ -30,7 +32,6 @@ class KanTrainer:
         train_dataset, test_dataset, val_dataset = random_split(dataset, [train_length, test_length, val_length])
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
-
         architecture = KAN(len(self.variables) - 1, 1)
         architecture.to(self.device)
         optimizer = torch.optim.Adam(architecture.parameters(), lr=self.lr)
@@ -55,6 +56,12 @@ class KanTrainer:
                 predictions = architecture(inputs)
                 loss = self.validation_loss_fn(predictions, targets)
                 val_loss += loss.item()
-        print(f"{avg_loss:.4f}")
-        print("")
-        return architecture
+
+
+        explainer = shap.DeepExplainer(architecture, train_dataset)
+        shap_values = explainer.shap_values(test_dataset)
+        shap_importance = np.abs(shap_values).mean(axis=0)
+        threshold = 0.05  # Ajustable según el dominio
+        selected_features = np.where(shap_importance > threshold)[0]
+        print(f"Variables seleccionadas: {selected_features}")
+        return architecture, avg_loss

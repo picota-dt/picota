@@ -4,18 +4,18 @@ dsl Konos
 Service Api as REST(host = empty, port = "{api_port}")
 	Resource("/state") state
 		Get
-			Parameter(in = query) entity as Text
+			Parameter(in = query, isRequired = true) entity as Text
 			Response as Word("Waiting" "Training" "Prepared" "Operating")
 		Post
-			Parameter(in = body) entity as Text
-			Parameter(in = body) value as Word("Waiting" "Training" "Operating")
+			Parameter(in = body, isRequired = true) entity as Text
+			Parameter(in = body, isRequired = true) value as Word("Waiting" "Training" "Operating")
 	Resource("/data") data
 		Post
-			Parameter(in = form) entity as Text
+			Parameter(in = form, isRequired = true) entity as Text
 			Parameter(in = form) data as File
 			Exception(code = BadRequest)
 	Resource("/status") status
 		Get
 			Parameter(in = query) moment as Word("Current" "Future")
-			Parameter(in = query) entity as Text
+			Parameter(in = query, isRequired = true) entity as Text
 			Response as Text

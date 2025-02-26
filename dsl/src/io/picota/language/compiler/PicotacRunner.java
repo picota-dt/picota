@@ -9,7 +9,7 @@ import io.intino.magritte.framework.stores.FileSystemStore;
 import io.intino.magritte.io.model.Stash;
 import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.compiler.codegeneration.PicotaSetupGenerationOperation;
-import io.picota.language.compiler.codegeneration.TrainingScriptGenerationOperation;
+import io.picota.language.compiler.codegeneration.TorchScriptGenerationOperation;
 import io.picota.language.model.PicotaGraph;
 import tara.dsl.Picota;
 
@@ -46,7 +46,7 @@ public class PicotacRunner {
 			PicotaGraph graph = loadGraph(config, sourcesMap(sources));
 			if (graph == null) return;
 			List<OutputItem> outputs = new PicotaSetupGenerationOperation(config, sources,graph).call();
-			outputs.addAll(new TrainingScriptGenerationOperation(config, sources, graph).call());
+			outputs.addAll(new TorchScriptGenerationOperation(config, sources, graph).call());
 			new CompilationReporter(config).report(sources, outputs);
 		} catch (Exception e) {
 			LOG.log(Level.SEVERE, e.getMessage() == null ? e.getStackTrace()[0].toString() : e.getMessage());

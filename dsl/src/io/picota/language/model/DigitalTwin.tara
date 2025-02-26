@@ -23,6 +23,7 @@ Concept:Named DigitalTwin
 	Concept Infer
 		var Variable variable
 	Facet Predictive
+//		var integer:Positive timeHorizon
 		var integer timeHorizon
 		var integer lag
 	Facet Estimate

@@ -1,4 +1,3 @@
-import io.intino.alexandria.Context;
 import io.intino.alexandria.Resource;
 import io.intino.alexandria.exceptions.BadRequest;
 import io.picota.example.picota.GraphLoader;
@@ -7,12 +6,16 @@ import io.picota.example.picota.InfecarDataToCSV;
 import io.picota.example.picota.Main;
 import io.picota.runtime.PicotaStarter;
 import io.picota.runtime.RuntimeBox;
+import io.picota.runtime.actions.GetStateAction;
 import io.picota.runtime.actions.PostDataAction;
+import io.picota.runtime.actions.PostStateAction;
+import io.picota.runtime.rest.resources.PostStateResource;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 public class DTTest {
 
@@ -39,6 +42,24 @@ public class DTTest {
 		action.execute();
 		Thread.sleep(10000);
 	}
+
+	@Test
+	public void should_prepare_models() throws BadRequest, InterruptedException, ExecutionException {
+		GetStateAction action = new GetStateAction();
+		action.box = box;
+		action.entity = InfecarDataPreparer.SS;
+		System.out.println(action.execute());
+		PostStateAction changeStateAction = new PostStateAction();
+		changeStateAction.box = box;
+		changeStateAction.entity = InfecarDataPreparer.SS;
+		changeStateAction.value = PostStateResource.Value.Training;
+		changeStateAction.execute();
+		System.out.println(action.execute());
+		synchronized (changeStateAction.training()) {
+			changeStateAction.training().get();
+		}
+	}
+
 
 	private static String[] args() {
 		return new String[]{"broker_port=63000",

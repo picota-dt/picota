@@ -24,7 +24,7 @@ import java.util.stream.Stream;
 import static java.util.logging.Level.SEVERE;
 
 @SuppressWarnings("resource")
-public class TrainingScriptGenerationOperation extends Generator {
+public class TorchScriptGenerationOperation extends Generator {
 	private static final Logger LOG = Logger.getGlobal();
 	private final Map<File, Boolean> sources;
 	private final PicotaGraph model;
@@ -33,12 +33,12 @@ public class TrainingScriptGenerationOperation extends Generator {
 	private final File tempDir;
 	private final File outDir;
 
-	public TrainingScriptGenerationOperation(CompilerConfiguration conf, Map<File, Boolean> sources, PicotaGraph model) {
+	public TorchScriptGenerationOperation(CompilerConfiguration conf, Map<File, Boolean> sources, PicotaGraph model) {
 		super(conf);
 		this.outDir = conf.outDirectory();
 		this.sources = sources;
 		this.model = model;
-		this.template = new TrainingScriptsTemplate();
+		this.template = new TorchScriptsTemplate();
 		this.tempDir = new File(conf.getTempDirectory(), conf.module());
 //		this.tempDir = conf.genDirectory(); //FIXME
 	}
@@ -113,7 +113,7 @@ public class TrainingScriptGenerationOperation extends Generator {
 			vpDir.mkdirs();
 			createPackage(vpDir);
 			File file = new File(vpDir, i.variable().name$() + ".py");
-			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i.variable(), "inference")));
+			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i)));
 			put(sources.keySet().iterator().next().getAbsolutePath(), file.getAbsolutePath());
 		}
 	}
@@ -135,8 +135,14 @@ public class TrainingScriptGenerationOperation extends Generator {
 				.flatMap(vp -> vp.variableList().stream())
 				.filter(v -> infers.stream().noneMatch(i -> i.variable().equals(v)))
 				.forEach(v -> builder.add("variable", frameOf(v, "entity")));
-		infers.forEach(i -> builder.add("variable", frameOf(i.variable(), "inference")));
+		infers.forEach(i -> builder.add("variable", frameOf(i)));
+		return builder.toFrame();
+	}
 
+	private Frame frameOf(DigitalTwin.Infer i) {
+		FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
+		DigitalTwin twin = i.core$().ownerAs(DigitalTwin.class);
+		if (twin.isPredictive()) builder.add("timeHorizon", "+" + twin.asPredictive().timeHorizon());
 		return builder.toFrame();
 	}
 
