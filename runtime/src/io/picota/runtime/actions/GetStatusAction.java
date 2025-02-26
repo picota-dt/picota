@@ -10,7 +10,7 @@ import static io.picota.runtime.rest.resources.GetStatusResource.Moment.Future;
 
 
 public class GetStatusAction implements io.intino.alexandria.rest.RequestErrorHandler {
-	public GetStatusResource.Moment moment;
+	public io.picota.runtime.rest.resources.GetStatusResource.Moment moment;
 	public String entity;
 	public RuntimeBox box;
 	public io.intino.alexandria.http.server.AlexandriaHttpContext context;

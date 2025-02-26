@@ -1,0 +1,40 @@
+dsl Konos
+
+use Theme
+
+Service RuntimeElements as UI(port = "{api_port}", title = "{title}", favicon = "/logo.ico")
+
+	Resource(path = "/") home as Page(homeTemplate) Main
+
+Template(layout=Vertical Flexible) homeTemplate as Relative(height=100%, width=100%)
+	TemplateStamp(template=headerTemplate) header
+
+	Block(layout=Vertical Flexible) digitalTwinsBlock as Relative(width=100%) Conditional > TemplateStamp(template=digitalTwinsCatalog) digitalTwinsStamp
+
+Template headerTemplate
+	Block(layout=Horizontal, format=headerBackground) contentBlock
+		Block(layout=Horizontal Flexible)
+			Image(value="logo.png", format=airLeft) as Absolute(height=45px)
+			Block(layout=Horizontal Flexible, format=airLeft) mainToolbar
+				Text(format=headerLink, color="white") title
+			Block(layout=Horizontal EndJustified, format=doubleAirRight)
+				MaterialIconButton(title="Dark mode", icon="Brightness5", titlePosition=Right) as SetDarkMode
+				MaterialIconButton(title="Light mode", icon="Brightness7", titlePosition=Right) as SetLightMode
+
+Template(layout=Vertical Flexible) digitalTwinsCatalog as Relative(width=100%, height=100%)
+	Block(layout=Horizontal Flexible) as Resizable
+		Block(layout=Vertical Flexible, format=doubleSpaced) as Relative(width=30%)
+			Text(value="Digital twins", format=h4 airBottom, translate=true)
+			List(itemClass="io.picota.runtime.ui.DigitalTwin") digitalTwinsList
+				Mold
+					Item(height=30px) digitalTwinItem
+						Link(title = "") titleLink as Action
+
+		Block(layout=Vertical Flexible, format=doubleSpaced) as Relative(width=70%)
+			Block(layout=Vertical Flexible CenterCenter) noDigitalTwinSelectedMessage > Text(value="Select digital twin from left panel", translate=true)
+			TemplateStamp(template=digitalTwinTemplate, visible=false) currentDigitalTwin
+
+Template digitalTwinTemplate
+	Text(format=h4) title
+	Timeline(mode=Catalog) timeline
+
