@@ -1,23 +1,20 @@
 dsl Legio
 
 Artifact("io.picota", "1.0.0") runtime
-	Dsl("Konos", "13.2.2")
-		Builder(generationPackage ="")
+	Dsl("Konos", "13.2.2") > Builder(generationPackage ="")
 	Imports
-		Compile("io.intino.sumus", "chronos", "2.4.4")
+		Compile("io.intino.sumus", "chronos", "2.4.5")
 		Compile("io.intino", "data-hub", "12.0.8")
-		Compile("io.intino.alexandria", "rest", "4.1.5")
+		Compile("io.intino.alexandria", "rest", "4.1.8")
 		Compile("io.intino.alexandria", "core-framework", "2.2.2")
 		Compile("io.intino.alexandria", "logger4j", "1.1.0")
-		Compile("io.intino.alexandria", "ui-framework", "6.2.8")
-		Compile("org.apache.commons", "commons-compress", "1.23.0")
+		Compile("io.intino.alexandria", "ui-framework", "6.3.0")
+		Compile("org.apache.commons", "commons-compress", "1.27.1")
 		Compile("commons-io", "commons-io", "2.18.0")
-		Test("junit", "junit", "4.13")
+		Test("junit", "junit", "4.13.2")
 		Web(groupId = "io.picota", artifactId = "runtime-elements", version = "1.0.0")
 	Package(mode = ModulesAndLibrariesLinkedByManifest, attachSources = true) as Runnable(mainClass = "io.picota.runtime.Main")
 	Parameter("api_port")
-	Parameter("title")
 
 RunConfiguration local
 	Argument("api_port", "9090")
-	Argument("title", "Infecar")

@@ -11,6 +11,6 @@ public class HeaderTemplate extends AbstractHeaderTemplate<RuntimeBox> {
 	@Override
 	public void refresh() {
 		super.refresh();
-		title.value(box().configuration().title());
+		title.value("Picota");
 	}
 }

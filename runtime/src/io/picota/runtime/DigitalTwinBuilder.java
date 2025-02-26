@@ -113,16 +113,24 @@ public class DigitalTwinBuilder {
 				.flatMap(this::labelOf)
 				.collect(joining(SEPARATOR)));
 		int timeHorizon = timeHorizon(dt);
-		if (timeHorizon > 0) header.append(SEPARATOR).append(stream(tl.sensorModel().magnitudes())
-				.flatMap(this::labelOf)
-				.map(label -> format("%s+%d", label, timeHorizon))
-				.collect(joining(SEPARATOR)));
+		if (timeHorizon > 0) appendTimeHorizonLabels(tl, header, timeHorizon);
+		appendLagLabels(dt, tl, header);
+		return header + "\n";
+	}
+
+	private void appendLagLabels(Sensor dt, TimelineStore tl, StringBuilder header) {
 		IntStream.range(0, lag(dt)).forEach(i ->
 				header.append(SEPARATOR).append(stream(tl.sensorModel().magnitudes())
 						.flatMap(this::labelOf)
 						.map(label -> format("%s-%d", label, i))
 						.collect(joining(SEPARATOR))));
-		return header + "\n";
+	}
+
+	private void appendTimeHorizonLabels(TimelineStore tl, StringBuilder header, int timeHorizon) {
+		header.append(SEPARATOR).append(stream(tl.sensorModel().magnitudes())
+				.flatMap(this::labelOf)
+				.map(label -> format("%s+%d", label, timeHorizon))
+				.collect(joining(SEPARATOR)));
 	}
 
 	private void writeValues(Sensor dt, TimelineStore tl, BufferedWriter writer) throws IOException {
@@ -132,30 +140,30 @@ public class DigitalTwinBuilder {
 		for (Magnitude m : timeline.magnitudes())
 			if (m.model.attribute("type").equals("Numeric"))
 				timeline = timeline.add(m, timeline.get(m).normalize());
-		timeline.stream().skip(lag).forEach(p -> {
-			StringBuilder builder = new StringBuilder();
-			builder.append(dateTimeColumns(p.instant()));
-			builder.append(SEPARATOR).append(magnitudeColumns(p));
-			if (timeHorizon > 0) {
-				Timeline.Point pointOnHorizon = p.step(timeHorizon);
-				if (pointOnHorizon == null) return;
-				builder.append(SEPARATOR).append(magnitudeColumns(pointOnHorizon));
-			}
-			if (lag != 0) {
-				String prefix = builder.toString();
-				StringBuilder lagBuilder = new StringBuilder();
-				IntStream.range(0, lag + 1).forEach(i -> {
-					lagBuilder.append(prefix);
-					IntStream.range(0, lag).forEach(j -> {
-						if (j < lag - i) lagBuilder.append("0");
-						else lagBuilder.append(magnitudeColumns(p.step(-(j + 1))));
-						if (j < lag - 1) lagBuilder.append(SEPARATOR);
-					});
-					lagBuilder.append("\n");
+		timeline.stream().skip(lag).forEach(p -> writePoint(writer, p, timeHorizon, lag));
+	}
+
+	private void writePoint(BufferedWriter writer, Timeline.Point p, int timeHorizon, int lag) {
+		var builder = new StringBuilder().append(dateTimeColumns(p.instant())).append(SEPARATOR).append(magnitudeColumns(p));
+		if (timeHorizon > 0) {
+			Timeline.Point pointOnHorizon = p.step(timeHorizon);
+			if (pointOnHorizon == null) return;
+			builder.append(SEPARATOR).append(magnitudeColumns(pointOnHorizon));
+		}
+		if (lag != 0) {
+			String prefix = builder.toString();
+			StringBuilder lagBuilder = new StringBuilder();
+			IntStream.range(0, lag + 1).forEach(i -> {
+				lagBuilder.append(prefix);
+				IntStream.range(0, lag).forEach(j -> {
+					if (j < lag - i) lagBuilder.append("0");
+					else lagBuilder.append(magnitudeColumns(p.step(-(j + 1))));
+					if (j < lag - 1) lagBuilder.append(SEPARATOR);
 				});
-				write(writer, lagBuilder.toString());
-			} else write(writer, builder + "\n");
-		});
+				lagBuilder.append("\n");
+			});
+			write(writer, lagBuilder.toString());
+		} else write(writer, builder + "\n");
 	}
 
 

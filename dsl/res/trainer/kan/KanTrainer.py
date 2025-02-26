@@ -57,9 +57,8 @@ class KanTrainer:
                 loss = self.validation_loss_fn(predictions, targets)
                 val_loss += loss.item()
 
-
-        explainer = shap.DeepExplainer(architecture, train_dataset)
-        shap_values = explainer.shap_values(test_dataset)
+        explainer = shap.DeepExplainer(architecture, torch.stack([item[0] for item in train_dataset], dim=0))
+        shap_values = explainer.shap_values(torch.stack([item[0] for item in test_dataset], dim=0))
         shap_importance = np.abs(shap_values).mean(axis=0)
         threshold = 0.05  # Ajustable según el dominio
         selected_features = np.where(shap_importance > threshold)[0]
