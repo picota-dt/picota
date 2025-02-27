@@ -69,7 +69,7 @@ public class RuntimeBox extends AbstractBox {
 	}
 
 	public void beforeStart() {
-		// TODO OR, me peta -> datahub().start();
+		datahub().start();
 	}
 
 	public void afterStart() {

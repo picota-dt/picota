@@ -1,9 +1,6 @@
 package io.picota.runtime.ui.pages;
 
-import io.intino.alexandria.exceptions.*;
-import java.time.*;
-import java.util.*;
-import io.picota.runtime.ui.displays.templates.*;
+import io.picota.runtime.ui.displays.templates.HomeTemplate;
 
 public class HomePage extends AbstractHomePage {
 
@@ -16,5 +13,10 @@ public class HomePage extends AbstractHomePage {
 				component.init();
 			}
 		};
+	}
+
+	@Override
+	protected String title() {
+		return "Picota";
 	}
 }

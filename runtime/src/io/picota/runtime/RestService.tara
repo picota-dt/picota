@@ -12,6 +12,7 @@ Service Api as REST(host = empty, port = "{api_port}")
 	Resource("/data") data
 		Post
 			Parameter(in = form, isRequired = true) entity as Text
+			Parameter(in = form, isRequired = true) type as Word("csv" "tsv")
 			Parameter(in = form) data as File
 			Exception(code = BadRequest)
 	Resource("/status") status

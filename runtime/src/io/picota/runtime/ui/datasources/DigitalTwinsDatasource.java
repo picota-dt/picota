@@ -4,11 +4,9 @@ import io.intino.alexandria.ui.model.datasource.Filter;
 import io.intino.alexandria.ui.model.datasource.Group;
 import io.intino.alexandria.ui.model.datasource.PageDatasource;
 import io.intino.alexandria.ui.services.push.UISession;
-import io.intino.datahub.model.Sensor;
 import io.picota.runtime.RuntimeBox;
 import io.picota.runtime.ui.DigitalTwin;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -40,8 +38,7 @@ public class DigitalTwinsDatasource extends PageDatasource<DigitalTwin> {
 	}
 
 	private List<DigitalTwin> load(String condition) {
-		// TODO alimentar con la lista de digital twins
-		return List.of(sensor(1), sensor(2), sensor(3));
+		return box.datahub().graph().sensorList().stream().map(s -> new DigitalTwin().title(s.name$())).toList();
 	}
 
 	private DigitalTwin sensor(int index) {

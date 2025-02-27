@@ -1,5 +1,7 @@
+import accessor.PicotaApiAccessor;
 import io.intino.alexandria.Resource;
 import io.intino.alexandria.exceptions.BadRequest;
+import io.intino.alexandria.exceptions.InternalServerError;
 import io.picota.example.picota.GraphLoader;
 import io.picota.example.picota.InfecarDataPreparer;
 import io.picota.example.picota.InfecarDataToCSV;
@@ -15,6 +17,8 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.concurrent.ExecutionException;
 
 public class DTTest {

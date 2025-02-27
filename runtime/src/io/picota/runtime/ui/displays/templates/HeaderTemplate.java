@@ -13,7 +13,7 @@ public class HeaderTemplate extends AbstractHeaderTemplate<RuntimeBox> {
 	@Override
 	public void refresh() {
 		super.refresh();
-		title.value(box().configuration().title());
+		title.value("Picota");
 		state.formats(Set.of("stateStyle", "state" + box().state().name() + "Style"));
 		stateMessage.value(translate(box().state().name()));
 	}

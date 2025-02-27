@@ -81,8 +81,8 @@ public class DataFeeder {
 	}
 
 	private String separator(String contentType) {
-		if (contentType.contains("csv")) return ",";
-		if (contentType.contains("tsv")) return "\t";
+		if (contentType.toLowerCase().contains("csv")) return ",";
+		if (contentType.toLowerCase().contains("tsv")) return "\t";
 		return ";";
 	}
 }

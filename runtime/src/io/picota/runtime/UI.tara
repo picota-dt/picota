@@ -3,12 +3,10 @@ dsl Konos
 use Theme
 
 Service RuntimeElements as UI(port = "{api_port}", title = "{title}", favicon = "/logo.ico")
-
 	Resource(path = "/") home as Page(homeTemplate) Main
 
 Template(layout=Vertical Flexible) homeTemplate as Relative(height=100%, width=100%)
 	TemplateStamp(template=headerTemplate) header
-
 	Block(layout=Vertical Flexible) digitalTwinsBlock as Relative(width=100%) Conditional > TemplateStamp(template=digitalTwinsCatalog) digitalTwinsStamp
 
 Template headerTemplate
