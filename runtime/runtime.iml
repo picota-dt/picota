@@ -48,7 +48,6 @@
     <orderEntry type="library" name="Intino: org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.25" level="project" />
     <orderEntry type="library" name="Intino: org.bouncycastle:bcmail-jdk15:1.46" level="project" />
     <orderEntry type="library" name="Intino: org.bouncycastle:bcprov-jdk15:1.46" level="project" />
-    <orderEntry type="library" name="Intino: org.apache.httpcomponents:httpmime:4.5.9" level="project" />
     <orderEntry type="library" name="Intino: eu.medsea.mimeutil:mime-util:2.1.3" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:rest-accessor:3.1.8" level="project" />
     <orderEntry type="library" name="Intino: org.apache.httpcomponents:httpcore:4.4.16" level="project" />
@@ -146,12 +145,14 @@
     <orderEntry type="library" name="Intino: org.xerial:sqlite-jdbc:3.49.0.0" level="project" />
     <orderEntry type="module" module-name="runtime-elements" />
     <orderEntry type="library" name="Intino: io.intino.sumus:chronos:2.4.5" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.alexandria:rest:4.1.8" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.alexandria:http:2.1.7" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:ui-framework:6.3.0" level="project" />
     <orderEntry type="library" name="Intino: org.apache.commons:commons-compress:1.27.1" level="project" />
     <orderEntry type="library" name="Intino: commons-codec:commons-codec:1.17.1" level="project" />
     <orderEntry type="library" name="Intino: org.apache.commons:commons-lang3:3.16.0" level="project" />
     <orderEntry type="library" scope="TEST" name="Intino: junit:junit:4.13.2" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.alexandria:rest:4.1.9" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.alexandria:http:2.1.8" level="project" />
+    <orderEntry type="library" name="Intino: org.apache.httpcomponents:httpmime:4.5.14" level="project" />
+    <orderEntry type="library" scope="RUNTIME" name="Intino: log4j:log4j:1.2.14" level="project" />
   </component>
 </module>

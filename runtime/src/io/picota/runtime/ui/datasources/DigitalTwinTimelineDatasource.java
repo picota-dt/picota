@@ -31,7 +31,6 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 		this.box = box;
 		this.session = session;
 		sensor = box.datahub().graph().sensorList(s -> s.name$().equalsIgnoreCase(digitalTwin.title())).findFirst().get();
-
 		this.digitalTwin = digitalTwin;
 	}
 

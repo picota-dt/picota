@@ -1,11 +1,11 @@
 dsl Legio
 
 Artifact("io.picota", "1.0.0") runtime
-	Dsl("Konos", "13.2.2") > Builder(generationPackage ="")
+	Dsl("Konos", "13.2.3") > Builder(generationPackage ="")
 	Imports
 		Compile("io.intino.sumus", "chronos", "2.4.5")
+		Compile("io.intino.alexandria", "rest", "4.1.9")
 		Compile("io.intino", "data-hub", "12.0.8")
-		Compile("io.intino.alexandria", "rest", "4.1.8")
 		Compile("io.intino.alexandria", "core-framework", "2.2.2")
 		Compile("io.intino.alexandria", "logger4j", "1.1.0")
 		Compile("io.intino.alexandria", "ui-framework", "6.3.0")

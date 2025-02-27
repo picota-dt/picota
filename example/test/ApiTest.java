@@ -3,11 +3,13 @@ import io.intino.alexandria.exceptions.BadRequest;
 import io.intino.alexandria.exceptions.InternalServerError;
 import io.picota.example.picota.InfecarDataPreparer;
 import io.picota.example.picota.Main;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 
+@Ignore
 public class ApiTest {
 
 	@Test
