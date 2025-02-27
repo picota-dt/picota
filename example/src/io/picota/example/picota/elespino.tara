@@ -8,7 +8,7 @@ Reality elEspino //World
 		ViewPoint energy //viewPoint
 			Variable watts as Numeric
 
-DigitalTwin(elEspino.grid) elEspinoDT as Predictive(timeHorizon = 1, lag = 1)
+DigitalTwin(elEspino.grid) Espino-Twin as Predictive(timeHorizon = 1, lag = 1)
 	Resolution(1,Minute)
 	Infer(elEspino.grid.energy.watts) //Resolución
 

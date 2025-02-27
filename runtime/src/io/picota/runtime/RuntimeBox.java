@@ -8,7 +8,7 @@ import java.io.File;
 import java.net.URL;
 
 public class RuntimeBox extends AbstractBox {
-	public enum State {Waiting, Training, Prepared, Operating;}
+	public enum State {Waiting, Training, Prepared, Operating}
 
 	private DataHubBox datahub;
 	private File workingDir;
@@ -69,7 +69,7 @@ public class RuntimeBox extends AbstractBox {
 	}
 
 	public void beforeStart() {
-		datahub().start();
+		if (datahub() != null) datahub().start();
 	}
 
 	public void afterStart() {

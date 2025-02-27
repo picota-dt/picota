@@ -59,6 +59,6 @@ public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHa
 	}
 
 	public void onMalformedRequest(Throwable e) throws AlexandriaException {
-		throw new BadRequest("Malformed request");
+		throw new BadRequest("Malformed request: " + e.getMessage());
 	}
 }

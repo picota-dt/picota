@@ -39,40 +39,40 @@ rule type(graphloader)
 	}
 
 rule type(digitalTwin) and trigger(call)
-	$name(datalake, master);
+	$name+camelCase+firstLowerCase(datalake, master);
 
 rule type(digitalTwin) and trigger(method)
-	private static void $name(Datalake datalake, Datamart master) {
-		Sensor $name~_Sensor = datalake.graph().create("sensors","$name").sensor();
-		$name~_Sensor.create("resolution").attribute("$period");
-		$name~_Sensor.create("resolutionScale").attribute("$scale");
-		$name~_Sensor.create("inference").attribute("$moment");
+	private static void $name+camelCase+firstLowerCase(Datalake datalake, Datamart master) {
+		Sensor $name+camelCase+firstLowerCase~_Sensor = datalake.graph().create("sensors", "$name").sensor();
+		$name+camelCase+firstLowerCase~_Sensor.create("resolution").attribute("$period");
+		$name+camelCase+firstLowerCase~_Sensor.create("resolutionScale").attribute("$scale");
+		$name+camelCase+firstLowerCase~_Sensor.create("inference").attribute("$moment");
 		<<$lag>>
 		<<$timeHorizon>>
 		<<$timeHorizonScale>>
 		<<$variable...[$NL]>>
-		Entity $name~_Entity = master.create("$name").entity();
-		Datalake.Tank.Measurement $name~_Tank = datalake.create("$name").tank().asMeasurement($name~_Sensor, $period, Scale.$scale+firstUpperCase);
-		master.create("$name~_Timeline").timeline($name~_Entity).asRaw($name~_Tank);
+		Entity $name+camelCase+firstLowerCase~_Entity = master.create("$name").entity();
+		Datalake.Tank.Measurement $name+camelCase+firstLowerCase~_Tank = datalake.create("$name").tank().asMeasurement($name+camelCase+firstLowerCase~_Sensor, $period, Scale.$scale+firstUpperCase);
+		master.create("$name+camelCase+firstLowerCase~_Timeline").timeline($name+camelCase+firstLowerCase~_Entity).asRaw($name+camelCase+firstLowerCase~_Tank);
 	}
 
 rule trigger(lag)
-	$<container>name~_Sensor.create("lag").attribute("$this");
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("lag").attribute("$this");
 
 rule trigger(timeHorizon)
-	$<container>name~_Sensor.create("timeHorizon").attribute("$this");
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("timeHorizon").attribute("$this");
 
 rule trigger(timeHorizonScale)
-	$<container>name~_Sensor.create("timeHorizonScale").attribute("$this");
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("timeHorizonScale").attribute("$this");
 
 rule type(numeric) and trigger(variable)
-	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Numeric")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("type").attribute("Numeric")<<$inference>>;
 
 rule type(numeric) and trigger(variable)
-	$<container>name~_Sensor.create("$name").magnitude("$name").create("type").attribute("Cyclic")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("type").attribute("Cyclic")<<$inference>>;
 
 rule trigger(variable)
-	$<container>name~_Sensor.create("$name").magnitude("$name")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name")<<$inference>>;
 
 rule trigger(inference)
 	.core$$().ownerAs(Sensor.Magnitude.class).create("inference").attribute("$this")

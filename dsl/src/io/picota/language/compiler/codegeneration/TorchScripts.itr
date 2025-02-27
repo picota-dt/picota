@@ -67,7 +67,6 @@ rule type(variable)
 		test_proportion = 0.2
 		validation_proportion = 0.16
 		dataset = InputDataset(dt, output_variable)
-		dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 		model, loss = (KanTrainer(dt.keys(), batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
 					.train(dataset))
 		torch.save(model.state_dict(), model_path)

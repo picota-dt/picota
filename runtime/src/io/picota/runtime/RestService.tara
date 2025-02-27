@@ -7,8 +7,8 @@ Service Api as REST(host = empty, port = "{api_port}")
 			Parameter(in = query, isRequired = true) entity as Text
 			Response as Word("Waiting" "Training" "Prepared" "Operating")
 		Post
-			Parameter(in = body, isRequired = true) entity as Text
-			Parameter(in = body, isRequired = true) value as Word("Waiting" "Training" "Operating")
+			Parameter(in = form, isRequired = true) entity as Text
+			Parameter(in = form, isRequired = true) value as Word("Waiting" "Training" "Operating")
 	Resource("/data") data
 		Post
 			Parameter(in = form, isRequired = true) entity as Text
