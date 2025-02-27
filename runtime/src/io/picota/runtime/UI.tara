@@ -18,6 +18,7 @@ Template headerTemplate
 			Block(layout=Horizontal Flexible, format=airLeft) mainToolbar
 				Text(format=headerLink, color="white") title
 			Block(layout=Horizontal EndJustified, format=doubleAirRight)
+				Block(layout=Horizontal) > Text(value=" ") state; Text(format=doubleAirRight) stateMessage
 				MaterialIconButton(title="Dark mode", icon="Brightness5", titlePosition=Right) as SetDarkMode
 				MaterialIconButton(title="Light mode", icon="Brightness7", titlePosition=Right) as SetLightMode
 

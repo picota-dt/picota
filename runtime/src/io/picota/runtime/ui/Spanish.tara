@@ -5,5 +5,9 @@ Translator(language = Spanish)
 	Translation("Light mode", "Modo claro")
 	Translation("Digital twins", "Gemelos digitales")
 	Translation("Select digital twin from left panel", "Seleccione un gemelo digital del panel izquierdo")
+	Translation("Waiting", "Esperando")
+	Translation("Training", "Entrenando")
+	Translation("Prepared", "Preparando")
+	Translation("Operating", "Operando")
 
 

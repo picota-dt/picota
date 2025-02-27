@@ -149,26 +149,11 @@ Format("position:'absolute',width:'100%',height:'100%',zIndex:'1'") fullItemLink
 Format("position:'absolute',width:'calc(100% + 57px)',height:'100%',zIndex:'1',borderRadius:'10px'") fullRightPanel
 Format("position:'absolute',width:'100%',height:'100%',zIndex:'1',top:'0'") fullHeaderItemLink
 Format("position:'absolute',right:'0',marginRight:'140px',marginTop:'10px',zIndex:'1'") trashToolbar
-Format("padding:'2px 0',width:'65px',textAlign:'center',fontSize:'6pt',color:'white',borderRadius:'5px',marginLeft:'5px'") stateCircleLineStyle
-Format("background:'white'") stateCircleDraftStyle
-Format("background:'white'") stateCircleDraftTranscriptionStyle
-Format("background:'#94b9c7',color:'black'") stateCircleBusyStyle
-Format("background:'#0B759F'") stateCircleConsolidatedStyle
-Format("background:'#EB9202'") stateCirclePendingStyle
-Format("background:'#EB9202'") stateCircleErrorStyle
-Format("background:'#A6A6A6'") stateCircleRemovedStyle
-Format("paddingRight:'5px',position:'relative',fontSize:'6pt',textAlign:'right',borderRadius:'20px'") stateStyle
-Format("height:'15px',width:'15px'") stateSmallStyle
-Format("height:'20px',width:'20px',marginTop:'5px'") stateNormalStyle
-Format("height:'20px',width:'20px',marginTop:'2px',marginRight:'5px'") stateMagazineStyle
-Format("height:'28px',width:'28px',marginTop:'7px'") stateLargeStyle
-Format("background:'white',border:'2px solid black'") stateDraftStyle
-Format("background:'white',border:'2px solid black'") stateDraftTranscriptionStyle
-Format("background:'#94b9c7',border:'2px solid black',animation:'consolidating 1s infinite'") stateBusyStyle
-Format("background:'#0B759F',border:'2px solid black'") stateConsolidatedStyle
-Format("background:'#EB9202',border:'2px solid black'") statePendingStyle
-Format("background:'#EB9202',border:'2px solid black'") stateErrorStyle
-Format("background:'#A6A6A6',border:'2px solid black'") stateRemovedStyle
+Format("padding:'2px 0',width:'65px',textAlign:'center',fontSize:'6pt',color:'white',borderRadius:'20px',width:'20px',height:'20px',marginRight:'10px'") stateStyle
+Format("background:'orange'") stateWaitingStyle
+Format("background:'yellow'") stateTrainingStyle
+Format("background:'green',color:'black'") statePreparedStyle
+Format("background:'blue'") stateOperatingStyle
 Format("marginRight:'5px'") headerToolbarStyle
 Format("marginBottom:'0px',minHeight:'42px'") navigationHeaderContainer
 Format("margin:'0 15px 20px',width:'calc(100% - 30px)'") usernameStyle
