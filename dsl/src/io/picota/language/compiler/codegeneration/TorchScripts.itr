@@ -14,10 +14,10 @@ rule type(supermain)
 	$dt+call...[$NL]
 
 rule trigger(import)
-	import $this.main
+	import $this+camelcase+firstLowercase.main
 
 rule trigger(call)
-	$this.main.train(sys.argv[1] + "/$this.csv", sys.argv[2] + "/$this")
+	$this+camelcase+firstLowercase.main.train(sys.argv[1] + "/$this.csv", sys.argv[2] + "/$this")
 
 rule type(digitalTwin)
 	import os
@@ -36,10 +36,10 @@ rule trigger(quoted)
 	"$this"
 
 rule trigger(importVariable)
-	import $<container>name.$viewPoint.$name
+	import $<container>name+camelcase+firstLowercase.$viewPoint.$name
 
 rule trigger(callVariable)
-	$<container>name.$viewPoint.$name.train(dt, modeldir)
+	$<container>name+camelcase+firstLowercase.$viewPoint.$name.train(dt, modeldir)
 
 rule trigger(evaluate)
 	print("$viewPoint~_$name	{}".format(KanEvaluator.evaluate(sys.argv[1] + "/$viewPoint/$name.bin", row)))

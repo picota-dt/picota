@@ -14,12 +14,9 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static java.time.ZoneOffset.UTC;
+import java.util.Locale;
 
 public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 	private final RuntimeBox box;
@@ -41,37 +38,52 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 
 	@Override
 	public List<MagnitudeDefinition> magnitudes() {
-		return sensor.magnitudeList().stream().map(m -> measurementOf(m.name$(), "", m.name$())).toList();
+		return sensor.magnitudeList().stream().map(m -> magnitudeOf(m.name$(), "", m.name$())).toList();
 	}
 
 	@Override
 	public Magnitude magnitude(MagnitudeDefinition definition) {
-		return measurements(definition, box.datahub().datamarts().get("master").timelineStore().get(definition.name(), definition.name()));
+		return measurements(definition, timeline());
+	}
+
+	private TimelineStore timeline() {
+		return box.datahub().datamarts().get("master").timelineStore().get(digitalTwin.title, digitalTwin.title);
 	}
 
 	@Override
 	public List<Scale> scales() {
-		return List.of(Scale.Minute, Scale.Hour, Scale.Day, Scale.Week, Scale.Month, Scale.Year);
+//		String value = sensor.attribute(a -> a.name$().equalsIgnoreCase("resolutionScale")).value();
+//		Scale scale = Scale.valueOf(value);
+//		return stream(Scale.values(), 0, scale.ordinal() + 1).toList();
+		return List.of(Scale.Hour, Scale.Day);
 	}
 
 	@Override
 	public Instant from(Scale scale) {
-		return LocalDateTime.ofInstant(Instant.now(), UTC).minus(30, scale.temporalUnit()).toInstant(UTC);
+		try {
+			return timeline().timeline().first().instant();
+		} catch (IOException e) {
+			Logger.error(e);
+			return Instant.EPOCH;
+		}
 	}
 
 	@Override
 	public Instant to(Scale scale) {
-		return Instant.now();
+		try {
+			return timeline().timeline().last().instant();
+		} catch (IOException e) {
+			Logger.error(e);
+			return Instant.now();
+		}
 	}
 
-	private MagnitudeDefinition measurementOf(String name, String unit, String label) {
-		return new MagnitudeDefinition().name(name).unit(unit).add("es", label);
+	private MagnitudeDefinition magnitudeOf(String name, String unit, String label) {
+		return new MagnitudeDefinition()
+				.name(name)
+				.unit(unit).add("en", label)
+				.formatter(value -> String.format(Locale.ENGLISH, "%.2f", value));
 	}
-
-	private String customViewOf(String title, Map<String, Integer> variables) {
-		return "<h4 style=\"padding:'0';margin:'0'\">" + title + "</h4>" + variables.entrySet().stream().map(v -> "<div style=\"fontWeight:'bold'\">" + v.getKey() + "</div><div>" + v.getValue() + "</div>").collect(Collectors.joining(""));
-	}
-
 
 	private TimelineDatasource.Magnitude measurements(MagnitudeDefinition magnitude, TimelineStore store) {
 		try {
@@ -88,5 +100,4 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 	private Magnitude getMagnitude(MagnitudeDefinition magnitude, TimeSeries series) {
 		return series == null ? new NullMagnitude(magnitude) : new TimeSeriesMagnitude(series, magnitude);
 	}
-
 }

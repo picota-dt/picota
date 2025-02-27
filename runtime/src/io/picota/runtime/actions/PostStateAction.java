@@ -2,15 +2,11 @@ package io.picota.runtime.actions;
 
 import io.intino.alexandria.exceptions.AlexandriaException;
 import io.intino.alexandria.exceptions.BadRequest;
-import io.intino.alexandria.logger.Logger;
 import io.picota.runtime.RuntimeBox;
 import io.picota.runtime.RuntimeBox.State;
 import io.picota.runtime.rest.resources.PostStateResource;
 
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 
 public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHandler {
@@ -30,8 +26,7 @@ public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHa
 			if (box.state() == State.Training) throw new BadRequest("Already training");
 			if (box.state() == State.Waiting || box.state() == State.Operating) {
 				box.datahub().stop();
-				training = box.dtBuilder().start(System.out::println);
-				subscribeToFinished(training);
+				training = box.dtBuilder().start(this::onfinish);
 				box.state(State.Training);
 			}
 		} else if (value == PostStateResource.Value.Operating) {
@@ -43,19 +38,13 @@ public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHa
 		}
 	}
 
-	public Future<?> training() {
-		return training;
+	private void onfinish(String x) {
+		System.out.println(x);
+		box.state(State.Prepared);
 	}
 
-	private void subscribeToFinished(Future<?> start) {
-		new Thread(() -> {
-			try {
-				start.get(1, TimeUnit.HOURS);
-				box.state(State.Prepared);
-			} catch (InterruptedException | ExecutionException | TimeoutException e) {
-				Logger.error(e);
-			}
-		});
+	public Future<?> training() {
+		return training;
 	}
 
 	public void onMalformedRequest(Throwable e) throws AlexandriaException {

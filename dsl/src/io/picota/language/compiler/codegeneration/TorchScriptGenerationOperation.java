@@ -21,6 +21,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
+import static io.intino.itrules.formatters.StringFormatters.camelCase;
+import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
 import static java.util.logging.Level.SEVERE;
 
 @SuppressWarnings("resource")
@@ -83,13 +85,17 @@ public class TorchScriptGenerationOperation extends Generator {
 
 	private void createDigitalTwinScripts() throws IOException {
 		for (var dt : model.digitalTwinList()) {
-			File dtDir = new File(tempDir, dt.name$());
+			File dtDir = new File(tempDir, normalize(dt.name$()));
 			dtDir.mkdirs();
 			createPackage(dtDir);
 			if (dt.isPredictive()) renderPredictiveModels(dt, dtDir);
 			renderInferences(dt, dtDir);
 			renderDtMain(dt, new File(dtDir, "main.py"));
 		}
+	}
+
+	private String normalize(String s) {
+		return firstLowerCase().format(camelCase().format(s).toString()).toString();
 	}
 
 	private void renderPredictiveModels(DigitalTwin dt, File dir) throws IOException {

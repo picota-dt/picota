@@ -24,8 +24,8 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 
 public class InfecarDataPreparer {
-	public static final String Tank = "predictiveEnergyGeneration";
-	public static final String SS = "predictiveEnergyGeneration";
+	public static final String Tank = "Infecar-Twin";
+	public static final String SS = "Infecar-Twin";
 	private final FileDatalake datalake;
 	private final File stageDir;
 	private final InputStream source;

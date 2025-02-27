@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -41,7 +42,8 @@ public class DataFeeder {
 			try {
 				String[] fields = l.split(separator);
 				if (!exceptions.isEmpty()) return;
-				save(entity, header, ts(fields), map(sensor, fields, header), session);
+				List<String> magnitudes = header.subList(1, header.size());
+				save(entity, magnitudes, ts(fields), map(sensor, values(fields), magnitudes), session);
 			} catch (Exception e) {
 				Logger.error(e);
 				exceptions.add(e);
@@ -51,21 +53,25 @@ public class DataFeeder {
 		if (!exceptions.isEmpty()) throw exceptions.getFirst();
 	}
 
+	private List<String> values(String[] fields) {
+		return Arrays.asList(fields).subList(1, fields.length);
+	}
+
 	private static Instant ts(String[] fields) {
 		return Instant.parse(fields[0]);
 	}
 
-	private static double[] map(Sensor sensor, String[] values, List<String> header) throws Exception {
-		double[] doubleValues = new double[values.length];
-		for (int i = 1; i < header.size(); i++) {
-			String h = header.get(i);
+	private static double[] map(Sensor sensor, List<String> values, List<String> magnitudes) throws Exception {
+		double[] doubleValues = new double[values.size()];
+		for (int i = 0; i < magnitudes.size(); i++) {
+			String h = magnitudes.get(i);
 			Sensor.Magnitude magnitude = sensor.magnitude(m -> m.name$().equals(h));
 			if (magnitude == null) throw new Exception("Column not found: " + h);
 			String type = magnitude.attribute(a -> a.name$().equalsIgnoreCase("Type")).value();
 			if (type.equalsIgnoreCase("Enumerated")) {
 				List<String> enums = List.of(magnitude.attribute(a -> a.name$().equalsIgnoreCase("Enumerated")).value().split(";"));
-				doubleValues[i] = enums.indexOf(values[i]);
-			} else if (type.equalsIgnoreCase("Numeric")) doubleValues[i] = Double.parseDouble(values[i]);
+				doubleValues[i] = enums.indexOf(values.get(i));
+			} else if (type.equalsIgnoreCase("Numeric")) doubleValues[i] = Double.parseDouble(values.get(i));
 		}
 		return doubleValues;
 	}

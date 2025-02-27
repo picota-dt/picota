@@ -7,6 +7,7 @@ import io.intino.sumus.chronos.TimeSeries;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -73,12 +74,12 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 
 	@Override
 	public Double min() {
-		return series.min();
+		return Arrays.stream(series.values).min().getAsDouble();
 	}
 
 	@Override
 	public Double max() {
-		return series.max();
+		return Arrays.stream(series.values).max().getAsDouble();
 	}
 
 	@Override
@@ -116,14 +117,14 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 				return values(list).min().getAsDouble();
 			}
 
-			@NotNull
-			private DoubleStream values(List<TimeSeries.Point> list) {
-				return list.stream().mapToDouble(TimeSeries.Point::value);
-			}
-
 			@Override
 			public Instant minDate() {
 				return list.getFirst().instant();
+			}
+
+			@NotNull
+			private DoubleStream values(List<TimeSeries.Point> list) {
+				return list.stream().mapToDouble(TimeSeries.Point::value);
 			}
 
 			@Override
