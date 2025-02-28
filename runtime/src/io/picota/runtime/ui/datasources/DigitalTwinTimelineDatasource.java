@@ -4,15 +4,14 @@ import io.intino.alexandria.Scale;
 import io.intino.alexandria.ui.model.timeline.MagnitudeDefinition;
 import io.intino.alexandria.ui.model.timeline.TimelineDatasource;
 import io.intino.datahub.model.Sensor;
-import io.intino.sumus.chronos.Period;
 import io.intino.sumus.chronos.Timeline;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 
+import static io.picota.runtime.ui.datasources.TimeSeriesMagnitude.periodOf;
 import static java.util.Arrays.stream;
 
 public class DigitalTwinTimelineDatasource implements TimelineDatasource {
@@ -53,12 +52,12 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 
 	@Override
 	public Instant to(Scale scale) {
-		return timeline == null ? Instant.now() : rescaled(timeline, scale).last().instant();
+		if (timeline == null) return Instant.now();
+		return rescaled(timeline, scale).last().instant();
 	}
 
-
 	private Timeline rescaled(Timeline timeline, Scale scale) {
-		return timeline.resampleBy(Period.each(1, (ChronoUnit) scale.temporalUnit()));
+		return timeline.resampleBy(periodOf(scale));
 	}
 
 	private MagnitudeDefinition magnitudeOf(String name, String unit, String label) {

@@ -2,7 +2,7 @@ dsl Legio
 
 Artifact(groupId = "io.picota", version = "1.0.0") runtime-elements
 	WebImports
-		WebArtifact("io.intino.alexandria", "ui-framework-elements", "6.3.1") alexandria-ui-elements
+		WebArtifact("io.intino.alexandria", "ui-framework-elements", "6.3.4") alexandria-ui-elements
 
 Repository("intino-maven")
 	Release("https://artifactory.intino.io/artifactory/releases")

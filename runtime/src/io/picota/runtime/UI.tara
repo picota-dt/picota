@@ -22,14 +22,14 @@ Template headerTemplate
 
 Template(layout=Vertical Flexible) digitalTwinsCatalog as Relative(width=100%, height=100%)
 	Block(layout=Horizontal Flexible) as Resizable
-		Block(layout=Vertical Flexible, format=doubleSpaced) as Relative(width=30%)
+		Block(layout=Vertical Flexible, format=doubleSpaced) as Relative(width=15%)
 			Text(value="Digital twins", format=h4 airBottom, translate=true)
 			List(itemClass="io.picota.runtime.ui.DigitalTwin") digitalTwinsList
 				Mold
 					Item(height=30px) digitalTwinItem
 						Link(title = "") titleLink as Action
 
-		Block(layout=Vertical Flexible, format=doubleSpaced) as Relative(width=70%)
+		Block(layout=Vertical Flexible, format=doubleSpaced) as Relative(width=85%)
 			Block(layout=Vertical Flexible CenterCenter) noDigitalTwinSelectedMessage > Text(value="Select digital twin from left panel", translate=true)
 			TemplateStamp(template=digitalTwinTemplate, visible=false) currentDigitalTwin
 

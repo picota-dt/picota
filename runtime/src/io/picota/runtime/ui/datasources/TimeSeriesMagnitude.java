@@ -12,8 +12,12 @@ import io.intino.sumus.chronos.models.descriptive.timeseries.Distribution;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
+import static java.time.ZoneId.systemDefault;
 import static java.util.Spliterator.ORDERED;
 import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.stream.Collectors.toMap;
@@ -37,12 +41,26 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 
 	@Override
 	public Serie serie(Scale scale, Instant start, Instant end) {
-		return serie(stream(spliteratorUnknownSize(rescaled(scale).from(start, end).iterator(), ORDERED), false).toList());
+		Instant inclusiveEnd;
+		if (scale.equals(Scale.Month)) inclusiveEnd = addMonth(end);
+		else if (scale.equals(Scale.Week)) inclusiveEnd = addWeek(end);
+		else inclusiveEnd = end.plus(1, scale.temporalUnit());
+		return serie(stream(spliteratorUnknownSize(rescaled(scale).from(start, inclusiveEnd).iterator(), ORDERED), false).toList());
+	}
+
+	private Instant addMonth(Instant end) {
+		return end.atZone(systemDefault()).plusMonths(1).toInstant();
+	}
+
+	private Instant addWeek(Instant end) {
+		return end.atZone(systemDefault()).plusWeeks(1).toInstant();
 	}
 
 	@Override
 	public Serie serie(Scale scale, Instant end, int count) {
-		return serie(rescaled(scale).at(end).backward().limit(count).toList().reversed());
+		Point at = rescaled(scale).at(end);
+		if (at == null) return null;
+		return serie(at.backward().limit(count).toList().reversed());
 	}
 
 	private TimeSeries rescaled(Scale scale) {
