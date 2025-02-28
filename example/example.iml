@@ -162,5 +162,6 @@
     <orderEntry type="library" name="Intino: io.intino.alexandria:rest:4.1.9" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:http:2.1.8" level="project" />
     <orderEntry type="library" name="Intino: org.apache.httpcomponents:httpmime:4.5.14" level="project" />
+    <orderEntry type="library" scope="RUNTIME" name="Intino: log4j:log4j:1.2.14" level="project" />
   </component>
 </module>

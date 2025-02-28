@@ -35,5 +35,6 @@ Template(layout=Vertical Flexible) digitalTwinsCatalog as Relative(width=100%, h
 
 Template digitalTwinTemplate
 	Text(format=h4) title
+	DateNavigator navigator
 	Timeline(mode=Catalog) timeline
 

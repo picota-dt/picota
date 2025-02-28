@@ -14,9 +14,12 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+
+import static java.time.ZoneOffset.UTC;
 
 public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 	private final RuntimeBox box;
@@ -60,6 +63,17 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 
 	@Override
 	public Instant from(Scale scale) {
+		return LocalDateTime.ofInstant(Instant.now(), UTC).minus(30, scale.temporalUnit()).toInstant(UTC);
+	}
+
+	@Override
+	public Instant to(Scale scale) {
+		return Instant.now();
+	}
+
+	/*
+	@Override
+	public Instant from(Scale scale) {
 		try {
 			return timeline().timeline().first().instant();
 		} catch (IOException e) {
@@ -77,7 +91,7 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 			return Instant.now();
 		}
 	}
-
+*/
 	private MagnitudeDefinition magnitudeOf(String name, String unit, String label) {
 		return new MagnitudeDefinition()
 				.name(name)
