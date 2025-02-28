@@ -51,6 +51,7 @@ public class TorchScriptGenerationOperation extends Generator {
 			createDigitalTwinScripts();
 			createMainScript();
 			extract("trainer");
+			if (!outDir.exists()) outDir.mkdirs();
 			Tar.createTarFile(tempDir, new File(outDir, "trainer.tar"));
 			FileUtils.cleanDirectory(tempDir);
 			createEvaluatorScripts();
