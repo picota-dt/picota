@@ -36,7 +36,7 @@ public record NullMagnitude(MagnitudeDefinition definition) implements TimelineD
 	}
 
 	@Override
-	public TimelineDatasource.Summary summary(Instant date, Scale scale) {
+	public TimelineDatasource.Summary summary(Scale scale, Instant instant) {
 		return new TimelineDatasource.Summary() {
 			@Override
 			public double average() {

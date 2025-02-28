@@ -7,16 +7,14 @@ import io.intino.alexandria.ingestion.EventSession;
 import io.intino.alexandria.ingestion.SessionHandler;
 import io.intino.alexandria.logger.Logger;
 import io.intino.datahub.model.Sensor;
+import io.intino.sumus.chronos.Magnitude;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 import static io.intino.alexandria.event.Event.Format.Message;
 import static java.util.Collections.addAll;

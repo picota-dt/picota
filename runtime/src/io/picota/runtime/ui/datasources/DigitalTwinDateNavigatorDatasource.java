@@ -1,47 +1,43 @@
 package io.picota.runtime.ui.datasources;
 
 import io.intino.alexandria.Scale;
-import io.intino.alexandria.logger.Logger;
 import io.intino.alexandria.ui.model.datenavigator.DateNavigatorDatasource;
-import io.intino.alexandria.ui.model.timeline.MagnitudeDefinition;
-import io.intino.alexandria.ui.model.timeline.TimelineDatasource;
-import io.intino.alexandria.ui.services.push.UISession;
 import io.intino.datahub.model.Sensor;
-import io.intino.sumus.chronos.TimeSeries;
-import io.intino.sumus.chronos.TimelineStore;
-import io.picota.runtime.RuntimeBox;
-import io.picota.runtime.ui.DigitalTwin;
-import org.jetbrains.annotations.NotNull;
+import io.intino.sumus.chronos.Period;
+import io.intino.sumus.chronos.Timeline;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Locale;
 
 import static java.time.ZoneOffset.UTC;
+import static java.util.Arrays.stream;
 
 public class DigitalTwinDateNavigatorDatasource implements DateNavigatorDatasource {
-	private final RuntimeBox box;
-	private final UISession session;
-	private final DigitalTwin digitalTwin;
 	private final Sensor sensor;
+	private final Timeline timeline;
 
-	public DigitalTwinDateNavigatorDatasource(RuntimeBox box, UISession session, DigitalTwin digitalTwin) {
-		this.box = box;
-		this.session = session;
-		sensor = box.datahub().graph().sensorList(s -> s.name$().equalsIgnoreCase(digitalTwin.title())).findFirst().get();
-		this.digitalTwin = digitalTwin;
+	public DigitalTwinDateNavigatorDatasource(Sensor sensor, Timeline timeline) {
+		this.sensor = sensor;
+		this.timeline = timeline;
 	}
 
 	@Override
 	public List<Scale> scales() {
-		return List.of(Scale.Hour, Scale.Day);
+		String value = sensor.attribute(a -> a.name$().equalsIgnoreCase("resolutionScale")).value();
+		Scale scale = Scale.valueOf(value);
+		return stream(Scale.values(), 0, scale.ordinal() + 1).toList();
 	}
 
 	@Override
 	public Instant from(Scale scale) {
-		return LocalDateTime.ofInstant(Instant.now(), UTC).minus(30, scale.temporalUnit()).toInstant(UTC);
+		return timeline == null ? Instant.EPOCH : rescaled(timeline, scale).first().instant();
+	}
+
+	@Override
+	public Instant to(Scale scale) {
+		return timeline == null ? Instant.now() : rescaled(timeline, scale).last().instant();
 	}
 
 	@Override
@@ -54,9 +50,7 @@ public class DigitalTwinDateNavigatorDatasource implements DateNavigatorDatasour
 		return LocalDateTime.ofInstant(date, UTC).plus(1, scale.temporalUnit()).toInstant(UTC);
 	}
 
-	@Override
-	public Instant to(Scale scale) {
-		return Instant.now();
+	private Timeline rescaled(Timeline timeline, Scale scale) {
+		return timeline.resampleBy(Period.each(1, (ChronoUnit) scale.temporalUnit()));
 	}
-
 }

@@ -3,44 +3,66 @@ package io.picota.runtime.ui.datasources;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.ui.model.timeline.MagnitudeDefinition;
 import io.intino.alexandria.ui.model.timeline.TimelineDatasource;
+import io.intino.alexandria.ui.model.timeline.TimelineDatasource.Serie;
+import io.intino.sumus.chronos.Period;
 import io.intino.sumus.chronos.TimeSeries;
+import io.intino.sumus.chronos.TimeSeries.Point;
+import io.intino.sumus.chronos.Timeline;
+import io.intino.sumus.chronos.models.descriptive.timeseries.Distribution;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.DoubleStream;
+import java.util.*;
+
+import static java.util.Spliterator.ORDERED;
+import static java.util.Spliterators.spliteratorUnknownSize;
+import static java.util.stream.Collectors.toMap;
+import static java.util.stream.StreamSupport.stream;
 
 class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
+	private final Timeline timeline;
 	private final TimeSeries series;
 	private final MagnitudeDefinition magnitude;
 
-	public TimeSeriesMagnitude(TimeSeries series, MagnitudeDefinition magnitude) {
-		this.series = series;
+	public TimeSeriesMagnitude(Timeline timeline, MagnitudeDefinition magnitude) {
+		this.timeline = timeline;
+		this.series = timeline.get(magnitude.name());
 		this.magnitude = magnitude;
 	}
 
 	@Override
-	public TimelineDatasource.Summary summary(Instant first, Scale scale) {
-		return summary(series.at(first).forward().limit(24).toList());
+	public TimelineDatasource.Summary summary(Scale scale, Instant instant) {
+		return summary(rescaled(scale));
 	}
 
 	@Override
-	public TimelineDatasource.Serie serie(Scale scale, Instant start, Instant end) {
-		return serie(series.from(start, end).first().forward().toList());
+	public Serie serie(Scale scale, Instant start, Instant end) {
+		return serie(stream(spliteratorUnknownSize(rescaled(scale).from(start, end).iterator(), ORDERED), false).toList());
 	}
 
 	@Override
-	public TimelineDatasource.Serie serie(Scale scale, Instant first, int count) {
-		return serie(series.at(first).forward().limit(count).toList());
+	public Serie serie(Scale scale, Instant end, int count) {
+		return serie(rescaled(scale).at(end).backward().limit(count).toList().reversed());
+	}
+
+	private TimeSeries rescaled(Scale scale) {
+		return timeline.resampleBy(periodOf(scale)).get(magnitude.name());
+	}
+
+	public static Period periodOf(Scale scale) {
+		if (scale == Scale.Minute) return Period.Minutes;
+		if (scale == Scale.Hour) return Period.Hours;
+		if (scale == Scale.Day) return Period.Days;
+		if (scale == Scale.Week) return Period.Weeks;
+		if (scale == Scale.Month) return Period.Months;
+		if (scale == Scale.Year) return Period.Years;
+		return Period.Hours;
 	}
 
 	@NotNull
-	private TimelineDatasource.Serie serie(List<TimeSeries.Point> list) {
-		return new TimelineDatasource.Serie() {
+	private Serie serie(List<Point> points) {
+		var values = points.stream().collect(toMap(Point::instant, Point::value, (v1, v2) -> v1, LinkedHashMap::new));
+		return new Serie() {
 			@Override
 			public String name() {
 				return "Evolution";
@@ -48,7 +70,7 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 
 			@Override
 			public Map<Instant, Double> values() {
-				return list.stream().collect(Collectors.toMap(TimeSeries.Point::instant, TimeSeries.Point::value));
+				return values;
 			}
 
 			@Override
@@ -89,43 +111,40 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 	}
 
 	@NotNull
-	private TimelineDatasource.Summary summary(List<TimeSeries.Point> list) {
+	private TimelineDatasource.Summary summary(TimeSeries timeSeries) {
+		Distribution distribution = timeSeries.distribution();
 		return new TimelineDatasource.Summary() {
 
 			@Override
 			public double average() {
-				return values(list).average().getAsDouble();
+				return distribution.mean();
 			}
 
 			@Override
 			public Instant averageDate() {
-				double average = average();
-				return list.stream().filter(p -> p.value() == average).findFirst().get().instant();
+				return null;
 			}
 
 			@Override
 			public double max() {
-				return values(list).max().getAsDouble();
+				return distribution.max;
 			}
 
 			@Override
 			public Instant maxDate() {
-				return list.getLast().instant();
+				for (Point point : timeSeries) if (point.value() == max()) return point.instant();
+				return null;
 			}
 
 			@Override
 			public double min() {
-				return values(list).min().getAsDouble();
+				return distribution.min;
 			}
 
 			@Override
 			public Instant minDate() {
-				return list.getFirst().instant();
-			}
-
-			@NotNull
-			private DoubleStream values(List<TimeSeries.Point> list) {
-				return list.stream().mapToDouble(TimeSeries.Point::value);
+				for (Point point : timeSeries) if (point.value() == min()) return point.instant();
+				return null;
 			}
 
 			@Override

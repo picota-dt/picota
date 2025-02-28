@@ -66,13 +66,13 @@ rule trigger(timeHorizonScale)
 	$<container>name+camelCase+firstLowerCase~_Sensor.create("timeHorizonScale").attribute("$this");
 
 rule type(numeric) and trigger(variable)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("type").attribute("Numeric")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Sensor.Magnitude.class).create("type").attribute("Numeric")<<$inference>>;
 
 rule type(numeric) and trigger(variable)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("type").attribute("Cyclic")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("type").create("operator").attribute("avg")..core$$().ownerAs(Sensor.Magnitude.class).attribute("Cyclic")<<$inference>>;
 
 rule trigger(variable)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Sensor.Magnitude.class)<<$inference>>;
 
 rule trigger(inference)
 	.core$$().ownerAs(Sensor.Magnitude.class).create("inference").attribute("$this")

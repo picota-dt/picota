@@ -1,42 +1,32 @@
 package io.picota.runtime.ui.datasources;
 
 import io.intino.alexandria.Scale;
-import io.intino.alexandria.logger.Logger;
 import io.intino.alexandria.ui.model.timeline.MagnitudeDefinition;
 import io.intino.alexandria.ui.model.timeline.TimelineDatasource;
-import io.intino.alexandria.ui.services.push.UISession;
 import io.intino.datahub.model.Sensor;
-import io.intino.sumus.chronos.TimeSeries;
-import io.intino.sumus.chronos.TimelineStore;
-import io.picota.runtime.RuntimeBox;
-import io.picota.runtime.ui.DigitalTwin;
+import io.intino.sumus.chronos.Period;
+import io.intino.sumus.chronos.Timeline;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Collections;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 
-import static java.time.ZoneOffset.UTC;
+import static java.util.Arrays.stream;
 
 public class DigitalTwinTimelineDatasource implements TimelineDatasource {
-	private final RuntimeBox box;
-	private final UISession session;
-	private final DigitalTwin digitalTwin;
 	private final Sensor sensor;
+	private final Timeline timeline;
 
-	public DigitalTwinTimelineDatasource(RuntimeBox box, UISession session, DigitalTwin digitalTwin) {
-		this.box = box;
-		this.session = session;
-		sensor = box.datahub().graph().sensorList(s -> s.name$().equalsIgnoreCase(digitalTwin.title())).findFirst().get();
-		this.digitalTwin = digitalTwin;
+	public DigitalTwinTimelineDatasource(Sensor sensor, Timeline timeline) {
+		this.sensor = sensor;
+		this.timeline = timeline;
 	}
 
 	@Override
 	public String name() {
-		return digitalTwin.title();
+		return sensor.name$();
 	}
 
 	@Override
@@ -46,52 +36,31 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 
 	@Override
 	public Magnitude magnitude(MagnitudeDefinition definition) {
-		return measurements(definition, timeline());
-	}
-
-	private TimelineStore timeline() {
-		return box.datahub().datamarts().get("master").timelineStore().get(digitalTwin.title, digitalTwin.title);
+		return measurements(definition);
 	}
 
 	@Override
 	public List<Scale> scales() {
-//		String value = sensor.attribute(a -> a.name$().equalsIgnoreCase("resolutionScale")).value();
-//		Scale scale = Scale.valueOf(value);
-//		return stream(Scale.values(), 0, scale.ordinal() + 1).toList();
-		return List.of(Scale.Hour, Scale.Day);
+		String value = sensor.attribute(a -> a.name$().equalsIgnoreCase("resolutionScale")).value();
+		Scale scale = Scale.valueOf(value);
+		return stream(Scale.values(), 0, scale.ordinal() + 1).toList();
 	}
 
 	@Override
 	public Instant from(Scale scale) {
-		return LocalDateTime.ofInstant(Instant.now(), UTC).minus(30, scale.temporalUnit()).toInstant(UTC);
+		return timeline == null ? Instant.EPOCH : rescaled(timeline, scale).first().instant();
 	}
 
 	@Override
 	public Instant to(Scale scale) {
-		return Instant.now();
+		return timeline == null ? Instant.now() : rescaled(timeline, scale).last().instant();
 	}
 
-	/*
-	@Override
-	public Instant from(Scale scale) {
-		try {
-			return timeline().timeline().first().instant();
-		} catch (IOException e) {
-			Logger.error(e);
-			return Instant.EPOCH;
-		}
+
+	private Timeline rescaled(Timeline timeline, Scale scale) {
+		return timeline.resampleBy(Period.each(1, (ChronoUnit) scale.temporalUnit()));
 	}
 
-	@Override
-	public Instant to(Scale scale) {
-		try {
-			return timeline().timeline().last().instant();
-		} catch (IOException e) {
-			Logger.error(e);
-			return Instant.now();
-		}
-	}
-*/
 	private MagnitudeDefinition magnitudeOf(String name, String unit, String label) {
 		return new MagnitudeDefinition()
 				.name(name)
@@ -99,19 +68,16 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 				.formatter(value -> String.format(Locale.ENGLISH, "%.2f", value));
 	}
 
-	private TimelineDatasource.Magnitude measurements(MagnitudeDefinition magnitude, TimelineStore store) {
-		try {
-			return store == null || store.timeline() == null ?
-					new NullMagnitude(magnitude) :
-					getMagnitude(magnitude, store.timeline().get(magnitude.name()));
-		} catch (IOException e) {
-			Logger.error(e);
-			return null;
-		}
+	private TimelineDatasource.Magnitude measurements(MagnitudeDefinition magnitude) {
+		return timeline == null ?
+				new NullMagnitude(magnitude) :
+				getMagnitude(magnitude, timeline);
 	}
 
 	@NotNull
-	private Magnitude getMagnitude(MagnitudeDefinition magnitude, TimeSeries series) {
-		return series == null ? new NullMagnitude(magnitude) : new TimeSeriesMagnitude(series, magnitude);
+	private Magnitude getMagnitude(MagnitudeDefinition magnitude, Timeline timeline) {
+		return timeline.get(magnitude.name()) == null ?
+				new NullMagnitude(magnitude) :
+				new TimeSeriesMagnitude(timeline, magnitude);
 	}
 }
