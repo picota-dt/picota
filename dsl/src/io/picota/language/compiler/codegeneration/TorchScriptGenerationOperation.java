@@ -19,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import java.util.stream.Stream;
 
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
@@ -65,10 +64,15 @@ public class TorchScriptGenerationOperation extends Generator {
 	}
 
 	private void createEvaluatorScripts() throws IOException {
-		for (DigitalTwin digitalTwin : model.digitalTwinList()) {
-			File file = new File(tempDir, digitalTwin.name$() + ".py");
+		for (DigitalTwin dt : model.digitalTwinList()) {
+			File file = new File(tempDir, dt.name$() + ".py");
 			FrameBuilder frame = new FrameBuilder("evaluator");
-			digitalTwin.inferList().forEach(i -> frame.add("variable", frameBuilderOf(i.variable(), "inference")));
+			frame.add("name", dt.name$());
+			dt.inferList().forEach(i -> {
+				FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
+				if (dt.isPredictive()) builder.add("timeHorizon", "+" + dt.asPredictive().timeHorizon());
+				frame.add("variable", builder.toFrame());
+			});
 			Files.writeString(file.toPath(), new Engine(template).render(frame));
 		}
 	}
@@ -89,7 +93,7 @@ public class TorchScriptGenerationOperation extends Generator {
 			File dtDir = new File(tempDir, normalize(dt.name$()));
 			dtDir.mkdirs();
 			createPackage(dtDir);
-			if (dt.isPredictive()) renderPredictiveModels(dt, dtDir);
+//			if (dt.isPredictive()) renderPredictiveModels(dt, dtDir);
 			renderInferences(dt, dtDir);
 			renderDtMain(dt, new File(dtDir, "main.py"));
 		}
@@ -137,19 +141,19 @@ public class TorchScriptGenerationOperation extends Generator {
 	private Frame frameOf(DigitalTwin dt) {
 		FrameBuilder builder = new FrameBuilder("digitalTwin").add("name", dt.name$());
 		List<DigitalTwin.Infer> infers = dt.inferList();
-		Reality reality = dt.entity().core$().ownerAs(Reality.class);
-		Stream.concat(reality.viewPointList().stream(), dt.entity().viewPointList().stream())
-				.flatMap(vp -> vp.variableList().stream())
-				.filter(v -> infers.stream().noneMatch(i -> i.variable().equals(v)))
-				.forEach(v -> builder.add("variable", frameOf(v, "entity")));
+//		Reality reality = dt.entity().core$().ownerAs(Reality.class);
+//		Stream.concat(reality.viewPointList().stream(), dt.entity().viewPointList().stream())
+//				.flatMap(vp -> vp.variableList().stream())
+//				.filter(v -> infers.stream().noneMatch(i -> i.variable().equals(v)))
+//				.forEach(v -> builder.add("variable", frameOf(v, "entity")));
 		infers.forEach(i -> builder.add("variable", frameOf(i)));
 		return builder.toFrame();
 	}
 
 	private Frame frameOf(DigitalTwin.Infer i) {
 		FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
-		DigitalTwin twin = i.core$().ownerAs(DigitalTwin.class);
-		if (twin.isPredictive()) builder.add("timeHorizon", "+" + twin.asPredictive().timeHorizon());
+		DigitalTwin dt = i.core$().ownerAs(DigitalTwin.class);
+		if (dt.isPredictive()) builder.add("timeHorizon", "+" + dt.asPredictive().timeHorizon());
 		return builder.toFrame();
 	}
 

@@ -1,6 +1,6 @@
 from torch import nn
 
-from kan.KAL import KAL
+from KAL import KAL
 
 
 class KAN(nn.Module):

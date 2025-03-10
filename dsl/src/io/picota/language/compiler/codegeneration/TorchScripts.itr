@@ -1,10 +1,12 @@
 rule type(evaluator)
 	import sys
-	import torch
-	import evaluator.KanEvaluator
+    import torch
+    import numpy as np
+    import KanEvaluator
+    from DatasetLoader import DatasetLoader
 
-	dt = DatasetLoader(sys.argv[2] + "/$name.csv", ",").load()
-	row = torch.tensor(dt, dtype=torch.float32)
+    dt = DatasetLoader(sys.argv[2], ",").load()
+    tensor = torch.tensor(np.array(list(dt.values())), dtype=torch.float32).squeeze(1)
 	$variable+evaluate...[$NL]
 
 rule type(supermain)
@@ -24,11 +26,16 @@ rule type(digitalTwin)
 	from DatasetLoader import DatasetLoader
 	$variable+importVariable...[$NL]
 
+	def variables(dict, output):
+		return {
+			key: value for key, value in dict.items()
+			if "+" not in key or key == output
+		}
+
 	def train(source, modeldir):
 		if not os.path.exists(source):
 			print("$name	No data")
 			return
-		print('$name~...')
 		dt = DatasetLoader(source, ",").load()
 		$variable+callVariable...[$NL]
 
@@ -39,20 +46,20 @@ rule trigger(importVariable)
 	import $<container>name+camelcase+firstLowercase.$viewPoint.$name
 
 rule trigger(callVariable)
-	$<container>name+camelcase+firstLowercase.$viewPoint.$name.train(dt, modeldir)
+	$<container>name+camelcase+firstLowercase.$viewPoint.$name.train(variables(dt, "$viewPoint~_$name~$timeHorizon"), modeldir)
 
 rule trigger(evaluate)
-	print("$viewPoint~_$name	{}".format(KanEvaluator.evaluate(sys.argv[1] + "/$viewPoint/$name.bin", row)))
+	print("$viewPoint~_$name	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$viewPoint/$name~$timeHorizon.bin", tensor)))
 
 rule type(variable)
 	import torch
 	import os
 	from torch import nn
-	from torch.utils.data import DataLoader
-
-	from DatasetLoader import DatasetLoader
 	from InputDataset import InputDataset
 	from kan.KanTrainer import KanTrainer
+
+	def input_variables(dict, output):
+		return {key: valor for key, valor in dict.items() if key != output}
 
 	def train(dt, modeldir):
 		model_path = modeldir + "/$viewPoint/$name~$timeHorizon.bin"
@@ -67,7 +74,7 @@ rule type(variable)
 		test_proportion = 0.2
 		validation_proportion = 0.16
 		dataset = InputDataset(dt, output_variable)
-		model, loss = (KanTrainer(dt.keys(), batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
-					.train(dataset))
+		model, loss, features = (KanTrainer(input_variables(dt, output_variable), output_variable, batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
+        				.train(dataset))
 		torch.save(model.state_dict(), model_path)
-		print(f"$viewPoint~_$name	{loss}")
+		print(f"{$<context>name}\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))

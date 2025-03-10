@@ -78,7 +78,7 @@ public class PicotaApiAccessor {
 		}
 	}
 
-	public void postState(String entity, StateValue value) throws InternalServerError {
+	public void postState(String entity, StateValue value) throws AlexandriaException {
 		RequestBuilder builder = new RequestBuilder(this.url).timeOut(this.timeoutMillis);
 		additionalHeaders.forEach((k, v) -> builder.headerParameter(k, v));
 		RequestBuilder.Request request = builder
@@ -89,7 +89,7 @@ public class PicotaApiAccessor {
 			io.intino.alexandria.restaccessor.Response response = request.execute();
 		} catch (AlexandriaException e) {
 			if (outBox != null) outBox.push(request);
-			throw new InternalServerError(e.message());
+			throw e;
 		}
 	}
 

@@ -1,4 +1,5 @@
 import accessor.PicotaApiAccessor;
+import io.intino.alexandria.exceptions.AlexandriaException;
 import io.intino.alexandria.exceptions.BadRequest;
 import io.intino.alexandria.exceptions.InternalServerError;
 import io.picota.example.picota.InfecarDataPreparer;
@@ -21,8 +22,14 @@ public class ApiTest {
 	}
 
 	@Test
-	public void should_start_training() throws InternalServerError, MalformedURLException {
+	public void should_start_training() throws AlexandriaException, MalformedURLException {
 		PicotaApiAccessor accessor = new PicotaApiAccessor(new URL("http://localhost:9000"));
 		accessor.postState(InfecarDataPreparer.SS, PicotaApiAccessor.StateValue.Training);
+	}
+
+	@Test
+	public void should_start_operating() throws AlexandriaException, MalformedURLException {
+		PicotaApiAccessor accessor = new PicotaApiAccessor(new URL("http://localhost:9000"));
+		accessor.postState(InfecarDataPreparer.SS, PicotaApiAccessor.StateValue.Operating);
 	}
 }

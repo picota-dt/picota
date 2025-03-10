@@ -7,15 +7,20 @@ import io.intino.datahub.model.Sensor;
 import java.io.File;
 import java.net.URL;
 
+import static java.util.Objects.requireNonNull;
+
 public class RuntimeBox extends AbstractBox {
-	public enum State {Waiting, Training, Prepared, Operating}
+
+
+	public enum State {Waiting, Training, Prepared, Operating;}
 
 	private DataHubBox datahub;
 	private File workingDir;
 	private File pythonVenv;
 	private DigitalTwinBuilder dtBuilder;
-	private DigitalTwinEvaluator dtEvaluator;
+	private DigitalTwinOperator dtOperator;
 	private State state = State.Waiting;
+	private boolean runningDataHub = false;
 
 	public RuntimeBox(RuntimeConfiguration args, DataHubBox datahub, File workingDir, File pythonVenv) {
 		super(args);
@@ -23,7 +28,7 @@ public class RuntimeBox extends AbstractBox {
 		this.workingDir = workingDir;
 		this.pythonVenv = pythonVenv;
 		this.dtBuilder = new DigitalTwinBuilder(datahub, workingDir, pythonVenv);
-		this.dtEvaluator = new DigitalTwinEvaluator(datahub, workingDir, pythonVenv);
+		this.dtOperator = new DigitalTwinOperator(datahub, workingDir, pythonVenv);
 	}
 
 	public RuntimeBox(String[] args) {
@@ -55,8 +60,8 @@ public class RuntimeBox extends AbstractBox {
 		return dtBuilder;
 	}
 
-	public DigitalTwinEvaluator dtEvaluator() {
-		return dtEvaluator;
+	public DigitalTwinOperator dtOperator() {
+		return dtOperator;
 	}
 
 	public DataHubBox datahub() {
@@ -69,10 +74,27 @@ public class RuntimeBox extends AbstractBox {
 	}
 
 	public void beforeStart() {
-		if (datahub() != null) datahub().start();
+		startDatahub();
+	}
+
+	public void startDatahub() {
+		if (datahub() != null && !runningDataHub) {
+			datahub().start();
+			runningDataHub = true;
+		}
+	}
+
+	public void stopDatahub() {
+		if (datahub() != null && runningDataHub) {
+			datahub().stop();
+			runningDataHub = false;
+		}
 	}
 
 	public void afterStart() {
+		File file = new File(workingDir, "models");
+		if (file.exists() && requireNonNull(file.listFiles()).length > 0) state = State.Prepared;
+
 	}
 
 	public void beforeStop() {
