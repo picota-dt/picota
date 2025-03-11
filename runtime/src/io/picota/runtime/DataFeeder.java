@@ -36,11 +36,11 @@ public class DataFeeder {
 		String separator = separator(contentType);
 		Iterator<String> lines = new BufferedReader(new InputStreamReader(stream)).lines().iterator();
 		addAll(header, lines.next().split(separator));
+		final List<String> magnitudes = header.subList(1, header.size());
 		lines.forEachRemaining(l -> {
 			try {
 				String[] fields = l.split(separator);
 				if (!exceptions.isEmpty()) return;
-				List<String> magnitudes = header.subList(1, header.size());
 				save(entity, magnitudes, ts(fields), map(sensor, values(fields), magnitudes), session);
 			} catch (Exception e) {
 				Logger.error(e);
@@ -63,13 +63,14 @@ public class DataFeeder {
 		double[] doubleValues = new double[values.size()];
 		for (int i = 0; i < magnitudes.size(); i++) {
 			String h = magnitudes.get(i);
+			int proposedIndex = sensor.magnitudeList().indexOf(sensor.magnitude(m->m.name$().equalsIgnoreCase(h)));
 			Sensor.Magnitude magnitude = sensor.magnitude(m -> m.name$().equals(h));
 			if (magnitude == null) throw new Exception("Column not found: " + h);
 			String type = magnitude.attribute(a -> a.name$().equalsIgnoreCase("Type")).value();
 			if (type.equalsIgnoreCase("Enumerated")) {
 				List<String> enums = List.of(magnitude.attribute(a -> a.name$().equalsIgnoreCase("Enumerated")).value().split(";"));
-				doubleValues[i] = enums.indexOf(values.get(i));
-			} else if (type.equalsIgnoreCase("Numeric")) doubleValues[i] = Double.parseDouble(values.get(i));
+				doubleValues[proposedIndex] = enums.indexOf(values.get(i));
+			} else if (type.equalsIgnoreCase("Numeric")) doubleValues[proposedIndex] = Double.parseDouble(values.get(i));
 		}
 		return doubleValues;
 	}

@@ -61,9 +61,8 @@ public class DigitalTwinBuilder {
 					prepareData(dt, timeline(dt));
 				}
 				untar(this.getClass().getResourceAsStream("/trainer.tar"), sourcesDir);
-				Result report = train();
-//				clean();
-				onFinished.onFinished(report);
+				onFinished.onFinished(train());
+				clean();
 			} catch (IOException | InterruptedException e) {
 				Logger.error(e);
 			}

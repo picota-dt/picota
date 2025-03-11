@@ -7,7 +7,7 @@ Translator(language = Spanish)
 	Translation("Select digital twin from left panel", "Seleccione un gemelo digital del panel izquierdo")
 	Translation("Waiting", "Esperando")
 	Translation("Training", "Entrenando")
-	Translation("Prepared", "Preparando")
+	Translation("Prepared", "Preparado")
 	Translation("Operating", "Operando")
 
 

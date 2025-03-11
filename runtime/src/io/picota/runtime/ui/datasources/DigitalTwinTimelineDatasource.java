@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static io.picota.runtime.ui.datasources.TimeSeriesMagnitude.periodOf;
 import static java.util.Arrays.stream;
@@ -17,10 +18,12 @@ import static java.util.Arrays.stream;
 public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 	private final Sensor sensor;
 	private final Timeline timeline;
+	private final Map<Sensor.Magnitude, Double> inferences;
 
-	public DigitalTwinTimelineDatasource(Sensor sensor, Timeline timeline) {
+	public DigitalTwinTimelineDatasource(Sensor sensor, Timeline timeline, Map<Sensor.Magnitude, Double> inferences) {
 		this.sensor = sensor;
 		this.timeline = timeline;
+		this.inferences = inferences;
 	}
 
 	@Override
@@ -77,6 +80,6 @@ public class DigitalTwinTimelineDatasource implements TimelineDatasource {
 	private Magnitude getMagnitude(MagnitudeDefinition magnitude, Timeline timeline) {
 		return timeline.get(magnitude.name()) == null ?
 				new NullMagnitude(magnitude) :
-				new TimeSeriesMagnitude(timeline, magnitude);
+				new TimeSeriesMagnitude(timeline, magnitude, inferences.get(sensor.magnitude(m->m.name$().equalsIgnoreCase(magnitude.name()))));
 	}
 }

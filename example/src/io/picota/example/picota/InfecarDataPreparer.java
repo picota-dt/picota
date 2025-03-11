@@ -154,8 +154,8 @@ public class InfecarDataPreparer {
 		return Instant.from(Instant.ofEpochSecond(ts)).truncatedTo(ChronoUnit.MINUTES);
 	}
 
-	private static double meteoValue(JsonObject o, String f) {
-		JsonElement extras = o.get("extras").getAsJsonObject().get(f);
+	private static double meteoValue(JsonObject o, String v) {
+		JsonElement extras = o.get("extras").getAsJsonObject().get(v);
 		if (extras.getAsString().startsWith("%")) return 0;
 		return extras.getAsDouble();
 	}

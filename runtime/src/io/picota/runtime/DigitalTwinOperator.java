@@ -1,13 +1,11 @@
 package io.picota.runtime;
 
-import io.intino.alexandria.jms.TopicProducer;
 import io.intino.alexandria.logger.Logger;
 import io.intino.datahub.box.DataHubBox;
 import io.intino.datahub.model.Sensor;
 import io.intino.sumus.chronos.TimeSeries;
 import io.intino.sumus.chronos.TimelineStore;
 import jakarta.jms.Message;
-import org.apache.activemq.command.ActiveMQTextMessage;
 import org.apache.commons.io.FileUtils;
 
 import java.io.BufferedWriter;
@@ -15,6 +13,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static io.picota.runtime.CsvUtils.*;
 import static java.util.Arrays.stream;
@@ -23,18 +22,20 @@ public class DigitalTwinOperator {
 	private final DataHubBox datahub;
 	private final File sourcesDir;
 	private final File pythonVenv;
+	private final Consumer<Inference> listener;
 	private final File modelsDir;
 	private final List<Sensor> sensors;
 	private final File dataDir;
 	private final Object monitor = new Object();
 	private boolean subscribed;
 
-	public DigitalTwinOperator(DataHubBox datahub, File workingDir, File pythonVenv) {
+	public DigitalTwinOperator(DataHubBox datahub, File workingDir, File pythonVenv, Consumer<Inference> listener) {
 		this.datahub = datahub;
 		this.modelsDir = new File(workingDir, "models");
 		this.sourcesDir = new File(workingDir, "sources");
 		this.dataDir = new File(workingDir, "data");
 		this.pythonVenv = pythonVenv;
+		this.listener = listener;
 		if (this.sourcesDir.exists()) clean();
 		this.sourcesDir.mkdirs();
 		this.modelsDir.mkdirs();
@@ -73,7 +74,7 @@ public class DigitalTwinOperator {
 			TimelineStore timelineStore = digitalTwin(digitalTwin.name$());
 			if (timelineStore == null || timelineStore.timeline().last() == null) return;
 			File data = prepareData(digitalTwin, timelineStore);
-			publish(digitalTwin, denormalize(timelineStore, inferDt(digitalTwin, data)));
+			publish(denormalize(timelineStore, inferDt(digitalTwin, data)));
 		} catch (Exception e) {
 			Logger.error(e);
 		}
@@ -93,7 +94,7 @@ public class DigitalTwinOperator {
 		if (process.exitValue() != 0) throw new IOException(result.trim());
 		return result.lines()
 				.map(line -> line.trim().split("\t"))
-				.map(f -> new Inference(f[0], Double.parseDouble(f[1]))).toList();
+				.map(f -> new Inference(dt, f[0], Double.parseDouble(f[1]))).toList();
 	}
 
 	private Sensor sensorOf(Message m) {
@@ -115,7 +116,7 @@ public class DigitalTwinOperator {
 		return inferences.stream().map(i -> {
 			try {
 				TimeSeries points = timelineStore.timeline().get(i.variable);
-				return new Inference(i.variable, denormalize(i.value, stream(points.values).min().getAsDouble(), stream(points.values).max().getAsDouble()));
+				return new Inference(i.digitalTwin, i.variable, denormalize(i.value, stream(points.values).min().getAsDouble(), stream(points.values).max().getAsDouble()));
 			} catch (IOException e) {
 				Logger.error(e);
 				return i;
@@ -131,26 +132,11 @@ public class DigitalTwinOperator {
 		writer.write(headerForInfer(digitalTwin, timelineStore));
 	}
 
-	private void publish(Sensor digitalTwin, List<Inference> inference) {
-		try {
-			TopicProducer producer = datahub.brokerService().manager().topicProducerOf("inference." + digitalTwin.name$());
-			ActiveMQTextMessage message = new ActiveMQTextMessage();
-			message.setText(messageOf(digitalTwin, inference).toString());
-			producer.produce(message);
-		} catch (Exception e) {
-			Logger.error(e);
-		}
+	private void publish(List<Inference> inference) {
+			inference.forEach(listener);
 	}
 
-	private io.intino.alexandria.message.Message messageOf(Sensor digitalTwin, List<Inference> inference) {
-		var message = new io.intino.alexandria.message.Message(digitalTwin.name$());
-		message.set("digitalTwin", digitalTwin.name$());
-		inference.forEach(i -> message.set(i.variable, i.value()));
-		return message;
-	}
-
-
-	public record Inference(String variable, double value) {
+	public record Inference(Sensor digitalTwin, String variable, double value) {
 	}
 
 	private TimelineStore digitalTwin(String name) {

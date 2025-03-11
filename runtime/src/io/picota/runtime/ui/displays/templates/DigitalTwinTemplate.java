@@ -33,7 +33,7 @@ public class DigitalTwinTemplate extends AbstractDigitalTwinTemplate<RuntimeBox>
 		navigator.source(new DigitalTwinDateNavigatorDatasource(sensor, timelineSource));
 		navigator.refresh();
 		timeline.summaryPointsCount(3);
-		timeline.source(new DigitalTwinTimelineDatasource(sensor, timelineSource));
+		timeline.source(new DigitalTwinTimelineDatasource(sensor, timelineSource,box().inferences()));
 		timeline.refresh();
 	}
 

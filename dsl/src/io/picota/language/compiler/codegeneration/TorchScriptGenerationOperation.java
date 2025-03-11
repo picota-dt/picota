@@ -153,6 +153,7 @@ public class TorchScriptGenerationOperation extends Generator {
 	private Frame frameOf(DigitalTwin.Infer i) {
 		FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
 		DigitalTwin dt = i.core$().ownerAs(DigitalTwin.class);
+		builder.add("digitalTwin", dt.name$());
 		if (dt.isPredictive()) builder.add("timeHorizon", "+" + dt.asPredictive().timeHorizon());
 		return builder.toFrame();
 	}

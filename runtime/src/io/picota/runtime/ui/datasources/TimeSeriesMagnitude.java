@@ -27,9 +27,11 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 	private final Timeline timeline;
 	private final TimeSeries series;
 	private final MagnitudeDefinition magnitude;
+	private final Double inference;
 
-	public TimeSeriesMagnitude(Timeline timeline, MagnitudeDefinition magnitude) {
+	public TimeSeriesMagnitude(Timeline timeline, MagnitudeDefinition magnitude, Double inference) {
 		this.timeline = timeline;
+		this.inference = inference;
 		this.series = timeline.get(magnitude.name());
 		this.magnitude = magnitude;
 	}
@@ -167,7 +169,23 @@ class TimeSeriesMagnitude implements TimelineDatasource.Magnitude {
 
 			@Override
 			public List<Attribute> attributes() {
-				return List.of();
+				if (inference == null || Double.isNaN(inference)) return List.of();
+				return List.of(new Attribute() {
+					@Override
+					public String name() {
+						return "Next";
+					}
+
+					@Override
+					public double value() {
+						return inference;
+					}
+
+					@Override
+					public Instant date() {
+						return null;
+					}
+				});
 			}
 		};
 	}

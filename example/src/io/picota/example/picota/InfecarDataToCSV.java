@@ -4,9 +4,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.intino.alexandria.Json;
 import io.intino.alexandria.logger.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,7 +43,6 @@ public class InfecarDataToCSV {
 	}
 
 	public void run() throws IOException {
-		if (target.exists()) return;
 		Logger.info("Importing infecar data...");
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(source)); BufferedWriter writer = new BufferedWriter(new FileWriter(target))) {
 			writer.write("ts," + magnitudes.values().stream().distinct().collect(joining(",")) + "\n");
@@ -89,8 +90,13 @@ public class InfecarDataToCSV {
 		result.addProperty("ts", ts.getEpochSecond());
 		magnitudes.values().stream()
 				.filter(m -> contains(values, m))
-				.forEach(m -> result.addProperty(m, values.stream().mapToDouble(o -> o.has(m) ? o.getAsJsonPrimitive(m).getAsDouble() : 0).average().orElse(0)));
+				.forEach(m -> result.addProperty(m, streamValues(values, m).average().orElse(0)));
 		return result;
+	}
+
+	@NotNull
+	private static DoubleStream streamValues(List<JsonObject> values, String magnitude) {
+		return values.stream().filter(v -> v.has(magnitude)).mapToDouble(o -> o.getAsJsonPrimitive(magnitude).getAsDouble());
 	}
 
 	private boolean contains(List<JsonObject> values, String m) {
@@ -119,6 +125,7 @@ public class InfecarDataToCSV {
 	private void save(JsonObject measure, BufferedWriter writer) {
 		try {
 			Instant ts = tsFrom(measure);
+			if (ts.atZone(ZoneId.systemDefault()).getYear() < 2020) return;
 			StringBuilder result = new StringBuilder();
 			String measurements = valuesOf(measure)
 					.mapToObj(d -> format(Locale.ENGLISH, "%.2f", d))

@@ -1,11 +1,18 @@
 package io.picota.runtime;
 
+import io.intino.alexandria.logger.Logger;
+import io.intino.alexandria.message.Message;
+import io.intino.alexandria.message.MessageReader;
 import io.intino.alexandria.ui.services.AuthService;
 import io.intino.datahub.box.DataHubBox;
 import io.intino.datahub.model.Sensor;
+import jakarta.jms.JMSException;
 
 import java.io.File;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
 
 import static java.util.Objects.requireNonNull;
 
@@ -15,12 +22,14 @@ public class RuntimeBox extends AbstractBox {
 	public enum State {Waiting, Training, Prepared, Operating;}
 
 	private DataHubBox datahub;
+
 	private File workingDir;
 	private File pythonVenv;
 	private DigitalTwinBuilder dtBuilder;
 	private DigitalTwinOperator dtOperator;
 	private State state = State.Waiting;
 	private boolean runningDataHub = false;
+	private final Map<Sensor.Magnitude, Double> inferences = new HashMap<>();
 
 	public RuntimeBox(RuntimeConfiguration args, DataHubBox datahub, File workingDir, File pythonVenv) {
 		super(args);
@@ -28,7 +37,7 @@ public class RuntimeBox extends AbstractBox {
 		this.workingDir = workingDir;
 		this.pythonVenv = pythonVenv;
 		this.dtBuilder = new DigitalTwinBuilder(datahub, workingDir, pythonVenv);
-		this.dtOperator = new DigitalTwinOperator(datahub, workingDir, pythonVenv);
+		this.dtOperator = new DigitalTwinOperator(datahub, workingDir, pythonVenv, onInference());
 	}
 
 	public RuntimeBox(String[] args) {
@@ -73,6 +82,10 @@ public class RuntimeBox extends AbstractBox {
 		return this;
 	}
 
+	public Map<Sensor.Magnitude, Double> inferences() {
+		return inferences;
+	}
+
 	public void beforeStart() {
 		startDatahub();
 	}
@@ -94,7 +107,13 @@ public class RuntimeBox extends AbstractBox {
 	public void afterStart() {
 		File file = new File(workingDir, "models");
 		if (file.exists() && requireNonNull(file.listFiles()).length > 0) state = State.Prepared;
+	}
 
+	private Consumer<DigitalTwinOperator.Inference> onInference() {
+		return i -> {
+			Sensor.Magnitude magnitude = i.digitalTwin().magnitude(m -> m.name$().equalsIgnoreCase(i.variable()));
+			inferences.put(magnitude, i.value());
+		};
 	}
 
 	public void beforeStop() {

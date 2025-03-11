@@ -27,9 +27,9 @@ public class DTTest {
 
 	@Before
 	public void setUp() {
-		String[] args = args();
-		box = PicotaStarter.start(args, GraphLoader.load(args));
-		Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
+//		String[] args = args();
+//		box = PicotaStarter.start(args, GraphLoader.load(args));
+//		Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
 	}
 
 	@Test
