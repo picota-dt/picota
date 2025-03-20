@@ -1,7 +1,7 @@
 from torch import nn
 
 from kan.KAL import KAL
-
+from kan.ParametricSigmoid import ParametricSigmoid
 
 class KAN(nn.Module):
 	def __init__(self, input_features, output_features):

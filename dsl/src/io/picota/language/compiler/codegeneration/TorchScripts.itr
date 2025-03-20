@@ -71,10 +71,9 @@ rule type(variable)
 		lr = 0.001
 		loss_fn = nn.MSELoss()
 		validation_loss_fn = nn.L1Loss()
-		test_proportion = 0.2
-		validation_proportion = 0.16
+		test_proportion = 0.3
 		dataset = InputDataset(dt, output_variable)
-		model, loss, features = (KanTrainer(input_variables(dt, output_variable), output_variable, batch_size, epochs, device, test_proportion, validation_proportion, lr, loss_fn, validation_loss_fn)
+		model, loss, features = (KanTrainer(input_variables(dt, output_variable), output_variable, batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
         				.train(dataset))
 		torch.save(model.state_dict(), model_path)
 		print(f"$digitalTwin\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))

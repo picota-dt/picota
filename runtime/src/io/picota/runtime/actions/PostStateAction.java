@@ -28,7 +28,7 @@ public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHa
 			box.state(State.Waiting);
 		} else if (value == Value.Training) {
 			if (box.state() == State.Training) throw new BadRequest("Already training");
-			if (box.state() == State.Waiting || box.state() == State.Operating) {
+			else {
 				box.stopDatahub();
 				training = box.dtBuilder().start(this::onfinish);
 				box.state(State.Training);

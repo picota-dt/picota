@@ -25,22 +25,6 @@ public class CompilationReporter {
 		this.out.println();
 	}
 
-	private void printMessage(CompilerMessage message) {
-		this.out.print("%%m");
-		this.out.print(message.category());
-		this.out.print("#%%#%%%#%%%%%%%%%#");
-		this.out.print(message.message());
-		this.out.print("#%%#%%%#%%%%%%%%%#");
-		this.out.print(message.url());
-		this.out.print("#%%#%%%#%%%%%%%%%#");
-		this.out.print(message.lineNum());
-		this.out.print("#%%#%%%#%%%%%%%%%#");
-		this.out.print(message.columnNum());
-		this.out.print("#%%#%%%#%%%%%%%%%#");
-		this.out.print("/%m");
-		this.out.println();
-	}
-
 	private void reportCompiledItems(List<OutputItem> compiledFiles) {
 		for(OutputItem compiledFile : compiledFiles) {
 			this.out.print("%%c");
