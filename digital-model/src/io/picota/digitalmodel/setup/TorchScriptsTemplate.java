@@ -1,4 +1,4 @@
-package io.picota.language.compiler.codegeneration;
+package io.picota.digitalmodel.setup;
 
 import io.intino.itrules.template.Rule;
 import io.intino.itrules.template.Template;

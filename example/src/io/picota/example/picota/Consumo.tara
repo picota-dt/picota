@@ -1,0 +1,25 @@
+dsl Picota
+
+
+Reality spain
+	Variable temperature as Numeric Layered
+		Layer max
+		Layer min
+		Layer mean
+	Variable pib as Numeric
+	Variable interestRate as Numeric
+	Subject family
+		Variable members as Numeric Layered(aggregable =true)
+			Layer inactive
+				Layer adult
+				Layer elderly
+				Layer children
+			Layer active
+				Layer gender
+		Variable income as Numeric
+		Variable expenses as Numeric Layered(aggregable=true)
+
+
+DigitalTwin(spain.family) dt
+	Resolution(value = 1, scale = Year) //value por defecto 1
+	Infer(variable = spain.family.expenses)

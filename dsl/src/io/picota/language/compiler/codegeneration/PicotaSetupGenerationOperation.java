@@ -4,6 +4,7 @@ import io.intino.builder.CompilerConfiguration;
 import io.intino.builder.OutputItem;
 import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
+import io.intino.magritte.framework.Layer;
 import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.model.*;
 
@@ -72,17 +73,8 @@ public class PicotaSetupGenerationOperation extends Generator {
 
 	private Frame frameOf(DigitalTwin digitalTwin) {
 		FrameBuilder builder = new FrameBuilder("digitalTwin").add("name", digitalTwin.name$());
-		List<Frame> variables = new ArrayList<>();
-		if (digitalTwin.entity() != null) {
-			Reality reality = digitalTwin.entity().core$().ownerAs(Reality.class);
-			List<ViewPoint> viewPoints = reality.viewPointList();
-			variables.addAll(viewPoints.stream().flatMap(vp -> vp.variableList().stream())
-					.map(v -> frameOf(v, digitalTwin.inferList())).toList());
-			List<ViewPoint> entityVP = digitalTwin.entity().viewPointList();
-			variables.addAll(entityVP.stream().flatMap(vp -> vp.variableList().stream()).map(v -> frameOf(v, digitalTwin.inferList())).toList());
-		}
+		if (digitalTwin.subject() != null) addVariableFrames(digitalTwin, builder);
 		builder.add("period", digitalTwin.resolution().value()).add("scale", digitalTwin.resolution().scale().name());
-		builder.add("variable", variables.toArray(new Frame[0]));
 		builder.add("moment", digitalTwin.isEstimate() ? "Current" : "Future");
 		if (digitalTwin.isPredictive()) {
 			builder.add("timeHorizon", digitalTwin.asPredictive().timeHorizon());
@@ -91,16 +83,28 @@ public class PicotaSetupGenerationOperation extends Generator {
 		return builder.toFrame();
 	}
 
+	private void addVariableFrames(DigitalTwin digitalTwin, FrameBuilder builder) {
+		Reality reality = digitalTwin.subject().core$().ownerAs(Reality.class);
+		List<Frame> variables = new ArrayList<>(reality.variableList().stream().map(v -> frameOf(v, digitalTwin.inferList())).toList());
+		List<Variable> subjectVars = digitalTwin.subject().variableList();
+		variables.addAll(subjectVars.stream().map(v -> frameOf(v, digitalTwin.inferList())).toList());
+		builder.add("variable", variables.toArray(new Frame[0]));
+	}
+
 	private Frame frameOf(Variable v, List<DigitalTwin.Infer> infers) {
-		FrameBuilder builder = new FrameBuilder("variable").add("name", vpOf(v).name$() + "_" + v.name$());
+		FrameBuilder builder = new FrameBuilder("variable").add("name", v.name$());
 		if (v.isCyclic()) builder.add("cyclic");
 		if (v.isNumeric()) builder.add("numeric");
-		if (infers.stream().anyMatch(i -> i.variable().equals(v)))
+		if (isInferenceVariable(v, infers))
 			builder.add("inference", infers.getFirst().core$().ownerAs(DigitalTwin.class).isEstimate() ? "Current" : "Future");
+		if (v.isLayered()) {
+			builder.add("layers", v.asLayered().layerList().stream().map(Layer::name$).toArray(String[]::new));
+			if (v.asLayered().aggregated()) builder.add("aggregated");
+		}
 		return builder.toFrame();
 	}
 
-	private ViewPoint vpOf(Variable v) {
-		return v.core$().ownerAs(ViewPoint.class);
+	private static boolean isInferenceVariable(Variable v, List<DigitalTwin.Infer> infers) {
+		return infers.stream().anyMatch(i -> i.variable().equals(v));
 	}
 }

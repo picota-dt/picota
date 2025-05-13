@@ -1,15 +1,13 @@
 dsl Picota
 
 Reality elEspino //World
-	ViewPoint weather //ViewPoint
-		Variable temperature as Numeric
-		Variable humidity as Numeric //Dimension facet
-	Entity grid //Entity
-		ViewPoint energy //viewPoint
-			Variable watts as Numeric
+	Variable temperature as Numeric
+	Variable humidity as Numeric //Dimension facet
+	Subject grid //Entity
+		Variable watts as Numeric
 
 DigitalTwin(elEspino.grid) Espino-Twin as Predictive(timeHorizon = 1, lag = 1)
 	Resolution(1,Minute)
-	Infer(elEspino.grid.energy.watts) //Resolución
+	Infer(elEspino.grid.watts) //Resolución
 
 

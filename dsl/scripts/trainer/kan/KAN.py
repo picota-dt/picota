@@ -8,7 +8,7 @@ class KAN(nn.Module):
 		super().__init__()
 		self.kal0 = KAL(input_features, 50)
 		self.kal1 = KAL(50, output_features)
-		self.sigmoid = nn.Sigmoid()
+		self.sigmoid = ParametricSigmoid()
 
 	def forward(self, x):
 		x = self.kal0(x)

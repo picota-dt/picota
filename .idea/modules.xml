@@ -2,10 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/digital-model/digital-model.iml" filepath="$PROJECT_DIR$/digital-model/digital-model.iml" />
       <module fileurl="file://$PROJECT_DIR$/dsl/dsl.iml" filepath="$PROJECT_DIR$/dsl/dsl.iml" />
-      <module fileurl="file://$PROJECT_DIR$/example/example.iml" filepath="$PROJECT_DIR$/example/example.iml" />
-      <module fileurl="file://$PROJECT_DIR$/runtime/runtime.iml" filepath="$PROJECT_DIR$/runtime/runtime.iml" />
-      <module fileurl="file://$PROJECT_DIR$/runtime-elements/runtime-elements.iml" filepath="$PROJECT_DIR$/runtime-elements/runtime-elements.iml" />
     </modules>
   </component>
 </project>

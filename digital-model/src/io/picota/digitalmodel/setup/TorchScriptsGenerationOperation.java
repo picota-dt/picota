@@ -1,71 +1,62 @@
-package io.picota.language.compiler.codegeneration;
+package io.picota.digitalmodel.setup;
 
-import io.intino.builder.CompilerConfiguration;
-import io.intino.builder.OutputItem;
+import io.intino.alexandria.logger.Logger;
 import io.intino.itrules.Engine;
 import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
 import io.intino.magritte.framework.Layer;
-import io.intino.tara.builder.core.errorcollection.TaraException;
 import io.picota.language.compiler.util.Tar;
-import io.picota.language.model.*;
+import io.picota.language.model.DigitalTwin;
+import io.picota.language.model.PicotaGraph;
+import io.picota.language.model.Variable;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.logging.Logger;
 
+import static io.intino.alexandria.logger.Logger.error;
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
-import static java.util.logging.Level.SEVERE;
 
-@SuppressWarnings("resource")
-public class TorchScriptGenerationOperation extends Generator {
-	private static final Logger LOG = Logger.getGlobal();
-	private final Map<File, Boolean> sources;
+public class TorchScriptsGenerationOperation {
 	private final PicotaGraph model;
 	private final Template template;
-	private final Map<String, List<String>> outMap = new LinkedHashMap<>();
-	private final File tempDir;
-	private final File outDir;
+	private final File trainerDir;
+	private final File evaluatorDir;
+	private final File scriptsDir;
 
-	public TorchScriptGenerationOperation(CompilerConfiguration conf, Map<File, Boolean> sources, PicotaGraph model) {
-		super(conf);
-		this.outDir = conf.outDirectory();
-		this.sources = sources;
+	public TorchScriptsGenerationOperation(File workingDir, PicotaGraph model) {
 		this.model = model;
 		this.template = new TorchScriptsTemplate();
-		this.tempDir = new File(conf.getTempDirectory(), conf.module());
-//		this.tempDir = conf.genDirectory(); //FIXME
+		this.scriptsDir = new File(workingDir, "scripts");
+		this.trainerDir = new File(scriptsDir, "trainer");
+		this.evaluatorDir = new File(scriptsDir, "evaluator");
+		clean();
+		this.evaluatorDir.mkdirs();
+		this.trainerDir.mkdirs();
 	}
 
-	public List<OutputItem> call() throws TaraException {
+	public void execute() {
 		try {
-			if (conf.isVerbose()) conf.out().println(prefix() + " Generating Script...");
-			createDigitalTwinScripts();
-			createMainScript();
-			extract("trainer");
-			if (!outDir.exists()) outDir.mkdirs();
-			Tar.createTarFile(tempDir, new File(outDir, "trainer.tar"));
-			FileUtils.cleanDirectory(tempDir);
+			createTrainerScripts();
 			createEvaluatorScripts();
-			extract("evaluator");
-			Tar.createTarFile(tempDir, new File(outDir, "evaluators.tar"));
-			return toOutputList(outMap);
 		} catch (Throwable e) {
-			LOG.log(SEVERE, "Error during script generation: " + e.getMessage(), e);
-			throw new TaraException(e.getMessage());
+			error("Error during script generation: " + e.getMessage(), e);
 		}
+	}
+
+	private void createTrainerScripts() throws IOException {
+		createDigitalTwinScripts();
+		createMainScript();
+		extract("trainer", trainerDir);
 	}
 
 	private void createEvaluatorScripts() throws IOException {
 		for (DigitalTwin dt : model.digitalTwinList()) {
-			File file = new File(tempDir, dt.name$() + ".py");
+			File file = new File(evaluatorDir, dt.name$() + ".py");
 			FrameBuilder frame = new FrameBuilder("evaluator");
 			frame.add("name", dt.name$());
 			dt.inferList().forEach(i -> {
@@ -75,14 +66,15 @@ public class TorchScriptGenerationOperation extends Generator {
 			});
 			Files.writeString(file.toPath(), new Engine(template).render(frame));
 		}
+		extract("evaluator", evaluatorDir);
 	}
 
-	private void extract(String lib) throws IOException {
-		Tar.extractTarFile(this.getClass().getResourceAsStream("/" + lib + ".tar"), tempDir);
+	private void extract(String lib, File dir) throws IOException {
+		Tar.extractTarFile(this.getClass().getResourceAsStream("/scripts/" + lib + ".tar"), dir);
 	}
 
 	private void createMainScript() throws IOException {
-		File main = new File(tempDir, "main.py");
+		File main = new File(trainerDir, "main.py");
 		FrameBuilder frame = new FrameBuilder("supermain");
 		frame.add("dt", model.digitalTwinList().stream().map(Layer::name$).toArray(String[]::new));
 		Files.writeString(main.toPath(), new Engine(template).render(frame));
@@ -90,7 +82,7 @@ public class TorchScriptGenerationOperation extends Generator {
 
 	private void createDigitalTwinScripts() throws IOException {
 		for (var dt : model.digitalTwinList()) {
-			File dtDir = new File(tempDir, normalize(dt.name$()));
+			File dtDir = new File(trainerDir, normalize(dt.name$()));
 			dtDir.mkdirs();
 			createPackage(dtDir);
 //			if (dt.isPredictive()) renderPredictiveModels(dt, dtDir);
@@ -105,11 +97,9 @@ public class TorchScriptGenerationOperation extends Generator {
 
 	private void renderInferences(DigitalTwin dt, File dir) throws IOException {
 		for (DigitalTwin.Infer i : dt.inferList()) {
-			;
 			createPackage(dir);
 			File file = new File(dir, i.variable().name$() + ".py");
 			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i)));
-			put(sources.keySet().iterator().next().getAbsolutePath(), file.getAbsolutePath());
 		}
 	}
 
@@ -144,5 +134,13 @@ public class TorchScriptGenerationOperation extends Generator {
 
 	private static FrameBuilder frameBuilderOf(Variable v, String tag) {
 		return new FrameBuilder(tag, "variable").add("name", v.name$());
+	}
+
+	private void clean() {
+		try {
+			FileUtils.deleteDirectory(this.scriptsDir);
+		} catch (IOException e) {
+			Logger.error(e);
+		}
 	}
 }

@@ -2,9 +2,9 @@ rule type(graphloader)
 	package $package;
 
 	import io.intino.alexandria.logger.Logger;
-	import io.intino.datahub.box.DataHubConfiguration;
-	import io.intino.datahub.model.*;
-	import io.intino.datahub.model.rules.Scale;
+	import systems.intino.eventsourcing.datahub.box.DatahubConfiguration;
+	import systems.intino.eventsourcing.datahub.model.*;
+	import systems.intino.eventsourcing.datahub.model.rules.Scale;
 
 	import java.io.File;
 	import java.io.IOException;
@@ -12,9 +12,10 @@ rule type(graphloader)
 
 	public class GraphLoader {
 		public static NessGraph load(String[] args) {
-			DataHubConfiguration configuration = new DataHubConfiguration(args);
+			DatahubConfiguration configuration = new DatahubConfiguration(args);
 			NessGraph ness = NessGraph.load();
-			ness.create().broker().port(Integer.parseInt(configuration.brokerPort())).secondaryPort(Integer.parseInt(configuration.brokerSecondaryPort()));
+			ness.create().broker().port(Integer.parseInt(configuration.brokerPort()))
+				.secondaryPort(Integer.parseInt(configuration.brokerSecondaryPort()));
 			Datalake datalake = ness.create().datalake(Scale.$scale);
 			Datamart master = ness.create("master", "master").datamart();
 			datalake.create().seal().create().cron("0 0 4 1/1 * ? *", null);
@@ -43,36 +44,43 @@ rule type(digitalTwin) and trigger(call)
 
 rule type(digitalTwin) and trigger(method)
 	private static void $name+camelCase+firstLowerCase(Datalake datalake, Datamart master) {
-		Sensor $name+camelCase+firstLowerCase~_Sensor = datalake.graph().create("sensors", "$name").sensor();
-		$name+camelCase+firstLowerCase~_Sensor.create("resolution").attribute("$period");
-		$name+camelCase+firstLowerCase~_Sensor.create("resolutionScale").attribute("$scale");
-		$name+camelCase+firstLowerCase~_Sensor.create("inference").attribute("$moment");
+		Message $name+camelCase+firstLowerCase~_Message = datalake.graph().create("messages", "$name").message();
+		$name+camelCase+firstLowerCase~_Message.create("resolution").attribute("_$period");
+		$name+camelCase+firstLowerCase~_Message.create("resolutionScale").attribute("_$scale");
+		$name+camelCase+firstLowerCase~_Message.create("inference").attribute("_$moment");
 		<<$lag>>
 		<<$timeHorizon>>
 		<<$timeHorizonScale>>
 		<<$variable...[$NL]>>
-		Entity $name+camelCase+firstLowerCase~_Entity = master.create("$name").entity();
-		Datalake.Tank.Measurement $name+camelCase+firstLowerCase~_Tank = datalake.create("$name").tank().asMeasurement($name+camelCase+firstLowerCase~_Sensor, $period, Scale.$scale+firstUpperCase);
+		Subject $name+camelCase+firstLowerCase~_Entity = master.create("$name").subject();
+		Datalake.Tank.Measurement $name+camelCase+firstLowerCase~_Tank = datalake.create("$name").tank().asMeasurement($name+camelCase+firstLowerCase~_Message, $period, Scale.$scale+firstUpperCase);
 		master.create("$name+camelCase+firstLowerCase~_Timeline").timeline($name+camelCase+firstLowerCase~_Entity).asRaw($name+camelCase+firstLowerCase~_Tank);
 	}
 
 rule trigger(lag)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("lag").attribute("$this");
+	$<container>name+camelCase+firstLowerCase~_Message.create("_lag").attribute("$this");
 
 rule trigger(timeHorizon)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("timeHorizon").attribute("$this");
+	$<container>name+camelCase+firstLowerCase~_Message.create("_timeHorizon").attribute("$this");
 
 rule trigger(timeHorizonScale)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("timeHorizonScale").attribute("$this");
+	$<container>name+camelCase+firstLowerCase~_Message.create("_timeHorizonScale").attribute("$this");
+
+rule trigger(layer)
+	$<container.container>name+camelCase+firstLowerCase~_Message.create("$<container>name.$name").magnitude("$<container>name.$name").create("operator").attribute("avg").core$$().ownerAs(Message.Attribute.class).create("type").attribute("Numeric")<<$<container>inference>>;
+
+rule type(numeric, layered) and trigger(variable)
+	$<container>name+camelCase+firstLowerCase~_Message.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Message.Attribute.class).create("type").attribute("Numeric")<<$inference>>;
+	$layer...[$NL]
 
 rule type(numeric) and trigger(variable)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Sensor.Magnitude.class).create("type").attribute("Numeric")<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Message.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Message.Attribute.class).create("type").attribute("Numeric")<<$inference>>;
 
-rule type(numeric) and trigger(variable)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("type").create("operator").attribute("avg")..core$$().ownerAs(Sensor.Magnitude.class).attribute("Cyclic")<<$inference>>;
+rule type(cyclic) and trigger(variable)
+	$<container>name+camelCase+firstLowerCase~_Message.create("$name").magnitude("$name").create("type").create("operator").attribute("avg")..core$$().ownerAs(Message.Attribute.class).attribute("Cyclic")<<$inference>>;
 
 rule trigger(variable)
-	$<container>name+camelCase+firstLowerCase~_Sensor.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Sensor.Magnitude.class)<<$inference>>;
+	$<container>name+camelCase+firstLowerCase~_Message.create("$name").magnitude("$name").create("operator").attribute("avg").core$$().ownerAs(Message.Attribute.class)<<$inference>>;
 
 rule trigger(inference)
-	.core$$().ownerAs(Sensor.Magnitude.class).create("inference").attribute("$this")
+	.core$$().ownerAs(Message.Attribute.class).create("_inference").attribute("$this")

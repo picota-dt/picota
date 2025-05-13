@@ -6,18 +6,18 @@ Concept:Named Variable is component
 	Facet Numeric
 	Facet Enumerated
 		var string[] values
+	Facet Layered
+		var boolean aggregated = false
+		Concept:Named Layer extends Variable
 Concept Reality
-	has ViewPoint
-	Concept:Named Entity
-		has ViewPoint
-
-Concept ViewPoint is component
 	has Variable
+	Concept:Named Subject
+		has Variable
 
 Concept:Named DigitalTwin
-	var Reality.Entity entity
+	var Reality.Subject subject
 	Concept:{1..1} Resolution
-		var integer value
+		var integer value = 1
 		var word:Scale scale
 	var integer memory = 0
 	Concept Infer

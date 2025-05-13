@@ -1,20 +1,16 @@
 dsl Picota
 
 Reality Infecar
-	ViewPoint weather
-		Variable temperature as Numeric
-		Variable radiation as Numeric
-	Entity SolarPlant
-		ViewPoint operational
-			Variable cellTemperature as Numeric
-		ViewPoint generation
-			Variable reactivePower as Numeric
-			Variable activePower as Numeric
-		ViewPoint consumption
-			Variable reactivePower as Numeric
-			Variable activePower as Numeric
+	Variable temperature as Numeric
+	Variable radiation as Numeric
+	Subject SolarPlant
+		Variable cellTemperature as Numeric
+		Variable generatedReactivePower as Numeric
+		Variable generatedActivePower as Numeric
+		Variable consumedReactivePower as Numeric
+		Variable consumedActivePower as Numeric
 
 DigitalTwin(Infecar.SolarPlant) Infecar-Twin as Predictive(timeHorizon = 6, lag = 0)
 	Resolution(1, Minute)
-	Infer(Infecar.SolarPlant.generation.activePower)
-	Infer(Infecar.SolarPlant.generation.reactivePower)
+	Infer(Infecar.SolarPlant.generatedActivePower)
+	Infer(Infecar.SolarPlant.generatedReactivePower)
