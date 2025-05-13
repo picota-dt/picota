@@ -7,7 +7,6 @@
 gen/
 temp
 www
-runtime-elements/node_modules
-runtime-elements/package.json
-runtime-elements/package-lock.json
-runtime-elements/webpack.config.js
+scripts
+*.ddb
+*.csv

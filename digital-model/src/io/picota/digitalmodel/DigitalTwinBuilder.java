@@ -70,6 +70,12 @@ public class DigitalTwinBuilder {
 
 	private Result train(DigitalTwin dt) throws IOException, InterruptedException {
 		Logger.info("Training " + dt.name$() + "...");
+		Result result = prepareData();
+		Logger.info("Finished training of " + dt.name$() + ". Code: " + result.code);
+		return result;
+	}
+
+	private Result prepareData() throws IOException, InterruptedException {
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
 		File scriptPath = new File(scriptsDir, "main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
@@ -79,7 +85,6 @@ public class DigitalTwinBuilder {
 				.start();
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
-		Logger.info("Finished training of " + dt.name$() + ". Code: " + code);
 		return new Result(code, report, trainings(code, report));
 	}
 
@@ -119,13 +124,13 @@ public class DigitalTwinBuilder {
 		view.exportTo(new File(dataDir, data.name() + ".csv"));
 	}
 
-	private static HistoryFormat historyFormat(DigitalTwin model, SubjectHistory history, TemporalAmount duration) {
+	private static HistoryFormat historyFormat(DigitalTwin dt, SubjectHistory history, TemporalAmount duration) {
 		HistoryFormat format = new HistoryFormat(history.first(), history.last(), duration);
 		TemporalMappers.mappers.forEach((k, v) -> format.add(new ColumnDefinition(k, v)));
 		history.tags().forEach(t -> format.add(new ColumnDefinition(t, t + ".first").add(new MinMaxNormalizationFilter())));
-		int timeHorizon = model.isPredictive() ? model.asPredictive().timeHorizon() : 0;
+		int timeHorizon = dt.isPredictive() ? dt.asPredictive().timeHorizon() : 0;
 		if (timeHorizon > 0) appendTimeHorizonColumns(history, format, timeHorizon);
-		int lag = model.memory();
+		int lag = dt.memory();
 		if (lag > 0) appendLagColumns(history, format, lag);
 		return format;
 	}
@@ -135,7 +140,8 @@ public class DigitalTwinBuilder {
 	}
 
 	private static String timeHorizonDefinition(String t) {
-		return null;
+		//TODO
+		return t + ".first";
 	}
 
 	private static void appendLagColumns(SubjectHistory history, HistoryFormat format, int lag) {
