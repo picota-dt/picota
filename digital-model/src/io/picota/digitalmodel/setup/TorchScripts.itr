@@ -5,7 +5,7 @@ rule type(evaluator)
     import KanEvaluator
     from DatasetLoader import DatasetLoader
 
-    dt = DatasetLoader(sys.argv[2], ",").load()
+    dt = DatasetLoader(sys.argv[2], "\\t").load()
     tensor = torch.tensor(np.array(list(dt.values())), dtype=torch.float32).squeeze(1)
 	$variable+evaluate...[$NL]
 
@@ -36,7 +36,7 @@ rule type(digitalTwin)
 		if not os.path.exists(source):
 			print("$name	No data")
 			return
-		dt = DatasetLoader(source, ",").load()
+		dt = DatasetLoader(source, "\\t").load()
 		$variable+callVariable...[$NL]
 
 rule trigger(quoted)
@@ -54,6 +54,7 @@ rule trigger(evaluate)
 rule type(variable)
 	import torch
 	import os
+	import Device
 	from torch import nn
 	from InputDataset import InputDataset
 	from kan.KanTrainer import KanTrainer
@@ -64,7 +65,7 @@ rule type(variable)
 	def train(dt, modeldir):
 		model_path = modeldir + "$name~$timeHorizon.bin"
 		output_variable = "$name~$timeHorizon"
-		device = "cpu"
+		device = Device.get_device()
 		batch_size = 2
 		epochs = 5
 		lr = 0.001
@@ -72,7 +73,7 @@ rule type(variable)
 		validation_loss_fn = nn.L1Loss()
 		test_proportion = 0.3
 		dataset = InputDataset(dt, output_variable)
-		model, loss, features = (KanTrainer(input_variables(dt, output_variable), output_variable, batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
+		model, loss, features = (KanTrainer("$digitalTwin", input_variables(dt, output_variable), output_variable, batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
         				.train(dataset))
 		torch.save(model.state_dict(), model_path)
 		print(f"$digitalTwin\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))

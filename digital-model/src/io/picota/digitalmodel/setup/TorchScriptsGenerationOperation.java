@@ -11,6 +11,8 @@ import io.picota.language.model.DigitalTwin;
 import io.picota.language.model.PicotaGraph;
 import io.picota.language.model.Variable;
 import org.apache.commons.io.FileUtils;
+import systems.intino.datamarts.subjectstore.SubjectHistory;
+import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,13 +25,15 @@ import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
 
 public class TorchScriptsGenerationOperation {
 	private final PicotaGraph model;
+	private final SubjectHistoryVault subjectStore;
 	private final Template template;
 	private final File trainerDir;
 	private final File evaluatorDir;
 	private final File scriptsDir;
 
-	public TorchScriptsGenerationOperation(File workingDir, PicotaGraph model) {
+	public TorchScriptsGenerationOperation(File workingDir, PicotaGraph model, SubjectHistoryVault subjectStore) {
 		this.model = model;
+		this.subjectStore = subjectStore;
 		this.template = new TorchScriptsTemplate();
 		this.scriptsDir = new File(workingDir, "scripts");
 		this.trainerDir = new File(scriptsDir, "trainer");
@@ -41,10 +45,25 @@ public class TorchScriptsGenerationOperation {
 
 	public void execute() {
 		try {
+			checkColumns();
 			createTrainerScripts();
 			createEvaluatorScripts();
 		} catch (Throwable e) {
 			error("Error during script generation: " + e.getMessage(), e);
+		}
+	}
+
+	private void checkColumns() {
+		for (DigitalTwin digitalTwin : model.digitalTwinList()) {
+			List<String> list = digitalTwin.inferList().stream().map(i -> i.variable().name$()).toList();
+			SubjectHistory subject = subjectStore.open(digitalTwin.name$());
+			if (subject.tags().isEmpty()) continue;
+			for (String variable : list) {
+				if (!subject.tags().contains(variable)) {
+					throw new IllegalStateException("Subject " + subject + " does not contain tag " + variable);
+				}
+			}
+
 		}
 	}
 

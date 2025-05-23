@@ -2,6 +2,7 @@ package io.picota.digitalmodel.actions;
 
 import io.intino.alexandria.exceptions.AlexandriaException;
 import io.intino.alexandria.exceptions.BadRequest;
+import io.intino.alexandria.exceptions.InternalServerError;
 import io.intino.alexandria.http.server.AlexandriaHttpContext;
 import io.intino.alexandria.rest.RequestErrorHandler;
 import io.picota.digitalmodel.DigitalModelBox;
@@ -9,6 +10,7 @@ import io.picota.digitalmodel.DigitalTwinOperator;
 import io.picota.digitalmodel.rest.resources.GetStatusResource;
 import io.picota.language.model.DigitalTwin;
 import io.picota.language.model.Variable;
+import systems.intino.datamarts.subjectstore.SubjectHistory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -23,10 +25,11 @@ public class GetStatusAction implements RequestErrorHandler {
 	public GetStatusResource.Moment moment;
 	public String digitalTwin;
 
-	public Map execute() {
+	public Map execute() throws BadRequest, InternalServerError {
 		GetStatusResource.Moment mode = getInferenceType(box.digitalTwin(digitalTwin));
 		Map<String, Object> map = new HashMap<>();
-		var subject = box.subject(digitalTwin);
+		var subject = box.vault().open(digitalTwin);
+		if (subject == null) throw new InternalServerError("Data not found");
 		var dt = box.digitalTwin(digitalTwin);
 		if (mode == Future) variables(dt).forEach(a -> map.put(a.name$(), value(a, subject)));
 		List<DigitalTwinOperator.Inference> infer = box.dtOperator().infer(dt);
@@ -34,9 +37,9 @@ public class GetStatusAction implements RequestErrorHandler {
 		return map;
 	}
 
-	private static String value(Variable a, systems.intino.datamarts.subjectstore.model.Subject store) {
-		if (a.isEnumerated()) return store.history().current().text(a.name$());
-		return store.history().current().text(a.name$());
+	private String value(Variable a, SubjectHistory subject) {
+		if (a.isEnumerated()) return subject.current().text(a.name$());
+		return subject.current().text(a.name$());
 	}
 
 	private static Stream<Variable> variables(DigitalTwin definition) {

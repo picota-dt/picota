@@ -4,7 +4,7 @@ import io.picota.digitalmodel.DigitalTwinBuilder.Result.Training;
 import io.picota.digitalmodel.setup.TorchScriptsGenerationOperation;
 import io.picota.language.model.DigitalTwin;
 import io.picota.language.model.PicotaGraph;
-import systems.intino.datamarts.subjectstore.SubjectStore;
+import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 
 import java.io.File;
 import java.util.HashMap;
@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 public class DigitalModelBox extends AbstractBox {
-	public enum State {WaitingData, Training, Prepared, Operating}
+	public enum State {WaitingData, Training, Prepared, Operating;}
 
 	private PicotaGraph graph;
 	private File workingDir;
@@ -20,15 +20,14 @@ public class DigitalModelBox extends AbstractBox {
 	private DigitalTwinOperator dtOperator;
 	private final Map<DigitalTwin, State> states = new HashMap<>();
 	private final Map<DigitalTwin, List<Training>> lastTrainings = new HashMap<>();
-
-	private SubjectStore subjectStore;
+	private SubjectHistoryVault subjectStore;
 
 	public DigitalModelBox(DigitalModelConfiguration conf, PicotaGraph graph, File workingDir) {
 		super(conf);
 		this.graph = graph;
-		this.subjectStore = new SubjectStore("jdbc:sqlite:" + conf.storeUrl());
+		this.subjectStore = subjectStore(conf);
 		this.workingDir = workingDir;
-		new TorchScriptsGenerationOperation(workingDir,  graph).execute();
+		new TorchScriptsGenerationOperation(workingDir, graph, subjectStore).execute();
 		this.dtBuilder = new DigitalTwinBuilder(subjectStore, workingDir, new File(conf.pythonVenv()));
 		this.dtOperator = new DigitalTwinOperator(subjectStore, workingDir, new File(conf.pythonVenv()));
 	}
@@ -64,10 +63,6 @@ public class DigitalModelBox extends AbstractBox {
 				.findFirst().orElse(null);
 	}
 
-	public systems.intino.datamarts.subjectstore.model.Subject subject(String name) {
-		return subjectStore.open(name);
-	}
-
 	public Map<DigitalTwin, List<Training>> lastTrainings() {
 		return lastTrainings;
 	}
@@ -95,4 +90,11 @@ public class DigitalModelBox extends AbstractBox {
 	public void afterStop() {
 	}
 
+	public SubjectHistoryVault vault() {
+		return subjectStore;
+	}
+
+	private static SubjectHistoryVault subjectStore(DigitalModelConfiguration conf) {
+		return new SubjectHistoryVault("jdbc:sqlite:" + conf.storeUrl());
+	}
 }

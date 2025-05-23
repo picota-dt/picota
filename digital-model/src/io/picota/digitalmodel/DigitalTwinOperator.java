@@ -3,17 +3,17 @@ package io.picota.digitalmodel;
 import io.intino.alexandria.logger.Logger;
 import io.picota.language.model.DigitalTwin;
 import io.picota.language.model.rules.Scale;
-import org.apache.commons.io.FileUtils;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
+import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
-import systems.intino.datamarts.subjectstore.SubjectStore;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.LagFilter;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNormalizationFilter;
-import systems.intino.datamarts.subjectstore.model.Subject;
-import systems.intino.datamarts.subjectstore.view.format.history.ColumnDefinition;
-import systems.intino.datamarts.subjectstore.view.format.history.HistoryFormat;
+import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
+import systems.intino.datamarts.subjectstore.view.history.format.HistoryFormat;
+import systems.intino.datamarts.subjectstore.view.history.format.HistoryFormat.RowDefinition;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.temporal.TemporalAmount;
@@ -25,13 +25,13 @@ import static io.picota.digitalmodel.utils.Utils.periodOf;
 public class DigitalTwinOperator {
 	private final File scriptsDir;
 	private final File pythonVenv;
-	private final SubjectStore store;
+	private final SubjectHistoryVault vault;
 	private final File modelsDir;
 	private final File dataDir;
 	private final Object monitor = new Object();
 
-	public DigitalTwinOperator(SubjectStore store, File workingDir, File pythonVenv) {
-		this.store = store;
+	public DigitalTwinOperator(SubjectHistoryVault vault, File workingDir, File pythonVenv) {
+		this.vault = vault;
 		this.modelsDir = new File(workingDir, "models");
 		this.scriptsDir = new File(workingDir, "scripts");
 		this.dataDir = new File(workingDir, "data");
@@ -43,22 +43,23 @@ public class DigitalTwinOperator {
 
 	public List<Inference> infer(DigitalTwin twin) {
 		synchronized (monitor) {
-			return calculate(twin);
+			try {
+				return calculate(twin);
+			} catch (IOException | InterruptedException e) {
+				Logger.error(e);
+				return List.of();
+			}
 		}
 	}
 
-	private List<Inference> calculate(DigitalTwin digitalTwin) {
-		try {
-			Subject subject = store.open(digitalTwin.name$());
-			if (subject == null || subject.history().last() == null) return List.of();
-			return inferDt(digitalTwin, subject, prepareData(digitalTwin, subject));
-		} catch (Exception e) {
-			Logger.error(e);
-			return List.of();
-		}
+	private List<Inference> calculate(DigitalTwin digitalTwin) throws IOException, InterruptedException {
+		SubjectHistory subject = vault.open(digitalTwin.name$());
+		if (subject == null) return List.of();
+		if (subject.last() == null) return List.of();
+		return inferDt(digitalTwin, subject, prepareData(digitalTwin, subject));
 	}
 
-	private List<Inference> inferDt(DigitalTwin dt, Subject subject, File data) throws IOException, InterruptedException {
+	private List<Inference> inferDt(DigitalTwin dt, SubjectHistory subject, File data) throws IOException, InterruptedException {
 		Logger.info("Inferring digital twin: " + dt.name$());
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
 		File scriptPath = new File(scriptsDir, dt.name$() + ".py");
@@ -75,15 +76,15 @@ public class DigitalTwinOperator {
 				.map(f -> denormalize(subject, new Inference(dt, f[0], Double.parseDouble(f[1])))).toList();
 	}
 
-	private File prepareData(DigitalTwin dt, Subject data) {
+	private File prepareData(DigitalTwin dt, SubjectHistory subjectHistory) {
 		try {
 			File dataFile = new File(dataDir, dt.name$() + ".csv");
 			var scale = dt.resolution().scale();
 			int resolution = dt.resolution().value();
 			TemporalAmount duration = scale.ordinal() < Scale.Day.ordinal() ? Duration.of(resolution, scale.chronoUnit()) : periodOf(resolution, scale.chronoUnit());
-			SubjectHistoryView.of(data.history())
-					.from(data.history().last().minus(dt.memory(), dt.resolution().scale().chronoUnit()).toString())
-					.with(historyFormat(dt, data.history(), duration)).exportTo(dataFile);
+			SubjectHistoryView.of(subjectHistory)
+					.from(subjectHistory.last().minus(dt.memory(), dt.resolution().scale().chronoUnit()).toString())
+					.with(historyFormat(dt, subjectHistory, duration)).export().onlyCompleteRows().to(new FileOutputStream(dataFile));
 			return dataFile;
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -91,8 +92,8 @@ public class DigitalTwinOperator {
 	}
 
 	private HistoryFormat historyFormat(DigitalTwin model, SubjectHistory history, TemporalAmount duration) {
-		HistoryFormat format = new HistoryFormat(history.first(), history.last(), duration);
-		TemporalMappers.mappers.forEach((k, v) -> format.add(new ColumnDefinition(k, v)));
+		HistoryFormat format = new HistoryFormat(new RowDefinition(history.first(), history.last(), duration));
+		TemporalColumns.get().forEach(format::add);
 		history.tags().forEach(t -> format.add(new ColumnDefinition(t, t).add(new MinMaxNormalizationFilter())));
 		int lag = model.memory();
 		if (lag > 0) appendLagColumns(history, format, lag);
@@ -103,8 +104,8 @@ public class DigitalTwinOperator {
 		IntStream.range(1, lag).forEach(l -> history.tags().forEach(t -> format.add(new ColumnDefinition(t + "-" + lag, t).add(List.of(new LagFilter(l), new MinMaxNormalizationFilter())))));
 	}
 
-	private Inference denormalize(Subject subject, Inference i) {
-		var points = subject.history().query().number(i.variable);
+	private Inference denormalize(SubjectHistory subject, Inference i) {
+		var points = subject.query().number(i.variable);
 		return new Inference(i.digitalTwin, i.variable, denormalize(i.value, points.all().distribution().min(), points.all().distribution().max()));
 	}
 
