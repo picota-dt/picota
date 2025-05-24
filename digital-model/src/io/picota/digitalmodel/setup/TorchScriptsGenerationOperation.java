@@ -6,10 +6,10 @@ import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
 import io.intino.magritte.framework.Layer;
-import io.picota.language.compiler.util.Tar;
-import io.picota.language.model.DigitalTwin;
-import io.picota.language.model.PicotaGraph;
-import io.picota.language.model.Variable;
+import io.picota.digitalmodel.utils.Tar;
+import model.DigitalTwin;
+import model.PicotaGraph;
+import model.Variable;
 import org.apache.commons.io.FileUtils;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
@@ -24,16 +24,16 @@ import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
 
 public class TorchScriptsGenerationOperation {
-	private final PicotaGraph model;
-	private final SubjectHistoryVault subjectStore;
+	private final PicotaGraph graph;
+	private final SubjectHistoryVault vault;
 	private final Template template;
 	private final File trainerDir;
 	private final File evaluatorDir;
 	private final File scriptsDir;
 
-	public TorchScriptsGenerationOperation(File workingDir, PicotaGraph model, SubjectHistoryVault subjectStore) {
-		this.model = model;
-		this.subjectStore = subjectStore;
+	public TorchScriptsGenerationOperation(File workingDir, PicotaGraph graph, SubjectHistoryVault vault) {
+		this.graph = graph;
+		this.vault = vault;
 		this.template = new TorchScriptsTemplate();
 		this.scriptsDir = new File(workingDir, "scripts");
 		this.trainerDir = new File(scriptsDir, "trainer");
@@ -54,9 +54,9 @@ public class TorchScriptsGenerationOperation {
 	}
 
 	private void checkColumns() {
-		for (DigitalTwin digitalTwin : model.digitalTwinList()) {
+		for (DigitalTwin digitalTwin : graph.digitalTwinList()) {
 			List<String> list = digitalTwin.inferList().stream().map(i -> i.variable().name$()).toList();
-			SubjectHistory subject = subjectStore.open(digitalTwin.name$());
+			SubjectHistory subject = vault.open(digitalTwin.name$());
 			if (subject.tags().isEmpty()) continue;
 			for (String variable : list) {
 				if (!subject.tags().contains(variable)) {
@@ -74,7 +74,7 @@ public class TorchScriptsGenerationOperation {
 	}
 
 	private void createEvaluatorScripts() throws IOException {
-		for (DigitalTwin dt : model.digitalTwinList()) {
+		for (DigitalTwin dt : graph.digitalTwinList()) {
 			File file = new File(evaluatorDir, dt.name$() + ".py");
 			FrameBuilder frame = new FrameBuilder("evaluator");
 			frame.add("name", dt.name$());
@@ -95,12 +95,12 @@ public class TorchScriptsGenerationOperation {
 	private void createMainScript() throws IOException {
 		File main = new File(trainerDir, "main.py");
 		FrameBuilder frame = new FrameBuilder("supermain");
-		frame.add("dt", model.digitalTwinList().stream().map(Layer::name$).toArray(String[]::new));
+		frame.add("dt", graph.digitalTwinList().stream().map(Layer::name$).toArray(String[]::new));
 		Files.writeString(main.toPath(), new Engine(template).render(frame));
 	}
 
 	private void createDigitalTwinScripts() throws IOException {
-		for (var dt : model.digitalTwinList()) {
+		for (var dt : graph.digitalTwinList()) {
 			File dtDir = new File(trainerDir, normalize(dt.name$()));
 			dtDir.mkdirs();
 			createPackage(dtDir);

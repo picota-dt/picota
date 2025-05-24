@@ -3,12 +3,11 @@ dsl Legio
 Artifact("io.picota", "1.0.0") digital-model
 	Dsl("Konos", "13.2.3") > Builder(generationPackage ="")
 	Imports
-		Compile("io.picota", "language", "1.0.0")
-			Exclude("io.intino.magritte", "builder")
+		Compile("io.quassar.picota", "reader-java", "1.0.0")
 		Compile("io.intino.itrules", "engine", "2.0.2")
 		Compile("systems.intino.datamarts", "subject-store", "2.0.10")
         Compile("org.xerial", "sqlite-jdbc", "3.49.1.0")
-		Compile("io.intino.alexandria", "rest", "4.2.4")
+		Compile("io.intino.alexandria", "rest", "4.2.5")
 		Compile("io.intino.alexandria", "zip", "1.0.5")
 		Compile("io.intino.alexandria", "core-framework", "2.2.2")
 		Compile("io.intino.alexandria", "logger4j", "1.1.0")
@@ -18,17 +17,17 @@ Artifact("io.picota", "1.0.0") digital-model
 		Test("junit", "junit", "4.13.2")
 		Test("io.picota", "picota-api-accessor", "1.0.0")
 
-
 	Package(mode = ModulesAndLibrariesLinkedByManifest, attachSources = true) as Runnable(mainClass = "io.picota.digitalmodel.Main")
 	Parameter("home")
-	Parameter("model_url")
 	Parameter("store_url")
 	Parameter("api_port")
 	Parameter("python_venv")
 
+
+Repository("intino-maven") > Release("https://quassar.io/releases")
+
 RunConfiguration local
 	Argument("home", "./temp")
 	Argument("api_port", "9090")
-	Argument("model_url", "file:///Users/oroncal/workspace/projects/picota/digital-model/test-res/dts_example.zip")
 	Argument("python_venv", "/Users/oroncal/workspace/projects/picota-smartbeach/.venv1")
 	Argument("store_url", "/Users/oroncal/workspace/projects/picota/digital-model/test-res/infecar.ddb")

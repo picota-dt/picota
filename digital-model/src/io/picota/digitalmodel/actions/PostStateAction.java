@@ -7,10 +7,9 @@ import io.picota.digitalmodel.DigitalModelBox.State;
 import io.picota.digitalmodel.DigitalTwinBuilder;
 import io.picota.digitalmodel.TrainReportBuilder;
 import io.picota.digitalmodel.rest.resources.PostStateResource.Value;
-import io.picota.language.model.DigitalTwin;
+import model.DigitalTwin;
 
 import java.io.File;
-import java.util.concurrent.Future;
 
 public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHandler {
 	public DigitalModelBox box;
@@ -28,7 +27,7 @@ public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHa
 			if (box.state(dt) == State.Training) throw new BadRequest("Already training");
 			else {
 				box.state(dt, State.Training);
-				Future<?> training = box.dtBuilder().build(dt, result -> onfinish(dt, result));
+//				Future<?> training = box.dtBuilder().build(dt, result -> onfinish(dt, result));
 			}
 		} else if (value == Value.Operating) {
 			if (box.state(dt) == State.WaitingData) throw new BadRequest("Currently waiting for training");

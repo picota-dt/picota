@@ -1,9 +1,8 @@
 package io.picota.digitalmodel;
 
 import io.picota.digitalmodel.DigitalTwinBuilder.Result.Training;
-import io.picota.digitalmodel.setup.TorchScriptsGenerationOperation;
-import io.picota.language.model.DigitalTwin;
-import io.picota.language.model.PicotaGraph;
+import io.picota.digitalmodel.ui.UiService;
+import model.DigitalTwin;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 
 import java.io.File;
@@ -14,7 +13,6 @@ import java.util.Map;
 public class DigitalModelBox extends AbstractBox {
 	public enum State {WaitingData, Training, Prepared, Operating;}
 
-	private PicotaGraph graph;
 	private File workingDir;
 	private DigitalTwinBuilder dtBuilder;
 	private DigitalTwinOperator dtOperator;
@@ -22,14 +20,12 @@ public class DigitalModelBox extends AbstractBox {
 	private final Map<DigitalTwin, List<Training>> lastTrainings = new HashMap<>();
 	private SubjectHistoryVault subjectStore;
 
-	public DigitalModelBox(DigitalModelConfiguration conf, PicotaGraph graph, File workingDir) {
+	public DigitalModelBox(DigitalModelConfiguration conf, File workingDir) {
 		super(conf);
-		this.graph = graph;
 		this.subjectStore = subjectStore(conf);
 		this.workingDir = workingDir;
-		new TorchScriptsGenerationOperation(workingDir, graph, subjectStore).execute();
-		this.dtBuilder = new DigitalTwinBuilder(subjectStore, workingDir, new File(conf.pythonVenv()));
-		this.dtOperator = new DigitalTwinOperator(subjectStore, workingDir, new File(conf.pythonVenv()));
+		this.dtBuilder = new DigitalTwinBuilder(workingDir, subjectStore, states, new File(conf.pythonVenv()));
+		//this.dtOperator = new DigitalTwinOperator(subjectStore, workingDir, new File(conf.pythonVenv()));
 	}
 
 	public DigitalModelBox(String[] args) {
@@ -59,8 +55,7 @@ public class DigitalModelBox extends AbstractBox {
 	}
 
 	public DigitalTwin digitalTwin(String name) {
-		return graph.digitalTwinList(s -> s.name$().equalsIgnoreCase(name))
-				.findFirst().orElse(null);
+		return null;
 	}
 
 	public Map<DigitalTwin, List<Training>> lastTrainings() {
@@ -76,12 +71,12 @@ public class DigitalModelBox extends AbstractBox {
 	}
 
 	public void beforeStart() {
+		io.intino.alexandria.http.AlexandriaHttpServerBuilder.setup(Integer.parseInt(configuration.apiPort()), "www/");
+		io.intino.alexandria.http.AlexandriaHttpServerBuilder.setUI(true);
+		new UiService(this).start();
 	}
 
 	public void afterStart() {
-		File dir = new File(workingDir, "models");
-		for (DigitalTwin dt : graph.digitalTwinList())
-			if (new File(dir, dt.name$()).exists()) states.put(dt, State.Prepared);
 	}
 
 	public void beforeStop() {

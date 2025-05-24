@@ -1,8 +1,8 @@
 package io.picota.digitalmodel;
 
 import io.intino.alexandria.logger.Logger;
-import io.picota.language.model.DigitalTwin;
-import io.picota.language.model.rules.Scale;
+import model.DigitalTwin;
+import model.DigitalTwin.Resolution.Scale;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
@@ -20,6 +20,7 @@ import java.time.temporal.TemporalAmount;
 import java.util.List;
 import java.util.stream.IntStream;
 
+import static io.picota.digitalmodel.utils.Utils.chronoUnitOf;
 import static io.picota.digitalmodel.utils.Utils.periodOf;
 
 public class DigitalTwinOperator {
@@ -81,9 +82,9 @@ public class DigitalTwinOperator {
 			File dataFile = new File(dataDir, dt.name$() + ".csv");
 			var scale = dt.resolution().scale();
 			int resolution = dt.resolution().value();
-			TemporalAmount duration = scale.ordinal() < Scale.Day.ordinal() ? Duration.of(resolution, scale.chronoUnit()) : periodOf(resolution, scale.chronoUnit());
+			TemporalAmount duration = scale.ordinal() < Scale.Day.ordinal() ? Duration.of(resolution, chronoUnitOf(scale)) : periodOf(resolution, chronoUnitOf(scale));
 			SubjectHistoryView.of(subjectHistory)
-					.from(subjectHistory.last().minus(dt.memory(), dt.resolution().scale().chronoUnit()).toString())
+					.from(subjectHistory.last().minus(dt.memory(), chronoUnitOf(dt.resolution().scale())).toString())
 					.with(historyFormat(dt, subjectHistory, duration)).export().onlyCompleteRows().to(new FileOutputStream(dataFile));
 			return dataFile;
 		} catch (IOException e) {

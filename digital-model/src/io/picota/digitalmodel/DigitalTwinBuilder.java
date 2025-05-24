@@ -2,8 +2,12 @@ package io.picota.digitalmodel;
 
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
+import io.intino.alexandria.zip.Zip;
+import io.picota.digitalmodel.DigitalModelBox.State;
 import io.picota.digitalmodel.DigitalTwinBuilder.Result.Training;
-import io.picota.language.model.DigitalTwin;
+import io.picota.digitalmodel.setup.TorchScriptsGenerationOperation;
+import model.DigitalTwin;
+import model.PicotaGraph;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
@@ -12,63 +16,95 @@ import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNorm
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.zip.ZipInputStream;
 
+import static io.picota.digitalmodel.utils.Utils.chronoUnitOf;
 import static io.picota.digitalmodel.utils.Utils.periodOf;
 import static java.time.temporal.ChronoUnit.HOURS;
 
 public class DigitalTwinBuilder {
+	private final File workingDir;
+	private final SubjectHistoryVault vault;
+	private final Map<DigitalTwin, State> states;
 	private final File pythonVenv;
-	private final SubjectHistoryVault subjectStore;
 	private final File modelsDir;
 	private final File dataDir;
 	private final ExecutorService executor;
 	private final File scriptsDir;
 	private Future<?> current;
 
-	public DigitalTwinBuilder(SubjectHistoryVault subjectStore, File workingDir, File pythonVenv) {
-		this.subjectStore = subjectStore;
+	public DigitalTwinBuilder(File workingDir, SubjectHistoryVault vault, Map<DigitalTwin, State> states, File pythonVenv) {
+		this.workingDir = workingDir;
 		this.modelsDir = new File(workingDir, "models");
 		this.scriptsDir = new File(workingDir, "scripts/trainer");
 		this.dataDir = new File(workingDir, "data");
+		this.vault = vault;
+		this.states = states;
 		this.pythonVenv = pythonVenv;
 		this.modelsDir.mkdirs();
 		this.dataDir.mkdirs();
-		this.executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-			int counter = 0;
-
-			@Override
-			public Thread newThread(Runnable r) {
-				Thread thread = new Thread(r, "Trainer-" + counter++);
-				thread.setDaemon(true);
-				return thread;
-			}
-		});
+		this.executor = createExecutor();
 	}
 
-	public Future<?> build(DigitalTwin dt, OnFinished onFinished) {
+	public Future<?> build(String url, File zipData, OnFinished onFinished) {
 		if (current != null && !current.isDone()) throw new IllegalStateException("Executor is not terminated");
 		current = this.executor.submit(() -> {
 			try {
-				prepareData(dt, subject(dt));
-				onFinished.onFinished(train(dt));
+				PicotaGraph graph = buildModel(url);
+				if (graph == null) throw new IllegalStateException("Graph is null");
+				new TorchScriptsGenerationOperation(workingDir, graph, vault).execute();
+				File datasets = upzip(zipData);
+				for (DigitalTwin dt : graph.digitalTwinList()) {
+					states.put(dt, State.Training);
+					File tsv = new File(datasets, dt + ".tsv");
+					if (!tsv.exists()) {
+						states.put(dt, State.WaitingData);
+						continue;
+					}
+					prepareData(dt, tsv);
+					onFinished.onFinished(train(dt));
+					states.put(dt, State.Prepared);
+				}
 			} catch (Throwable e) {
 				Logger.error(e);
 			}
 		});
 		return current;
+	}
+
+	private File upzip(File zipData) throws IOException {
+		File datasetTemp = new File(workingDir, "temp");
+		datasetTemp.mkdirs();
+		Zip.unzip(new ZipInputStream(new FileInputStream(zipData)), datasetTemp.getAbsolutePath());
+		return datasetTemp;
+	}
+
+	private PicotaGraph buildModel(String url) {
+		try {
+			return new ModelLoader().load(workingDir, new URI(url).toURL());
+		} catch (URISyntaxException | IOException e) {
+			Logger.error(e);
+			return null;
+		}
 	}
 
 	public void stop() {
@@ -80,6 +116,10 @@ public class DigitalTwinBuilder {
 		Result result = runTrain();
 		Logger.info("Finished training of " + dt.name$() + ". Code: " + result.code);
 		return result;
+	}
+
+	public boolean isRunning() {
+		return !this.executor.isTerminated();
 	}
 
 	public record Result(int code, String report, List<Training> trainings) {
@@ -104,20 +144,35 @@ public class DigitalTwinBuilder {
 		return code != 0 ? List.of() : report.lines().map(l -> trainingResultOf(l.split("\t"))).toList();
 	}
 
+	private static ExecutorService createExecutor() {
+		return Executors.newSingleThreadExecutor(new ThreadFactory() {
+			int counter = 0;
+
+			@Override
+			public Thread newThread(Runnable r) {
+				Thread thread = new Thread(r, "Trainer-" + counter++);
+				thread.setDaemon(true);
+				return thread;
+			}
+		});
+	}
+
 	private Training trainingResultOf(String[] fields) {
 		return new Training(fields[0], fields[1], Double.parseDouble(fields[2]), Arrays.stream(fields).skip(3).toArray(String[]::new));
 	}
 
 	private SubjectHistory subject(DigitalTwin dt) {
-		return subjectStore.open(dt.name$());
+		return vault.open(dt.name$());
 	}
 
-	private void prepareData(DigitalTwin dt, SubjectHistory history) throws IOException {
-		if (history == null) {
+	private void prepareData(DigitalTwin dt, File tsv) throws IOException {
+		SubjectHistory history = vault.open(dt.name$());
+		if (tsv == null || tsv.length() == 0) {
 			Logger.warn("No data found for " + dt.name$());
 			return;
 		}
-		ChronoUnit scale = dt.resolution().scale().chronoUnit();
+		fillHistory(history, tsv);
+		ChronoUnit scale = chronoUnitOf(dt.resolution().scale());
 		var timeHorizon = timeHorizon(dt);
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale).plus(dt.memory(), scale))
@@ -130,6 +185,18 @@ public class DigitalTwinBuilder {
 				.export()
 				.onlyCompleteRows()
 				.to(new FileOutputStream(new File(dataDir, history.name() + ".csv")));
+	}
+
+	private static void fillHistory(SubjectHistory history, File tsv) throws IOException {
+		String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
+		SubjectHistory.Batch batch = history.batch();
+		Files.lines(tsv.toPath()).skip(1).map(l -> l.split("\t")).forEach(line -> {
+			SubjectHistory.Transaction t = batch.on(Instant.parse(line[0]), "");
+			for (int i = 1; i < header.length; i++)
+				if (!line[i].trim().isEmpty()) t.put(header[i].trim(), Double.parseDouble(line[i].trim()));
+			t.terminate();
+		});
+		batch.terminate();
 	}
 
 	private static List<ColumnDefinition> timeHorizonColumns(SubjectHistory history, int timeHorizon) {
@@ -163,10 +230,11 @@ public class DigitalTwinBuilder {
 
 	private TemporalAmount period(DigitalTwin.Resolution resolution) {
 		var scale = resolution.scale();
-		return scale.ordinal() > Scale.Day.ordinal() ? Duration.of(resolution.value(), scale.chronoUnit()) : periodOf(resolution.value(), scale.chronoUnit());
+		return scale.ordinal() > Scale.Day.ordinal() ? Duration.of(resolution.value(), chronoUnitOf(scale)) : periodOf(resolution.value(), chronoUnitOf(scale));
 	}
 
 	public interface OnFinished {
+
 		void onFinished(Result result);
 	}
 }

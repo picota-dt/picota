@@ -8,8 +8,8 @@ import io.intino.alexandria.rest.RequestErrorHandler;
 import io.picota.digitalmodel.DigitalModelBox;
 import io.picota.digitalmodel.DigitalTwinOperator;
 import io.picota.digitalmodel.rest.resources.GetStatusResource;
-import io.picota.language.model.DigitalTwin;
-import io.picota.language.model.Variable;
+import model.DigitalTwin;
+import model.Variable;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 
 import java.util.HashMap;
