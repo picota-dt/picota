@@ -18,8 +18,8 @@
 <header class="flex items-center justify-between bg-white px-8 py-4 shadow">
 	<div class="flex items-center">
 		<a href="/" class="flex items-center">
-		<img src="picota-40.png" alt="Picota logo" class="h-8 w-8 mr-2">
-		<span class="text-xl font-semibold text-gray-900">Picota</span>
+			<img src="picota-40.png" alt="Picota logo" class="h-8 w-8 mr-2">
+			<span class="text-xl font-semibold text-gray-900">Picota</span>
 		</a>
 	</div>
 	<nav class="flex space-x-6 text-gray-600">
@@ -28,18 +28,20 @@
 		<a href="/help" class="hover:text-gray-800">Help <i class="fas fa-chevron-down text-sm"></i></a>
 	</nav>
 </header>
-
-<!-- Wizard Container -->
 <main class="flex-grow flex items-center justify-center py-16 px-4">
 	<div class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-8">
 		<h1 class="text-3xl font-bold text-center text-gray-900 mb-8">Create your Digital Twin</h1>
-
-		<!-- Steps -->
 		<div class="step" id="step1">
 			<h2 class="text-xl font-semibold mb-4">Step 1: URL of Quassar model</h2>
-			<p class="text-gray-600 mb-4">If you dont have any, create it on <a href="https://quassar.io" class="text-blue-500 hover:underline">quassar.io</a></p>
-			<input type="url" id="modelUrl" placeholder="https://quassar.io/mi-modelo" class="w-full border border-gray-300 rounded-lg p-3 mb-6 focus:ring-2 focus:ring-blue-400">
-			<button id="next1" disabled class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Next</button>
+			<p class="text-gray-600 mb-4">If you dont have any, create it on <a href="https://quassar.io"
+																				class="text-blue-500 hover:underline">quassar.io</a>
+			</p>
+			<input type="url" id="modelUrl" placeholder="https://quassar.io/mi-modelo"
+				   class="w-full border border-gray-300 rounded-lg p-3 mb-6 focus:ring-2 focus:ring-blue-400">
+			<button id="next1" disabled
+					class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">
+				Next
+			</button>
 		</div>
 
 		<div class="step hidden" id="step2">
@@ -47,21 +49,32 @@
 			<p class="text-gray-600 mb-4">ZIP files for each subject. The headers must correspond to the variables.</p>
 			<input type="file" id="dataFile" accept=".zip" class="w-full mb-6">
 			<div class="flex justify-between">
-				<button id="prev2" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition">Previous</button>
-				<button id="next2" disabled class="bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-600 transition">Next</button>
+				<button id="prev2" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition">
+					Previous
+				</button>
+				<button id="next2" disabled
+						class="bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-600 transition">
+					Next
+				</button>
 			</div>
 		</div>
 
 		<div class="step hidden text-center" id="step3">
-			<h2 class="text-xl font-semibold mb-4">Step 3: Processing data</h2>
-			<p class="text-gray-600 mb-6">Waiting for the construction of the digital twin to be completed...</p>
+			<h2 class="text-xl font-semibold mb-4">Step 3: Building Model</h2>
+			<p id="statusMessage" class="text-gray-600 mb-6">Initializing...</p>
 			<div class="mx-auto w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
 		</div>
 
 		<div class="step hidden text-center" id="step4">
 			<h2 class="text-xl font-semibold mb-6">Step 4: Download Results</h2>
-			<button id="downloadPdf" class="w-full mb-4 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Descargar PDF</button>
-			<button id="downloadModel" class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Descargar Modelo</button>
+			<button id="downloadPdf"
+					class="w-full mb-4 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">
+				Download Report
+			</button>
+			<button id="downloadModel"
+					class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">
+				Download Digital Models
+			</button>
 		</div>
 	</div>
 </main>
@@ -70,46 +83,58 @@
 </footer>
 <script>
     const steps = Array.from(document.querySelectorAll('.step'));
+    let modelName = '';
+
     function showStep(i) {
         steps.forEach((s, idx) => s.classList.toggle('hidden', idx !== i));
     }
-    showStep(0);
 
-    // Step 1
+    showStep(0);
+    const statusMessage = document.getElementById('statusMessage');
     const modelUrlInput = document.getElementById('modelUrl');
     const next1 = document.getElementById('next1');
     modelUrlInput.addEventListener('input', () => next1.disabled = !modelUrlInput.value);
-    next1.addEventListener('click', () => showStep(1));
-
-    // Step 2
+    next1.addEventListener('click', () => {
+        const url = modelUrlInput.value.replace(/\/+$/, '');
+        const lastSegment = url.split('/').pop();
+        modelName = lastSegment.replace(/\.[^/.]+$/, '');
+        showStep(1)
+    });
     const dataFileInput = document.getElementById('dataFile');
     const prev2 = document.getElementById('prev2');
     const next2 = document.getElementById('next2');
     dataFileInput.addEventListener('change', () => next2.disabled = !dataFileInput.files.length);
     prev2.addEventListener('click', () => showStep(0));
-    next2.addEventListener('click', () => { showStep(2); startProcessing(); });
+    next2.addEventListener('click', () => {showStep(2);startProcessing();});
 
-    // Processing
     function startProcessing() {
         const url = modelUrlInput.value;
         const file = dataFileInput.files[0];
         const form = new FormData();
         form.append('modelUrl', url);
         form.append('dataset', file);
-        fetch('/train', { method: 'POST', body: form })
-            .then(r => { if (!r.ok) throw new Error(); showStep(2); pollStatus(); })
+        fetch('/train', {method: 'POST', body: form})
+            .then(r => {
+                if (!r.ok) throw new Error();
+                showStep(2);
+                pollStatus();
+            })
             .catch(() => alert('Error starting training'));
     }
+
     function pollStatus() {
-        fetch('/status').then(r => r.json()).then(j => {
-            if (j.status === 'done') showStep(3);
-            else setTimeout(pollStatus, 2000);
-        }).catch(() => setTimeout(pollStatus, 2000));
+        fetch('/status')
+            .then(res => res.json())
+            .then(j => {
+                if (j.message) statusMessage.textContent = j.message;
+                if (j.status === 'done') showStep(3)
+                else setTimeout(pollStatus, 2000);
+            })
+            .catch(() => setTimeout(pollStatus, 2000));
     }
 
-    // Downloads
-    document.getElementById('downloadPdf').addEventListener('click', () => window.location.href = '/results/report.pdf');
-    document.getElementById('downloadModel').addEventListener('click', () => window.location.href = '/results/models.zip');
+    document.getElementById('downloadPdf').addEventListener('click', () => window.location.href = `/results/${modelName}/report.pdf`);
+    document.getElementById('downloadModel').addEventListener('click', () => window.location.href = `/results/${modelName}/models.zip`);
 </script>
 </body>
 </html>

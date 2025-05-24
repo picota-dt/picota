@@ -1,9 +1,9 @@
 package io.picota.digitalmodel;
 
-import io.picota.digitalmodel.DigitalTwinBuilder.Result.Training;
+import io.picota.digitalmodel.builder.DigitalSubjectBuilder;
+import io.picota.digitalmodel.builder.DigitalSubjectBuilder.Result.Training;
 import io.picota.digitalmodel.ui.UiService;
 import model.DigitalTwin;
-import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 
 import java.io.File;
 import java.util.HashMap;
@@ -12,19 +12,16 @@ import java.util.Map;
 
 public class DigitalModelBox extends AbstractBox {
 	public enum State {WaitingData, Training, Prepared, Operating;}
-
 	private File workingDir;
-	private DigitalTwinBuilder dtBuilder;
+	private DigitalSubjectBuilder dtBuilder;
 	private DigitalTwinOperator dtOperator;
 	private final Map<DigitalTwin, State> states = new HashMap<>();
 	private final Map<DigitalTwin, List<Training>> lastTrainings = new HashMap<>();
-	private SubjectHistoryVault subjectStore;
 
 	public DigitalModelBox(DigitalModelConfiguration conf, File workingDir) {
 		super(conf);
-		this.subjectStore = subjectStore(conf);
 		this.workingDir = workingDir;
-		this.dtBuilder = new DigitalTwinBuilder(workingDir, subjectStore, states, new File(conf.pythonVenv()));
+		this.dtBuilder = new DigitalSubjectBuilder(workingDir, states, new File(conf.pythonVenv()));
 		//this.dtOperator = new DigitalTwinOperator(subjectStore, workingDir, new File(conf.pythonVenv()));
 	}
 
@@ -46,7 +43,7 @@ public class DigitalModelBox extends AbstractBox {
 		return states.getOrDefault(subject, State.WaitingData);
 	}
 
-	public DigitalTwinBuilder dtBuilder() {
+	public DigitalSubjectBuilder dtBuilder() {
 		return dtBuilder;
 	}
 
@@ -58,16 +55,12 @@ public class DigitalModelBox extends AbstractBox {
 		return null;
 	}
 
-	public Map<DigitalTwin, List<Training>> lastTrainings() {
-		return lastTrainings;
-	}
-
-	public void lastTraining(DigitalTwin dt, List<Training> trainings) {
-		this.lastTrainings.put(dt, trainings);
-	}
-
 	public void state(DigitalTwin subject, State state) {
 		states.put(subject, state);
+	}
+
+	public File workingDir() {
+		return workingDir;
 	}
 
 	public void beforeStart() {
@@ -83,13 +76,5 @@ public class DigitalModelBox extends AbstractBox {
 	}
 
 	public void afterStop() {
-	}
-
-	public SubjectHistoryVault vault() {
-		return subjectStore;
-	}
-
-	private static SubjectHistoryVault subjectStore(DigitalModelConfiguration conf) {
-		return new SubjectHistoryVault("jdbc:sqlite:" + conf.storeUrl());
 	}
 }

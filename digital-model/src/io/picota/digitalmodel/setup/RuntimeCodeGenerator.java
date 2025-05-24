@@ -11,8 +11,6 @@ import model.DigitalTwin;
 import model.PicotaGraph;
 import model.Variable;
 import org.apache.commons.io.FileUtils;
-import systems.intino.datamarts.subjectstore.SubjectHistory;
-import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,17 +21,15 @@ import static io.intino.alexandria.logger.Logger.error;
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
 
-public class TorchScriptsGenerationOperation {
+public class RuntimeCodeGenerator {
 	private final PicotaGraph graph;
-	private final SubjectHistoryVault vault;
 	private final Template template;
 	private final File trainerDir;
 	private final File evaluatorDir;
 	private final File scriptsDir;
 
-	public TorchScriptsGenerationOperation(File workingDir, PicotaGraph graph, SubjectHistoryVault vault) {
+	public RuntimeCodeGenerator(File workingDir, PicotaGraph graph) {
 		this.graph = graph;
-		this.vault = vault;
 		this.template = new TorchScriptsTemplate();
 		this.scriptsDir = new File(workingDir, "scripts");
 		this.trainerDir = new File(scriptsDir, "trainer");
@@ -43,26 +39,12 @@ public class TorchScriptsGenerationOperation {
 		this.trainerDir.mkdirs();
 	}
 
-	public void execute() {
+	public void generate() {
 		try {
-			checkColumns();
 			createTrainerScripts();
 			createEvaluatorScripts();
 		} catch (Throwable e) {
 			error("Error during script generation: " + e.getMessage(), e);
-		}
-	}
-
-	private void checkColumns() {
-		for (DigitalTwin digitalTwin : graph.digitalTwinList()) {
-			List<String> list = digitalTwin.inferList().stream().map(i -> i.variable().name$()).toList();
-			SubjectHistory subject = vault.open(digitalTwin.name$());
-			if (subject.tags().isEmpty()) continue;
-			for (String variable : list) {
-				if (!subject.tags().contains(variable)) {
-					throw new IllegalStateException("Subject " + subject + " does not contain tag " + variable);
-				}
-			}
 		}
 	}
 

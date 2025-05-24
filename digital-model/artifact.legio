@@ -14,15 +14,16 @@ Artifact("io.picota", "1.0.0") digital-model
 		Compile("io.intino.alexandria", "ui-framework", "6.5.6")
 		Compile("org.apache.commons", "commons-compress", "1.27.1")
 		Compile("commons-io", "commons-io", "2.19.0")
+		Compile("com.itextpdf", "kernel", "9.2.0")
+        Compile("com.itextpdf", "layout", "9.2.0")
 		Test("junit", "junit", "4.13.2")
 		Test("io.picota", "picota-api-accessor", "1.0.0")
 
+
 	Package(mode = ModulesAndLibrariesLinkedByManifest, attachSources = true) as Runnable(mainClass = "io.picota.digitalmodel.Main")
 	Parameter("home")
-	Parameter("store_url")
 	Parameter("api_port")
 	Parameter("python_venv")
-
 
 Repository("intino-maven") > Release("https://quassar.io/releases")
 
@@ -30,4 +31,3 @@ RunConfiguration local
 	Argument("home", "./temp")
 	Argument("api_port", "9090")
 	Argument("python_venv", "/Users/oroncal/workspace/projects/picota-smartbeach/.venv1")
-	Argument("store_url", "/Users/oroncal/workspace/projects/picota/digital-model/test-res/infecar.ddb")

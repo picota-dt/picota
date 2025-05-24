@@ -6,14 +6,12 @@ import io.intino.alexandria.exceptions.InternalServerError;
 import io.intino.alexandria.http.server.AlexandriaHttpContext;
 import io.intino.alexandria.rest.RequestErrorHandler;
 import io.picota.digitalmodel.DigitalModelBox;
-import io.picota.digitalmodel.DigitalTwinOperator;
 import io.picota.digitalmodel.rest.resources.GetStatusResource;
 import model.DigitalTwin;
 import model.Variable;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -28,12 +26,13 @@ public class GetStatusAction implements RequestErrorHandler {
 	public Map execute() throws BadRequest, InternalServerError {
 		GetStatusResource.Moment mode = getInferenceType(box.digitalTwin(digitalTwin));
 		Map<String, Object> map = new HashMap<>();
-		var subject = box.vault().open(digitalTwin);
-		if (subject == null) throw new InternalServerError("Data not found");
-		var dt = box.digitalTwin(digitalTwin);
-		if (mode == Future) variables(dt).forEach(a -> map.put(a.name$(), value(a, subject)));
-		List<DigitalTwinOperator.Inference> infer = box.dtOperator().infer(dt);
-		infer.forEach(i -> map.put(i.variable(), i.value()));
+//		var subject = box.vault().open(digitalTwin);
+//		if (subject == null) throw new InternalServerError("Data not found");
+//		var dt = box.digitalTwin(digitalTwin);
+//		if (mode == Future) variables(dt).forEach(a -> map.put(a.name$(), value(a, subject)));
+//		List<DigitalTwinOperator.Inference> infer = box.dtOperator().infer(dt);
+//		infer.forEach(i -> map.put(i.variable(), i.value()));
+		//TODO
 		return map;
 	}
 
