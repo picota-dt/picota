@@ -2,10 +2,10 @@ package io.picota.digitalmodel;
 
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
-import io.intino.alexandria.zip.Zip;
 import io.picota.digitalmodel.DigitalModelBox.State;
 import io.picota.digitalmodel.DigitalTwinBuilder.Result.Training;
 import io.picota.digitalmodel.setup.TorchScriptsGenerationOperation;
+import io.picota.digitalmodel.utils.Compression;
 import model.DigitalTwin;
 import model.PicotaGraph;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
@@ -16,7 +16,6 @@ import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNorm
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -35,7 +34,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import java.util.zip.ZipInputStream;
 
 import static io.picota.digitalmodel.utils.Utils.chronoUnitOf;
 import static io.picota.digitalmodel.utils.Utils.periodOf;
@@ -70,19 +68,11 @@ public class DigitalTwinBuilder {
 		current = this.executor.submit(() -> {
 			try {
 				PicotaGraph graph = buildModel(url);
-				if (graph == null) throw new IllegalStateException("Graph is null");
+				if (graph == null) throw new IllegalStateException("Impossible to load model");
 				new TorchScriptsGenerationOperation(workingDir, graph, vault).execute();
 				File datasets = upzip(zipData);
 				for (DigitalTwin dt : graph.digitalTwinList()) {
-					states.put(dt, State.Training);
-					File tsv = new File(datasets, dt + ".tsv");
-					if (!tsv.exists()) {
-						states.put(dt, State.WaitingData);
-						continue;
-					}
-					prepareData(dt, tsv);
-					onFinished.onFinished(train(dt));
-					states.put(dt, State.Prepared);
+					processDigitalTwin(dt, findFile(datasets, dt.name$()), onFinished);
 				}
 			} catch (Throwable e) {
 				Logger.error(e);
@@ -91,10 +81,26 @@ public class DigitalTwinBuilder {
 		return current;
 	}
 
+	private File findFile(File datasets, String name) {
+		File file = new File(datasets, name + ".csv");
+		return file.exists() ? file : new File(datasets, name + ".tsv");
+	}
+
+	private void processDigitalTwin(DigitalTwin dt, File dataset, OnFinished onFinished) throws IOException, InterruptedException {
+		states.put(dt, State.Training);
+		if (!dataset.exists() || dataset.length() == 0) {
+			states.put(dt, State.WaitingData);
+			return;
+		}
+		prepareData(dt, dataset);
+		onFinished.onFinished(train(dt));
+		states.put(dt, State.Prepared);
+	}
+
 	private File upzip(File zipData) throws IOException {
 		File datasetTemp = new File(workingDir, "temp");
 		datasetTemp.mkdirs();
-		Zip.unzip(new ZipInputStream(new FileInputStream(zipData)), datasetTemp.getAbsolutePath());
+		Compression.unzip(zipData, datasetTemp);
 		return datasetTemp;
 	}
 
@@ -107,24 +113,11 @@ public class DigitalTwinBuilder {
 		}
 	}
 
-	public void stop() {
-		if (current != null) current.cancel(true);
-	}
-
 	private Result train(DigitalTwin dt) throws IOException, InterruptedException {
 		Logger.info("Training " + dt.name$() + "...");
 		Result result = runTrain();
 		Logger.info("Finished training of " + dt.name$() + ". Code: " + result.code);
 		return result;
-	}
-
-	public boolean isRunning() {
-		return !this.executor.isTerminated();
-	}
-
-	public record Result(int code, String report, List<Training> trainings) {
-		public record Training(String dt, String variable, double loss, String[] contributors) {
-		}
 	}
 
 	private Result runTrain() throws IOException, InterruptedException {
@@ -138,6 +131,19 @@ public class DigitalTwinBuilder {
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
 		return new Result(code, report, trainings(code, report));
+	}
+
+	public boolean isRunning() {
+		return !this.executor.isTerminated();
+	}
+
+	public void stop() {
+		if (current != null) current.cancel(true);
+	}
+
+	public record Result(int code, String report, List<Training> trainings) {
+		public record Training(String dt, String variable, double loss, String[] contributors) {
+		}
 	}
 
 	private List<Training> trainings(int code, String report) {
@@ -165,13 +171,13 @@ public class DigitalTwinBuilder {
 		return vault.open(dt.name$());
 	}
 
-	private void prepareData(DigitalTwin dt, File tsv) throws IOException {
+	private void prepareData(DigitalTwin dt, File dataset) throws IOException {
 		SubjectHistory history = vault.open(dt.name$());
-		if (tsv == null || tsv.length() == 0) {
+		if (dataset == null || dataset.length() == 0) {
 			Logger.warn("No data found for " + dt.name$());
 			return;
 		}
-		fillHistory(history, tsv);
+		fillHistory(history, dataset);
 		ChronoUnit scale = chronoUnitOf(dt.resolution().scale());
 		var timeHorizon = timeHorizon(dt);
 		SubjectHistoryView.of(history)
@@ -187,10 +193,12 @@ public class DigitalTwinBuilder {
 				.to(new FileOutputStream(new File(dataDir, history.name() + ".csv")));
 	}
 
-	private static void fillHistory(SubjectHistory history, File tsv) throws IOException {
-		String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
+	private static void fillHistory(SubjectHistory history, File dataset) throws IOException {
+		String firstLine = Files.lines(dataset.toPath()).findFirst().get();
+		String separator = firstLine.contains("\t") ? "\t" : ",";
+		String[] header = firstLine.split(separator);
 		SubjectHistory.Batch batch = history.batch();
-		Files.lines(tsv.toPath()).skip(1).map(l -> l.split("\t")).forEach(line -> {
+		Files.lines(dataset.toPath()).skip(1).map(l -> l.split(separator)).forEach(line -> {
 			SubjectHistory.Transaction t = batch.on(Instant.parse(line[0]), "");
 			for (int i = 1; i < header.length; i++)
 				if (!line[i].trim().isEmpty()) t.put(header[i].trim(), Double.parseDouble(line[i].trim()));

@@ -6,7 +6,7 @@ import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
 import io.intino.magritte.framework.Layer;
-import io.picota.digitalmodel.utils.Tar;
+import io.picota.digitalmodel.utils.Compression;
 import model.DigitalTwin;
 import model.PicotaGraph;
 import model.Variable;
@@ -63,7 +63,6 @@ public class TorchScriptsGenerationOperation {
 					throw new IllegalStateException("Subject " + subject + " does not contain tag " + variable);
 				}
 			}
-
 		}
 	}
 
@@ -89,7 +88,7 @@ public class TorchScriptsGenerationOperation {
 	}
 
 	private void extract(String lib, File dir) throws IOException {
-		Tar.extractTarFile(this.getClass().getResourceAsStream("/scripts/" + lib + ".tar"), dir);
+		Compression.extractTarFile(this.getClass().getResourceAsStream("/scripts/" + lib + ".tar"), dir);
 	}
 
 	private void createMainScript() throws IOException {

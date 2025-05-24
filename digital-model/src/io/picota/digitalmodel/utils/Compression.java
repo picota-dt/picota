@@ -3,10 +3,42 @@ package io.picota.digitalmodel.utils;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+import org.apache.commons.compress.utils.IOUtils;
 
 import java.io.*;
 
-public class Tar {
+public class Compression {
+
+	public static void unzip(File zipFile, File destDir) throws IOException {
+		if (!zipFile.exists() || !zipFile.isFile())
+			throw new FileNotFoundException("No se encontró el ZIP: " + zipFile.getAbsolutePath());
+		if (!destDir.exists() && !destDir.mkdirs())
+			throw new IOException("No se pudo crear directorio destino: " + destDir.getAbsolutePath());
+		try (InputStream fis = new FileInputStream(zipFile);
+			 BufferedInputStream bis = new BufferedInputStream(fis);
+			 ZipArchiveInputStream zis = new ZipArchiveInputStream(bis, "UTF-8", true, true)) {
+
+			ZipArchiveEntry entry;
+			while ((entry = zis.getNextZipEntry()) != null) {
+				File outFile = new File(destDir, entry.getName());
+
+				if (entry.isDirectory()) {
+					outFile.mkdirs();
+				} else {
+					File parent = outFile.getParentFile();
+					if (parent != null && !parent.exists()) {
+						parent.mkdirs();
+					}
+					try (OutputStream os = new FileOutputStream(outFile)) {
+						IOUtils.copy(zis, os);
+					}
+				}
+			}
+		}
+	}
+
 
 	public static void createTarFile(File sourceDir, File tarFile) throws IOException {
 		try (FileOutputStream fos = new FileOutputStream(tarFile);

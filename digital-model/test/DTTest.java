@@ -10,14 +10,13 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
-
+//file:///Users/oroncal/workspace/projects/picota/digital-model/test-res/INFECAR-SOLAR-PLANT-1.0.0.zip
 public class DTTest {
 	public static final String DIGITAL_TWIN_NAME = "Infecar-Twin";
 	private DigitalModelBox box;
 
 	@Before
-	public void setUp() throws IOException, URISyntaxException {
+	public void setUp() {
 		String[] args = args();
 		box = Main.run(args);
 	}

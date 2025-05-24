@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<style>
+        h3.concept-title {
+            font-size: 1.5rem;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.4rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+        .example-block {
+            border: 1px solid #e0e0e8;
+            border-left: 4px solid #6b6bc1;
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            border-radius: 6px;
+        }
+
+        .syntax-block {
+            color: #2a2a2a;
+            font-family: "Courier New", monospace;
+            border-left: 3px solid #6666cc;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        pre.syntax-block code {
+            background-color: #eff;
+            font-size: 0.75rem !important;
+        }
+
+        strong {
+            font-weight: 600;
+        }
+
+        pre code {
+            display: block;
+            line-height: 1.5;
+            padding: 1rem;
+            background-color: #f6f8fa;
+            border-radius: 6px;
+            white-space: pre;
+            overflow-x: auto;
+            text-indent: 0;
+            margin: 0;
+            tab-size: 4;
+        }
+
+        pre code::first-line {
+            all: unset;
+        }
+
+        pre > code {
+            text-indent: 0 !important;
+            margin-left: 0 !important;
+            white-space: pre !important;
+            font-variant-ligatures: none; /* elimina efectos visuales inconsistentes */
+        }
+
+        .example-label {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+	</style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Picota 1.0.0 - Help</title>
+	<link rel="icon" href="/assets/favicon.png" type="image/png">
+	<!-- Tailwind CSS -->
+	<script src="https://cdn.tailwindcss.com"></script>
+	<!-- Font Awesome -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+	<!-- Google Fonts: Inter -->
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+<!-- Header -->
+<header class="bg-white shadow flex items-center justify-between px-8 py-4 fixed w-full top-0 z-10">
+	<div class="flex items-center">
+		<a href="/" class="flex items-center">
+		<img src="picota-40.png" alt="Picota logo" class="h-8 w-8 mr-2">
+		<span class="text-xl font-semibold text-gray-900">Picota</span>
+		</a>
+	</div>
+	<nav class="flex space-x-6 text-gray-600">
+        <a href="/" class="hover:text-gray-800">Home</a>
+		<a href="/wizard" class="hover:text-gray-800">Wizard</a>
+		<a href="/help" class="text-blue-500 font-semibold">Help</a>
+	</nav>
+</header>
+
+<main class="flex-grow container mx-auto px-8 py-32">
+	<h1 class="text-3xl font-bold text-gray-900 mb-2">Picota 1.0.0</h1>
+	<p class="text-gray-600 mb-8">Modeling and Building Digital Twins</p>
+
+	<div class="md:flex">
+		<nav class="md:w-1/4 mb-8 md:mb-0 sticky top-32 self-start">
+			<h2 class="text-xl font-semibold text-gray-800 mb-4">Contents</h2>
+			<ol class="space-y-2 text-gray-700">
+				<li><a href="#introduction" class="hover:text-blue-500">Introduction</a></li>
+				<li><a href="#how-picota-works" class="hover:text-blue-500">How Picota Works</a></li>
+				<li><a href="#getting-started" class="hover:text-blue-500">Getting Started</a></li>
+				<li><a href="#dsl-reference" class="hover:text-blue-500">DSL Reference</a></li>
+				<li><a href="#use-cases" class="hover:text-blue-500">Use Cases</a></li>
+				<li><a href="#data-integration" class="hover:text-blue-500">Data Integration</a></li>
+				<li><a href="#best-practices" class="hover:text-blue-500">Best Practices</a></li>
+				<li><a href="#appendices" class="hover:text-blue-500">Appendices</a></li>
+			</ol>
+		</nav>
+		<article class="md:w-3/4 md:pl-12 space-y-8 text-justify leading-relaxed">
+            <section id="introduction">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Introduction</h2>
+                <p><strong>Picota</strong> is a platform for building and running <strong>Digital Twins</strong> — virtual models of real-world systems that evolve over time and respond to changes in the environment.</p>
+                <p>At the heart of Picota is its domain-specific language (DSL), which lets users define structured models that describe the components of a system, the variables they depend on, and the way these elements change over time. This modeling layer is clear, compact, and expressive.</p>
+                <p>But Picota is not just a DSL — it also includes a runtime engine that brings these models to life. Once a model is defined, Picota can use real-world data to <strong>build and operate the Digital Twin</strong>: ingesting time-series data, interpreting variables, and estimating or forecasting unknown values.</p>
+                <p>In Picota, it's important to distinguish three main concepts.</p>
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Descriptive Model</h3>
+                <p>A <strong>Descriptive Model</strong> is written using the <em>Picota DSL</em>. It defines the structure of the system you want to simulate:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>What exists: Reality and Subject</li>
+                    <li>What is measured: Variable</li>
+                    <li>What should be estimated: InferenceModel</li>
+                    <li>How often it updates: Resolution</li>
+                </ul>
+                <p>By itself, this model doesn't estimate or predict anything — it's just a formal description of the system.</p>
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Inference Model</h3>
+                <p>An <strong>Inference Model</strong> is created when the <em>Picota RT</em> processes the <em>Descriptive model</em> and combines it with historical data. It builds a trained model that can:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Learn from past data</li>
+                    <li>Estimate unknown or future values</li>
+                    <li>Be used for simulations or online predictions</li>
+                </ul>
+                <p>The inference model is what makes the Digital Twin operational.</p>
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Digital Twin</h3>
+                <p>A <strong>Digital Twin</strong> in Picota is an operational entity that encapsulates one or more <em>Inference Models</em>. It is built and deployed using <em>Picota DT</em>, a web service that packages the trained models and turns them into a functional unit capable of simulating, predicting, and adapting to real-world data in real time.</p>
+                <p>A Digital Twin represents a live system, able to combine multiple trained models that cover different variables, resolutions, or components. It can coordinate their outputs, deliver integrated predictions, and run full-system simulations either continuously or on demand.</p>
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Summary</h3>
+                <p>You write a <strong>Descriptive Model</strong> using the Picota DSL. Then you build and use an <strong>Inference Model</strong> using the Picota RT.</p>
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Think of the Descriptive Model as the blueprint, and the Inference Model as the engine that runs estimations and predictions.
+                </blockquote>
+                <p>This documentation will guide you through the core concepts of Picota, how to define your own models, and how to connect them to real data. You will find practical examples, reusable patterns, and ready-to-use templates to help you get started quickly.</p>
+            </section>
+            <section id="how-picota-works">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">How Picota Works</h2>
+                <p>A Picota-based Digital Twin is developed in three stages, following a clear and modular lifecycle.</p>
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Descriptive Model Definition</h3>
+                <p>The first step is to write a <strong>Descriptive Model</strong> using the Picota DSL. This model acts as a blueprint: it defines what the system looks like, what entities it contains, and which variables are of interest.</p>
+                <p>In this phase, the user declares:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Reality: the overall environment (e.g. a city)</li>
+                    <li>Subject: the key entities within the system (e.g. a park</li>
+                    <li>Variable: measurable values such as temperature, or resource usage</li>
+                    <li>DigitalTwin: the artifact that is being created</li>
+                </ul>
+                <p>This descriptive model contains no logic for prediction—it is purely declarative. It defines <em>what</em> the system is, not <em>how</em> it behaves.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Inference Model Training</h3>
+                <p>Once the Descriptive Model is in place, the Picota RT uses it—along with historical data—to build an <strong>Inference Model</strong>. This model is trained to estimate or predict the value of variables marked for inference in the DSL.</p>
+                <p>This step involves:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Loading structured input data (usually from CSV files)</li>
+                    <li>Training inference models based on the historical data</li>
+                    <li>Creating an operational model that can estimate or forecast some variables</li>
+                </ul>
+                <p>The Inference Model is the driving component that brings the Digital Twin to life—it knows how to generate predictions using both learned patterns and new inputs.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Digital Twin Deployment</h3>
+                <p>Once one or more <em>Inference Models</em> have been trained, they are packaged into a <strong>Digital Twin</strong> — a web service that runs the models in a live environment. The Digital Twin can now operate using these Inference Models to produce outputs for selected variables in different modes:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Offline simulation: apply the Digital Twin to test data or hypothetical scenarios, replaying or exploring alternative outcomes</li>
+                    <li>Online operation: feed the Digital Twin with continuously updated input data (e.g. hourly or daily) and generate real-time or periodic predictions</li>
+                    <li>Model recalibration: update or fine-tune the underlying inference models as more historical data becomes available or as system behavior evolves</li>
+                </ul>
+                <p>Online operation allows the Digital Twin to function continuously, reflecting the latest conditions of the real system and adapting over time — without requiring constant manual intervention.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Summary</h3>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li><strong>Picota DSL</strong> is used to define the system — the <em>Descriptive Model</em> (structure, variables, update rules).</li>
+					<li><strong>Picota RT</strong> builds and runs the <em>Inference Model</em> — trained from historical data to perform estimation and forecasting.</li>
+                    <li><strong>Picota DT</strong> is a web service that packages one or more inference models into an operational <em>Digital Twin</em> — ready for simulation, monitoring, and real-time prediction.</li>
+                </ul>
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Think of the Picota DSL as the “what” (structure), Picota RT as the “how” (learning and inference), and Picota DT as the “where” it runs (deployment and operation).
+                </blockquote>
+            </section>
+            <section id="getting-started">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Getting Started</h2>
+                <p>This sections guides you through the creation of your first digital twin using the Picota DSL. You will model a city with a public park and estimate how many people are present in the park based on noise level and calendar features.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">1. Open the Picota Editor</h3>
+                <p>Go to <a href="https://quassar.io/picota" target="_blank">quassar.io/picota</a>. This is the official modeling interface for Picota. Click <strong>“New”</strong> to open a blank editor.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">2. Edit the Descriptive Model</h3>
+                <p>Paste the following Picota DSL code into the editor:</p>
+
+                <pre><code>Reality MyCity
+	Variable dayOfWeek is TimeFeature(DayOfWeek)
+	Variable season is TimeFeature(QuarterOfYear)
+
+	Subject CentralPark
+		Variable noiseLevel is Numeric
+		Variable occupancy is Numeric
+
+DigitalTwin ParkTwin
+	subject = MyCity.CentralPark
+
+	Resolution
+		value = 1
+		scale = days
+
+	Inference
+		variable = occupancy
+		Estimation</code></pre>
+
+                <p>This model defines:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>MyCity as the modeling context</li>
+                    <li>dayOfWeek and season as automatic time features derived from the date</li>
+                    <li>CentralPark as the subject with:
+						<ul class="list-disc list-outside pl-5 ml-6 space-y-1">
+                            <li>noiseLevel: a measurable variable from sensors</li>
+                            <li>occupancy: the target variable to estimate</li>
+                        </ul>
+                    </li>
+                    <li>ParkTwin as the twin that will estimate occupancy daily</li>
+                </ul>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">3. Commit the Model</h3>
+                <p>Click <strong>“Commit”</strong> to validate the model and create a versioned release. Only committed models can be used to build digital twins.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">4. Forge the Digital Twin</h3>
+                <p>Click <strong>“Forge”</strong> and follow the assistant:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Upload your CSV file with date, noiseLevel, occupancy</li>
+                    <li>Ensure dayOfWeek and season are extracted from the date column</li>
+                    <li>Select occupancy as the variable to estimate</li>
+                    <li>Run the training</li>
+                </ul>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">5. Use Your Digital Twin</h3>
+                <p>After training, your twin is ready to:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Estimate occupancy from new noise levels</li>
+                    <li>Operate in online mode with daily inputs</li>
+                    <li>Export predictions for monitoring or alerts</li>
+                </ul>
+
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Summary</h3>
+                <p>To create your first digital twin in Picota:</p>
+                <ol>
+                    <li>Open the editor at <a href="https://quassar.io/picota" target="_blank">quassar.io/picota</a>.</li>
+                    <li>Define a Reality with TimeFeatures and a Subject for the park.</li>
+                    <li>Declare measurable variables like noiseLevel and occupancy.</li>
+                    <li>Configure a DigitalTwin to estimate occupancy daily.</li>
+                    <li>Commit the model and use <strong>Forge</strong> to upload training data and run the estimation.</li>
+                    <li>Start simulating or operating the twin online with updated data.</li>
+                </ol>
+
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Start simple. You can always extend the model later with additional variables, subjects, or forecasting logic.
+                </blockquote>
+            </section>
+
+            <section id="dsl-reference" class="section">
+                <h2 class="section-title">DSL Reference</h2>
+
+                <p>This section provides a comprehensive reference for all constructs in the Picota DSL. It includes syntax, usage, and detailed explanations of core features such as layered variables and prototype subjects.</p>
+
+                <!--------------------------------------->
+                <h3 class="text-xl font-semibold text-gray-900 mt-8 mb-4">Overview of Constructs</h3>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li><a href="#variables">Variables</a></li>
+                    <li><a href="#subjects">Subjects</a></li>
+                    <li><a href="#reality">Reality</a></li>
+                    <li><a href="#digitaltwin">DigitalTwin</a></li>
+                </ul>
+
+                <!--------------------------------------->
+                <h3 id="variables" class="concept-title">Variables</h3>
+                <p>A Variable defines a data point associated with either a Reality or a Subject. Variables represent measurable, derived, or categorical values. All variables must explicitly declare their type.</p>
+
+
+                <!------->
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Syntax</h4>
+
+                <pre class="syntax-block"><code>Variable ::= "Variable" IDENTIFIER "is" Type [ "Layered" ]
+					[ Dependency ]
+					{ Layer }
+
+Dependency ::= INSIDE "depends" "=" IDENTIFIER { IDENTIFIER }
+
+Layer ::= INSIDE "Layer" "(" "values" "=" LITERAL ")" [ "is" "Disjoint" ] { Layer }
+
+Type ::= "Numeric" | "Enumerated" "(" LITERAL { "," LITERAL } ")"
+                   | "TimeFeature" "(" TimeFeatureKind ")"
+
+TimeFeatureKind ::= "DayOfWeek" | "DayOfMonth" | "MonthOfYear" | "WeekOfYear"
+                   | "QuarterOfYear" | "Year" | "IsWeekend" | "IsHoliday"
+
+IDENTIFIER ::= ? valid identifier name ?
+LITERAL ::= '"' { character } '"'
+INSIDE ::= ? newline and indentation ?
+</code></pre>
+
+                <p>Notes</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>TimeFeature variables are only allowed in the Reality scope.</li>
+                    <li>Layered can only be used with Numeric variables.</li>
+                    <li>depends must reference a variable declared in the same Subject or in the containing Reality.</li>
+                </ul>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Examples</h4>
+
+                <div class="example-block">
+                    <p class="example-label">Numeric Variable</p>
+                    <p>Represents quantitative values such as temperature, usage, occupancy, or count. It is the most commonly used type.</p>
+                    <pre><code>Variable temperature is Numeric</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Enumerated Variable</p>
+                    <p>Represents a fixed list of possible string values. Use this type when the variable has a limited set of categories.</p>
+                    <pre><code>Variable status is Enumerated("open", "closed", "maintenance")</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Time Feature</p>
+                    <p>Represents values automatically derived from the input date column. These variables are used to capture temporal structure (e.g. weekday/weekend patterns) and are only allowed in the Reality scope.</p>
+                    <p>Available values include: DayOfWeek, DayOfMonth, MonthOfYear, WeekOfYear, QuarterOfYear, Year, IsWeekend, IsHoliday</p>
+                    <pre><code>Variable dayOfWeek is TimeFeature(DayOfWeek)</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Layered Variable</p>
+                    <p>A basic layered variable uses one layer. For example, to model consumption by region:</p>
+                    <pre><code>Variable consumption is Numeric Layered
+Layer(value = "region.txt")</code></pre>
+                    <p>If region.txt contains:north, south, east west</p>
+                    <p>Expected inputs:</p>
+                    <code>consumption.north</code>, <code>consumption.south</code>, etc.
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Nested Layers</p>
+                    <p>You can nest layers to represent hierarchical structures, such as regions and product types:</p>
+                    <pre><code>Variable consumption is Numeric Layered
+Layer(value = "region.txt")
+  Layer(value = "product.txt")</code></pre>
+                    <p>Expected inputs:</p>
+                    <code>consumption.north.food</code>, <code>consumption.south.energy</code>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Multiple Independent Layers</p>
+                    <p>You can also define multiple independent branches of layers:</p>
+                    <pre><code>Variable consumption is Numeric Layered
+Layer(value = "region.txt")
+  Layer(value = "product.txt")
+Layer(value = "category.txt")</code></pre>
+                    <p>Expected inputs:</p>
+                    <ul class="list-disc list-inside space-y-2 mb-6">
+                        <li>consumption.north.food, consumption.south.energy</li>
+                        <li>consumption.residential, consumption.industrial</li>
+                    </ul>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Disjoint Layered Variable</p>
+                    <p>Use is Disjoint when layer values represent alternative measurements, not aggregable parts of a whole. For example:</p>
+                    <pre><code>Variable temperature is Numeric Layered
+  Layer(value = "types.txt") is Disjoint</code></pre>
+                    <p>If types.txt contains: min, max, average</p>
+                    <p>Expected inputs:</p>
+                    <code>temperature.min</code>, <code>temperature.max</code>, <code>temperature.average</code>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Variable Dependencies</p>
+                    <p>In the Picota DSL, a variable can declare its dependency on one or more other variables using the depends keyword. This is a semantic hint used during model interpretation and training to specify that the value of one variable is functionally or statistically related to others.</p>
+
+                    <p>Declaring dependencies does not alter the structure of the model or change the order of evaluation, but it informs the inference engine about which variables are relevant for estimation or prediction. This helps guide the learning process and improve model explainability.</p>
+
+                    <p>Example:</p>
+                    <pre><code>Variable waterUse is Numeric
+  depends = occupancy temperature dayOfWeek</code></pre>
+
+                    <p>This declaration expresses that waterUse is expected to vary based on occupancy, temperature, and the day of the week — allowing the model to incorporate behavioral and environmental factors during estimation.</p>
+                </div>
+
+                <!---->
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rules and Notes</h4>
+
+				<ul class="list-disc list-outside pl-5 space-y-2">
+                    <li>
+                        <p>Every Variable must declare its type: Numeric, Enumerated, or TimeFeature.</p>
+                        <p>TimeFeature variables may only be declared inside a Reality, not within a Subject.</p>
+                        <p>Variable names must be unique within the same Reality or Subject block.</p>
+                        <blockquote class="tip">
+                            <strong>Tip:</strong> Use TimeFeature variables like dayOfWeek or monthOfYear to add calendar-awareness to your models without requiring manual date parsing.
+                        </blockquote>
+
+                    </li>
+
+                    <li>
+                        <p>Only Numeric variables can be layered.</p>
+                        <p>Enumerated and TimeFeature types do not support layering.</p>
+                        <p>All expected paths (e.g. consumption.north.food) must be present in the dataset if used for inference or prediction.</p>
+                    </li>
+
+                    <li>
+                        <p>Enumerated values must be declared inline as a list of strings.</p>
+                        <p>These values are static and cannot be layered or loaded from external files.</p>
+                    </li>
+
+                    <li>
+                        <p>You can use depends to indicate input variables for estimation.</p>
+                        <p>Any referenced variable must be visible — either within the same Subject or in the parent Reality.</p>
+                        <p>TimeFeature and Layered variables can be used in dependencies.</p>
+                        <p>depends is optional. If omitted, the system infers dependencies from the structure of the training data.</p>
+                        <blockquote class="tip">
+                            <strong>Tip:</strong> Declare depends when you want to guide model logic explicitly or enforce known causal relationships.
+                        </blockquote>
+                    </li>
+                </ul>
+
+                <h3 id="subjects" class="concept-title">Subjects</h3>
+
+                <p>A Subject defines a measurable entity inside a Reality. It is the fundamental unit of simulation in Picota: all variables to be estimated or predicted belong to a subject.</p>
+
+                <p>There are two types of subjects:</p>
+
+                <ul class="list-disc list-outside pl-5 space-y-2">
+                    <li>
+                        Regular subjects: define a single named instance. Use these when the entity is unique in the model, such as a specific park, building, or zone.
+                    </li>
+                    <li>
+                        Prototype subjects: define a reusable structure for many entities of the same type. Instances are created automatically from an external list of identifiers (e.g., a CSV file). Use these when modeling repeated structures like rooms, sensors, or machines.
+                    </li>
+                </ul>
+
+                <p>Both types of subject can declare one or more variables. These variables are local to the subject unless they reference a global variable from the enclosing Reality using depends.</p>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Syntax</h4>
+
+                <pre class="syntax-block"><code>Subject          ::= INSIDE "Subject" IDENTIFIER
+                     { Variable }
+
+PrototypeSubject ::= INSIDE "Subject" IDENTIFIER "is" "Prototype"
+                     INSIDE "identifiers" "=" LITERAL
+                     { Variable }
+</code></pre>
+
+                <!---->
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Examples</h4>
+
+                <div class="example-block">
+                    <p class="example-label">Regular Subject</p>
+                    <p>This defines a single named subject with its own variables. Regular subjects are used when the entity is unique in the model (e.g., one specific park).</p>
+                    <pre><code>Subject CentralPark
+  Variable noiseLevel is Numeric
+  Variable occupancy is Numeric
+</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Prototype Subject</p>
+                    <p>Prototype subjects allow you to model many instances of the same structure, using identifiers from an external file.</p>
+                    <pre><code>Subject TrafficSensor is Prototype
+  identifiers = "sensors.csv"
+  Variable vehicleCount is Numeric
+  Variable averageSpeed is Numeric
+</code></pre>
+
+                    <p>If sensors.csv contains:</p>
+                    <pre><code>id
+S001
+S002
+S003
+S004</code></pre>
+
+                    <p>The system will create these subject instances at runtime:</p>
+                    <ul class="list-disc list-outside pl-5 space-y-2">
+                        <li>TrafficSensor[S001]</li>
+                        <li>TrafficSensor[S002]</li>
+                        <li>TrafficSensor[S003]</li>
+                        <li>TrafficSensor[S004]</li>
+                    </ul>
+                </div>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rules and Notes</h4>
+
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Each subject, whether regular or prototype, must have a unique name within the Reality.</li>
+                    <li>Prototype subjects allow the model to scale efficiently by avoiding repetition.</li>
+                    <li>The identifiers file should contain one unique ID per instance (e.g. sensor_001, sensor_002).</li>
+                </ul>
+
+
+                Use a regular subject when:
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>The entity is unique in the model (e.g., a single park or building)</li>
+                    <li>You want to configure the digital twin with specific resolution or logic</li>
+                    <li>You need to combine with prototype-based entities in the same reality</li>
+                </ul>
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Regular subjects are ideal when you want full control over the variables and simulation of a single entity.
+                </blockquote>
+
+                Use a prototype subject when:
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>You have many entities of the same type and structure</li>
+                    <li>You want to load identifiers from a file (e.g., sensors, rooms, stations)</li>
+                    <li>You want to apply inference to each instance individually</li>
+                </ul>
+
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Use prototype subjects to keep your models scalable and DRY (Don't Repeat Yourself). The system handles instantiation and identity resolution automatically.
+                </blockquote>
+
+
+
+                <!--------------------------------------->
+                <h3 id="reality" class="concept-title">Reality</h3>
+
+                <p>Reality is the top-level construct in Picota. It defines the <strong>context</strong> in which all Subjects exist. While subjects are the entities that we simulate, the reality acts as the environment — providing global variables and shared temporal or structural information.</p>
+
+                <p>A Reality contains:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Global variables, such as environmental indicators, time-derived features, or macroeconomic factors</li>
+                    <li>Subjects, defined directly or via prototypes to instantiate from a dataset</li>
+                </ul>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Examples</h4>
+
+                <div class="example-block">
+                    <p class="example-label">SmartCity</p>
+                    <p>Includes time features and socioeconomic variables.</p>
+                    <pre><code>Reality SmartCity
+  Variable dayOfWeek is TimeFeature(DayOfWeek)
+  Variable ipc is Numeric
+
+  Subject PublicPark
+    Variable occupancy is Numeric
+</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">FactoryFloor</p>
+                    <p>Includes environmental and scheduling variables.</p>
+                    <pre><code>Reality FactoryFloor
+  Variable shift is TimeFeature(DayOfWeek)
+  Variable temperature is Numeric
+  Variable electricityPrice is Numeric
+
+  Subject Machine is Prototype
+    identifiers = "machines.csv"
+    Variable errorRate is Numeric
+</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">GreenhouseNetwork</p>
+                    <p>Includes seasonal and climate-related variables.</p>
+                    <pre><code>Reality GreenhouseNetwork
+  Variable season is TimeFeature(MonthOfYear)
+  Variable rainfall is Numeric
+  Variable humidity is Numeric
+
+  Subject Greenhouse is Prototype
+    identifiers = "greenhouses.csv"
+    Variable yield is Numeric
+    Variable temperature is Numeric
+</code></pre>
+                </div>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rules and Notes</h4>
+
+                <p>The reality block is intended to define global variables and contextual features that apply across all subjects. These variables are not simulated on their own — they serve as shared inputs for estimation and prediction within subjects.</p>
+
+                <p>Use the reality to declare:</p>
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Time-related variables like day of week, season, or holiday flags</li>
+                    <li>Environmental measurements such as temperature, rainfall, or humidity</li>
+                    <li>Macroeconomic indicators such as inflation index, fuel price, or policy flags</li>
+                </ul>
+
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Use a mix of global variables to represent the structure of your system — time features for periodicity, numeric variables for measurements, and custom indicators for policy, cost, or external drivers.
+                </blockquote>
+
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Declare time features and environmental data at the reality level so that all subjects can reference them without duplication.
+                </blockquote>
+
+
+
+                <!--------------------------------------->
+                <h3 id="digitaltwin" class="concept-title">DigitalTwin</h3>
+
+                <p>A DigitalTwin represents the simulation configuration for a specific subject. It defines how subjects behaves over time, at what resolution it should be updated, and which variables are to be estimated or predicted. A digital twin references a subject and binds it to an inference model and resolution of execution.</p>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Syntax</h4>
+
+                <pre class="syntax-block"><code>DigitalTwin ::= "DigitalTwin" IDENTIFIER
+                       INSIDE "subject" "=" IDENTIFIER "." IDENTIFIER
+                       Resolution
+                       { InferenceModel }
+
+Resolution ::= INSIDE "Resolution"
+                       INSIDE "value" "=" NUMBER
+                       INSIDE "scale" "=" TIMEUNIT
+
+InferenceModel ::= INSIDE "InferenceModel"
+                       INSIDE "variable" "=" IDENTIFIER
+                       ( Estimation | Prediction )
+
+Estimation ::= INSIDE "Estimation"
+Prediction ::= INSIDE "Prediction"
+					   INSIDE "timeHorizon" "=" NUMBER
+</code></pre>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Examples</h4>
+
+                <div class="example-block">
+                    <p class="example-label">Basic Estimation</p>
+                    <p>This twin estimates water usage daily based on inputs like occupancy or weather.</p>
+                    <pre><code>DigitalTwin ParkTwin
+  subject = SmartCity.PublicPark
+
+  Resolution
+    value = 1
+    scale = days
+
+  InferenceModel
+    variable = waterUse
+    Estimation</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Prediction with Time Horizon</p>
+                    <p>This twin forecasts occupancy three days ahead using a prediction model.</p>
+                    <pre><code>DigitalTwin ForecastTwin
+  subject = MyHotel.MainBuilding
+
+  Resolution
+    value = 1
+    scale = days
+
+  InferenceModel
+    variable = occupancy
+    Prediction
+      timeHorizon = 3</code></pre>
+                </div>
+
+                <div class="example-block">
+                    <p class="example-label">Digital Twin for Prototyped Subjects</p>
+                    <p>This digital twin is linked to a prototype subject, an inference model will be created for each sensor instance.</p>
+
+                    <pre><code>Subject TrafficSensor is Prototype
+  identifiers = "sensors.csv"
+  Variable vehicleCount is Numeric
+  Variable averageSpeed is Numeric
+</code></pre>
+
+                    <pre><code>DigitalTwin SensorTwin
+  subject = SmartCity.TrafficSensor
+
+  Resolution
+    value = 1
+    scale = days
+
+  InferenceModel
+    variable = averageSpeed
+    Estimation
+              </code></pre>  </div>
+
+                <h4 class="text-lg font-medium text-gray-800 mt-6 mb-2">Rules and Notes</h4>
+
+                <ul class="list-disc list-inside space-y-2 mb-6">
+                    <li>Each digital twin must reference a subject using <code>reality.subject</code> notation.</li>
+                    <li>The resolution block defines how often the twin updates its internal state (e.g., once per day).</li>
+                    <li>Each inference model must point to a declared variable within the subject.</li>
+                    <li>Use <strong>Estimation</strong> for predicting current unknown values.</li>
+                    <li>Use <strong>Prediction</strong> for forecasting future values based on a time horizon.</li>
+                    <li>A single digital twin may include multiple inference models, each for a different variable.</li>
+                </ul>
+
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Use multiple digital twins when you want to simulate the same subject at different resolutions or with different inference goals.
+                </blockquote>
+
+                <blockquote class="tip">
+                    <strong>Tip:</strong> Keep inference models focused: each should estimate or predict a single variable, based on relevant inputs.
+                </blockquote>
+
+            </section>
+            <!-- More sections similarly styled... -->
+            <section id="appendices">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Appendices</h2>
+                <p class="text-gray-700">Additional reference materials and templates.</p>
+            </section>
+        </article>
+    </div>
+</main>
+
+<footer class="bg-white text-center py-4 shadow-inner">
+    <span class="text-gray-500 text-sm">&copy; 2025 Picota Project. All rights reserved.</span>
+</footer>
+
+</body>
+</html>

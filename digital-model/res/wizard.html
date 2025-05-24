@@ -3,175 +3,113 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Picota</title>
-	<!-- Icono de la página -->
+	<title>Picota - Wizard</title>
 	<link rel="icon" href="/assets/favicon.png" type="image/png">
-	<style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f5f5;
-            margin: 0;
-            padding: 20px;
-        }
-
-        #wizard {
-            max-width: 900px;
-            margin: 40px auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .step {
-            display: none;
-        }
-
-        .step.active {
-            display: block;
-        }
-
-        h1, h2 {
-            margin-top: 0;
-        }
-
-        .controls {
-            margin-top: 20px;
-        }
-
-        button {
-            padding: 10px 20px;
-            margin-right: 10px;
-            border: none;
-            border-radius: 4px;
-            background: #3498db;
-            color: white;
-            cursor: pointer;
-        }
-
-        button:disabled {
-            background: #aaa;
-            cursor: not-allowed;
-        }
-
-        /* Spinner */
-        .spinner {
-            margin: 20px auto;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-	</style>
+	<!-- Tailwind CSS -->
+	<script src="https://cdn.tailwindcss.com"></script>
+	<!-- Font Awesome -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+	<!-- Google Fonts: Inter -->
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>body { font-family: 'Inter', sans-serif; }</n}</style>
 </head>
-<body>
-<h1 style="text-align:center;">Picota</h1>
-<div id="wizard">
-	<div class="step active" id="step1">
-		<h2>Step 1: URL Quassar of the Quassar model</h2>
-		<p>If you dont have any yet. Create it on <a>quassar.io</a></p>
-		<input type="url" id="modelUrl" placeholder="https://quassar.io/my-picota-model"
-			   style="width:98%; padding:8px;">
-		<div class="controls">
-			<button id="next1" disabled>Next</button>
-		</div>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+<!-- Header -->
+<header class="flex items-center justify-between bg-white px-8 py-4 shadow">
+	<div class="flex items-center">
+		<a href="/" class="flex items-center">
+		<img src="picota-40.png" alt="Picota logo" class="h-8 w-8 mr-2">
+		<span class="text-xl font-semibold text-gray-900">Picota</span>
+		</a>
 	</div>
-	<div class="step" id="step2">
-		<h2>Step 2: Select data file (ZIP)</h2>
-		<p>Zip containing files for each Subject. Headers must correspond with variables of the subject</p>
-		<input type="file" id="dataFile" accept=".csv,.tsv">
-		<div class="controls">
-			<button id="prev2">Previous</button>
-			<button id="next2" disabled>Next</button>
-		</div>
-	</div>
-	<div class="step" id="step3">
-		<h2>Step 3: Processing model and data</h2>
-		<p>Waiting for finishing training...</p>
-		<div class="spinner"></div>
-	</div>
+	<nav class="flex space-x-6 text-gray-600">
+		<a href="/" class="hover:text-gray-800">Home</a>
+		<a href="/overview" class="hover:text-gray-800">Overview</a>
+		<a href="/help" class="hover:text-gray-800">Help <i class="fas fa-chevron-down text-sm"></i></a>
+	</nav>
+</header>
 
-	<div class="step" id="step4">
-		<h2>Step 4: Download Results</h2>
-		<div class="controls">
-			<button id="downloadPdf">Download PDF</button>
-			<button id="downloadModel">Download Digital-Twin</button>
+<!-- Wizard Container -->
+<main class="flex-grow flex items-center justify-center py-16 px-4">
+	<div class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-8">
+		<h1 class="text-3xl font-bold text-center text-gray-900 mb-8">Create your Digital Twin</h1>
+
+		<!-- Steps -->
+		<div class="step" id="step1">
+			<h2 class="text-xl font-semibold mb-4">Step 1: URL of Quassar model</h2>
+			<p class="text-gray-600 mb-4">If you dont have any, create it on <a href="https://quassar.io" class="text-blue-500 hover:underline">quassar.io</a></p>
+			<input type="url" id="modelUrl" placeholder="https://quassar.io/mi-modelo" class="w-full border border-gray-300 rounded-lg p-3 mb-6 focus:ring-2 focus:ring-blue-400">
+			<button id="next1" disabled class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Next</button>
+		</div>
+
+		<div class="step hidden" id="step2">
+			<h2 class="text-xl font-semibold mb-4">Step 2: Seleccionar fichero ZIP</h2>
+			<p class="text-gray-600 mb-4">ZIP files for each subject. The headers must correspond to the variables.</p>
+			<input type="file" id="dataFile" accept=".zip" class="w-full mb-6">
+			<div class="flex justify-between">
+				<button id="prev2" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition">Previous</button>
+				<button id="next2" disabled class="bg-blue-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-600 transition">Next</button>
+			</div>
+		</div>
+
+		<div class="step hidden text-center" id="step3">
+			<h2 class="text-xl font-semibold mb-4">Step 3: Processing data</h2>
+			<p class="text-gray-600 mb-6">Waiting for the construction of the digital twin to be completed...</p>
+			<div class="mx-auto w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+		</div>
+
+		<div class="step hidden text-center" id="step4">
+			<h2 class="text-xl font-semibold mb-6">Step 4: Download Results</h2>
+			<button id="downloadPdf" class="w-full mb-4 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Descargar PDF</button>
+			<button id="downloadModel" class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Descargar Modelo</button>
 		</div>
 	</div>
-</div>
-
+</main>
+<footer class="bg-white text-center py-4 shadow-inner">
+	<span class="text-gray-500 text-sm">&copy; 2025 Picota Inc.</span>
+</footer>
 <script>
     const steps = Array.from(document.querySelectorAll('.step'));
-
-    function showStep(index) {
-        steps.forEach((s, i) => s.classList.toggle('active', i === index));
+    function showStep(i) {
+        steps.forEach((s, idx) => s.classList.toggle('hidden', idx !== i));
     }
+    showStep(0);
 
+    // Step 1
     const modelUrlInput = document.getElementById('modelUrl');
     const next1 = document.getElementById('next1');
     modelUrlInput.addEventListener('input', () => next1.disabled = !modelUrlInput.value);
     next1.addEventListener('click', () => showStep(1));
+
+    // Step 2
     const dataFileInput = document.getElementById('dataFile');
     const prev2 = document.getElementById('prev2');
     const next2 = document.getElementById('next2');
-    dataFileInput.addEventListener('change', () => next2.disabled = !(dataFileInput.files.length));
+    dataFileInput.addEventListener('change', () => next2.disabled = !dataFileInput.files.length);
     prev2.addEventListener('click', () => showStep(0));
-    next2.addEventListener('click', () => {
-        showStep(2);
-        startProcessing();
-    });
+    next2.addEventListener('click', () => { showStep(2); startProcessing(); });
 
+    // Processing
     function startProcessing() {
         const url = modelUrlInput.value;
         const file = dataFileInput.files[0];
         const form = new FormData();
         form.append('modelUrl', url);
         form.append('dataset', file);
-        fetch('/train', {
-            method: 'POST',
-            body: form
-        }).then(response => {
-            if (!response.ok) throw new Error('Error starting training');
-            showStep(2);
-            pollStatus();
-        }).catch(error => {
-            alert('Error starting training: ' + error.message);
-        });
+        fetch('/train', { method: 'POST', body: form })
+            .then(r => { if (!r.ok) throw new Error(); showStep(2); pollStatus(); })
+            .catch(() => alert('Error starting training'));
     }
-
     function pollStatus() {
-        fetch('/status')
-            .then(res => res.json())
-            .then(json => {
-                if (json.status === 'done') {
-                    showStep(3);
-                } else {
-                    setTimeout(pollStatus, 2000);
-                }
-            })
-            .catch(err => {
-                console.error('Error al checking status:', err);
-                setTimeout(pollStatus, 2000);
-            });
+        fetch('/status').then(r => r.json()).then(j => {
+            if (j.status === 'done') showStep(3);
+            else setTimeout(pollStatus, 2000);
+        }).catch(() => setTimeout(pollStatus, 2000));
     }
 
-    document.getElementById('downloadPdf').addEventListener('click', () => {
-        window.location.href = '/results/report.pdf';
-    });
-    document.getElementById('downloadModel').addEventListener('click', () => {
-        window.location.href = '/results/models.zip';
-    });
+    // Downloads
+    document.getElementById('downloadPdf').addEventListener('click', () => window.location.href = '/results/report.pdf');
+    document.getElementById('downloadModel').addEventListener('click', () => window.location.href = '/results/models.zip');
 </script>
 </body>
 </html>
