@@ -2,8 +2,10 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/digital-model/digital-model.iml" filepath="$PROJECT_DIR$/digital-model/digital-model.iml" />
+      <module fileurl="file://$PROJECT_DIR$/digital-twin/digital-twin.iml" filepath="$PROJECT_DIR$/digital-twin/digital-twin.iml" />
       <module fileurl="file://$PROJECT_DIR$/dsl/dsl.iml" filepath="$PROJECT_DIR$/dsl/dsl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/runtime.evaluator/runtime.evaluator.iml" filepath="$PROJECT_DIR$/runtime.evaluator/runtime.evaluator.iml" />
+      <module fileurl="file://$PROJECT_DIR$/runtime.trainer/runtime.trainer.iml" filepath="$PROJECT_DIR$/runtime.trainer/runtime.trainer.iml" />
     </modules>
   </component>
 </project>

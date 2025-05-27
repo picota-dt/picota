@@ -1,0 +1,84 @@
+rule type(evaluator)
+	import sys
+    import torch
+    import numpy as np
+    import KanEvaluator
+    from DatasetLoader import DatasetLoader
+
+    dt = DatasetLoader(sys.argv[2], "\\t").load()
+    tensor = torch.tensor(np.array(list(dt.values())), dtype=torch.float32).squeeze(1)
+	$variable+evaluate...[$NL]
+
+rule type(supermain)
+	import sys
+	$dt+import...[$NL]
+
+	$dt+call...[$NL]
+
+rule trigger(import)
+	import $this+camelcase+firstLowercase.main
+
+rule trigger(call)
+	$this+camelcase+firstLowercase.main.train(sys.argv[1], sys.argv[2] + "/$this")
+
+rule type(digitalTwin)
+	import os
+	from DatasetLoader import DatasetLoader
+	$variable+importVariable...[$NL]
+
+	def variables(dict, output):
+		return {
+			key: value for key, value in dict.items()
+			if "+" not in key or key == output
+		}
+
+	def train(source, modeldir):
+		if not os.path.exists(source):
+			print("$name	No data")
+			return
+		loader = DatasetLoader(source)
+		dataset = loader.load()
+		means = loader.means()
+		stds = loader.stds()
+		$variable+callVariable...[$NL]
+
+rule trigger(quoted)
+	"$this"
+
+rule trigger(importVariable)
+	import $<container>name+camelcase+firstLowercase.$name
+
+rule trigger(callVariable)
+	$<container>name+camelcase+firstLowercase.$name.train(variables(dataset, "$name~$timeHorizon"), loader.means(), loader.stds(), modeldir)
+
+rule trigger(evaluate)
+	print("$name	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$viewPoint/$name~$timeHorizon.bin", tensor)))
+
+rule type(variable)
+	import torch
+	import os
+	import Device
+	from torch import nn
+	from InputDataset import InputDataset
+	from kan.KanTrainer import KanTrainer
+
+	def input_variables(dict, output):
+		return {key: valor for key, valor in dict.items() if key != output}
+
+	def train(dataset, means, stds, modeldir):
+		model_path = modeldir + "$name~$timeHorizon.bin"
+		output_variable = "$name~$timeHorizon"
+		device = Device.get_device()
+		batch_size = 2
+		epochs = 10
+		lr = 0.001
+		loss_fn = nn.MSELoss()
+		validation_loss_fn = nn.L1Loss()
+		test_proportion = 0.3
+		dataset = TimeSeriesDataset(dataset)
+		model, loss, features = (
+                KanTrainer("$subject", input_variables(dataset, output_variable), means, stds, output_variable,
+                           batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
+                .train(dataset))
+		torch.save(model.state_dict(), model_path)
+		print(f"$subject\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))
