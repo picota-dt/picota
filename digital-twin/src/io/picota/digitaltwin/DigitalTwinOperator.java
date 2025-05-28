@@ -2,7 +2,7 @@ package io.picota.digitaltwin;
 
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
-import io.quassar.DigitalTwin.DigitalSubject;
+import io.quassar.picota.DigitalTwin.DigitalSubject;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;

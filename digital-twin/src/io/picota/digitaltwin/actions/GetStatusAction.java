@@ -5,7 +5,7 @@ import io.intino.alexandria.exceptions.BadRequest;
 import io.intino.alexandria.exceptions.InternalServerError;
 import io.intino.alexandria.http.server.AlexandriaHttpContext;
 import io.intino.alexandria.rest.RequestErrorHandler;
-import io.quassar.DigitalTwin;
+import io.quassar.picota.DigitalTwin;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -3,8 +3,8 @@ package io.picota.digitaltwin;
 import io.picota.digitaltwin.builder.DigitalSubjectBuilder;
 import io.picota.digitaltwin.builder.DigitalSubjectBuilder.Result.Training;
 import io.picota.digitaltwin.ui.UiService;
-import io.quassar.DigitalTwin;
-import io.quassar.DigitalTwin.DigitalSubject;
+import io.quassar.picota.DigitalTwin;
+import io.quassar.picota.DigitalTwin.DigitalSubject;
 
 import java.io.File;
 import java.util.HashMap;

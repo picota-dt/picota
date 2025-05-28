@@ -7,10 +7,10 @@ import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
 import io.intino.magritte.framework.Layer;
 import io.picota.digitaltwin.utils.Compression;
-import io.quassar.DigitalTwin.DigitalSubject;
-import io.quassar.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.PicotaGraph;
-import io.quassar.Variable;
+import io.quassar.picota.DigitalTwin.DigitalSubject;
+import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.picota.PicotaGraph;
+import io.quassar.picota.Variable;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;

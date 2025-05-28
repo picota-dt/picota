@@ -5,15 +5,15 @@ Artifact("io.picota", "1.0.0") digital-twin
 	Imports
 		Compile("io.quassar", "picota", "1.1.2")
 		Compile("org.apache.commons", "commons-collections4", "4.5.0")
-		Compile("io.quassar.picota", "reader-java", "1.1.0")
+		Compile("io.quassar.picota", "reader-java", "1.0.4")
 		Compile("io.intino.itrules", "engine", "2.0.2")
-		Compile("systems.intino.datamarts", "subject-store", "2.0.10")
+		Compile("systems.intino.datamarts", "subject-store", "2.0.13")
         Compile("org.xerial", "sqlite-jdbc", "3.49.1.0")
 		Compile("io.intino.alexandria", "rest", "4.2.5")
 		Compile("io.intino.alexandria", "zip", "1.0.5")
 		Compile("io.intino.alexandria", "core-framework", "2.2.2")
 		Compile("io.intino.alexandria", "logger4j", "1.1.0")
-		Compile("io.intino.alexandria", "ui-framework", "6.5.6")
+		Compile("io.intino.alexandria", "ui-framework", "6.5.7")
 		Compile("org.apache.commons", "commons-compress", "1.27.1")
 		Compile("commons-io", "commons-io", "2.19.0")
 		Compile("com.itextpdf", "kernel", "9.2.0")
@@ -26,7 +26,7 @@ Artifact("io.picota", "1.0.0") digital-twin
 	Parameter("api_port")
 	Parameter("python_venv")
 
-Repository("quassar") > Release("https://quassar.io/releases")
+Repository("quassar") > Release("https://quassar.io/artifacts/releases")
 
 RunConfiguration local
 	Argument("home", "./temp")

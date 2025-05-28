@@ -4,9 +4,9 @@ import com.google.gson.Gson;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.TemporalColumns;
-import io.quassar.DigitalTwin;
-import io.quassar.DigitalTwin.DigitalSubject;
-import io.quassar.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.picota.DigitalTwin;
+import io.quassar.picota.DigitalTwin.DigitalSubject;
+import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
 import org.jetbrains.annotations.NotNull;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
@@ -87,18 +87,17 @@ public class DataPreparer {
 
 	private static String outputVariableName(InferenceModel inferenceModel) {
 		if (inferenceModel.variable().isNumeric() && inferenceModel.variable().asNumeric().isLayered()) {
-			String layers = inferenceModel.layers();
-			if (layers == null) {
+			List<String> layers = inferenceModel.layers();
+			if (layers == null || layers.isEmpty()) {
 				Logger.warn("No layers found for " + inferenceModel.name$() + ". Logic not implemented yet");
 				//TODO
 				return inferenceModel.variable().name$();
-			} else return inferenceModel.variable().name$() + "+" + layers;
+			} else return inferenceModel.variable().name$() + "+" + layers.get(0);
 
 		} else return inferenceModel.variable().name$();
 	}
 
 	private void transformToTsv(File jsonl, String outName) {
-
 
 	}
 

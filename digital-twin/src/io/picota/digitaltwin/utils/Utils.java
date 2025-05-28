@@ -1,6 +1,6 @@
 package io.picota.digitaltwin.utils;
 
-import io.quassar.DigitalTwin.DigitalSubject.Resolution.Scale;
+import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
 
 import java.time.Duration;
 import java.time.Period;

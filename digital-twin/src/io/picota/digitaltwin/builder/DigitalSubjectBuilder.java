@@ -6,9 +6,9 @@ import io.picota.digitaltwin.DigitalTwinBox.State;
 import io.picota.digitaltwin.builder.DigitalSubjectBuilder.Result.Training;
 import io.picota.digitaltwin.setup.RuntimeCodeGenerator;
 import io.picota.digitaltwin.utils.Compression;
-import io.quassar.DigitalTwin.DigitalSubject;
-import io.quassar.ModelReader;
-import io.quassar.PicotaGraph;
+import io.quassar.picota.DigitalTwin.DigitalSubject;
+import io.quassar.picota.ModelReader;
+import io.quassar.picota.PicotaGraph;
 import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.NotNull;
 

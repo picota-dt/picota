@@ -5,7 +5,7 @@ import io.intino.alexandria.exceptions.BadRequest;
 import io.picota.digitaltwin.DigitalTwinBox.State;
 import io.picota.digitaltwin.rest.resources.PostStateResource.Value;
 
-import static io.quassar.DigitalTwin.DigitalSubject;
+import static io.quassar.picota.DigitalTwin.DigitalSubject;
 
 public class PostStateAction implements io.intino.alexandria.rest.RequestErrorHandler {
 	public io.picota.digitaltwin.DigitalTwinBox box;
