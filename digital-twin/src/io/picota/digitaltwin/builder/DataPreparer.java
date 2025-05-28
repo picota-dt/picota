@@ -34,11 +34,12 @@ import static java.time.temporal.ChronoUnit.HOURS;
 public class DataPreparer {
 	private final File dataDir;
 	private final SubjectHistoryVault vault;
+	private final Gson gson = new Gson();
 
 	public DataPreparer(File temp, File dataDir) {
-		vault = subjectStore(temp);
+		this.vault = subjectStore(temp);
 		this.dataDir = dataDir;
-		dataDir.mkdirs();
+		this.dataDir.mkdirs();
 	}
 
 	void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File dataset) throws IOException {
@@ -51,8 +52,8 @@ public class DataPreparer {
 		checkColumns(subject);
 		ChronoUnit scale = chronoUnitOf(subject.resolution().scale());
 		var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
-		var outName = timeHorizon == 0 ? inferenceModel.variable().name$() : inferenceModel.variable().name$() + "+" + timeHorizon;
-		File file = new File(dataDir, history.name() + "_" + inferenceModel.variable().name$() + ".csv");
+		var outName = timeHorizon == 0 ? outputVariableName(inferenceModel) : outputVariableName(inferenceModel) + "+" + timeHorizon;
+		File file = new File(dataDir, history.name() + "_" + outputVariableName(inferenceModel) + ".tsv");
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale))
 				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, scale))
@@ -66,32 +67,51 @@ public class DataPreparer {
 		double[] means = history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
 		double[] stds = history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().sd()).toArray();
 		Map<String, Object> normal = new HashMap<>(Map.of("means", means, "stds", stds));
-		transformToJsonl(file, outName, normal, inferenceModel.asType().lookBack());
+		File jsonl = transformToJsonl(file, outName, normal, inferenceModel.asType().lookBack());
+		transformToTsv(jsonl, outName);
 		vault.close();
+		file.delete();
+	}
+
+	private static String outputVariableName(InferenceModel inferenceModel) {
+		if (inferenceModel.variable().isNumeric() && inferenceModel.variable().asNumeric().isLayered()) {
+			String layers = inferenceModel.layers();
+			if (layers == null) {
+				Logger.warn("No layers found for " + inferenceModel.name$() + ". Logic not implemented yet");
+				//TODO
+				return inferenceModel.variable().name$();
+			} else return inferenceModel.variable().name$() + "+" + layers;
+
+		} else return inferenceModel.variable().name$();
+	}
+
+	private void transformToTsv(File jsonl, String outName) {
+
+
 	}
 
 	@NotNull
 	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel) {
 		boolean prediction = inferenceModel.isPrediction();
 		return history.tags().stream()
-				.filter(t -> prediction || !t.equals(inferenceModel.variable().name$()))
+				.filter(t -> prediction || !t.equals(outputVariableName(inferenceModel)))
 				.map(DataPreparer::columnOf).toList();
 	}
 
-	private void transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues, int lookback) throws IOException {
+	private File transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues, int lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(".csv", ".jsonl"));
 		String[] header = Files.lines(source.toPath()).findFirst().get().split("\t");
 		headerValues.put("input_variables", Arrays.stream(header).filter(f -> !f.equals(outputVariable)).toArray(String[]::new));
 		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
-		BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl));
-		writer.write(new Gson().toJson(headerValues) + "\n");
-		if (lookback > 0) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
-		else writeWithoutLookBack(source, outputVariable, header, features, writer);
-		writer.close();
+		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
+			writer.write(gson.toJson(headerValues) + "\n");
+			if (lookback > 0) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
+			else writeWithoutLookBack(source, outputVariable, header, features, writer);
+		}
+		return jsonl;
 	}
 
 	private void writeWithoutLookBack(File source, String outputVariable, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
-		Gson gson = new Gson();
 		Files.lines(source.toPath())
 				.skip(1)
 				.map(l -> rowOf(header, l.split("\t")))
@@ -101,7 +121,6 @@ public class DataPreparer {
 	}
 
 	private void writeWithLookBack(File source, String outputVariable, int lookback, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
-		Gson gson = new Gson();
 		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookback);
 		Files.lines(source.toPath())
 				.skip(1)
@@ -151,7 +170,7 @@ public class DataPreparer {
 	}
 
 	private void checkColumns(DigitalSubject subject) {
-		List<String> variables = subject.inferenceModelList().stream().map(i -> i.variable().name$()).toList();
+		List<String> variables = subject.inferenceModelList().stream().map(i -> outputVariableName(i)).toList();
 		SubjectHistory history = vault.open(subject.name$());
 		if (history.tags().isEmpty()) return;
 		for (String variable : variables) {
@@ -176,7 +195,7 @@ public class DataPreparer {
 	}
 
 	private static ColumnDefinition outputVariable(InferenceModel inference) {
-		String name = inference.variable().name$();
+		String name = outputVariableName(inference);
 		String colName = name + (inference.isPrediction() ? "+" + inference.asPrediction().timeHorizon() : "");
 		ColumnDefinition column = columnOf(colName, name);
 		if (inference.isPrediction()) column.add(new LeadFilter(inference.asPrediction().timeHorizon()));

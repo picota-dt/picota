@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Picota - Wizard</title>
+	<!-- Tailwind CSS CDN -->
+	<script src="https://cdn.tailwindcss.com"></script>
+	<!-- Google Font Poppins -->
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+	<style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+	</style>
+</head>
+<body class="bg-black text-white flex flex-col min-h-screen">
+<!-- Header fijo -->
+<header class="fixed top-0 left-0 w-full bg-black py-4 px-[10vw] flex items-center gap-2 z-50">
+	<a href="/" class="flex items-center">
+		<img src="images/logo.png" alt="Picota logo" class="h-10 w-10 mr-2">
+		<span class="text-3xl font-semibold uppercase">picota</span>
+	</a>
+</header>
+<main class="flex-grow flex items-center justify-center pt-32 px-[10vw] pb-12">
+	<div class="w-full max-w-2xl bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg p-8">
+		<h1 class="text-3xl md:text-4xl font-semibold text-center mb-8">Crea tu Gemelo Digital</h1>
+		<div class="step" id="step1">
+			<h2 class="text-2xl font-medium mb-4">Paso 1: URL del modelo Quassar</h2>
+			<p class="text-gray-300 mb-4">
+				Si no tienes ninguno, créalo en
+				<a href="https://quassar.io" class="text-blue-400 hover:underline">quassar.io</a>
+			</p>
+			<input type="url" id="modelUrl"
+				   placeholder="https://quassar.io/commits/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+				   class="w-full bg-transparent border border-gray-600 rounded-lg p-3 mb-6 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500">
+			<button id="next1" disabled
+					class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition">
+				Siguiente
+			</button>
+		</div>
+		<div class="step hidden" id="step2">
+			<h2 class="text-2xl font-medium mb-4">Paso 2: Selecciona fichero ZIP</h2>
+			<p class="text-gray-300 mb-4">
+				Ficheros ZIP para cada sujeto. Las cabeceras deben corresponder a las variables.
+			</p>
+			<input type="file" id="dataFile" accept=".zip"
+				   class="w-full mb-6 text-gray-200">
+			<div class="flex justify-between">
+				<button id="prev2"
+						class="bg-gray-700 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+					Anterior
+				</button>
+				<button id="next2" disabled
+						class="bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+					Siguiente
+				</button>
+			</div>
+		</div>
+
+		<!-- Step 3 -->
+		<div class="step hidden text-center" id="step3">
+			<h2 class="text-2xl font-medium mb-4">Paso 3: Generando Modelo</h2>
+			<p id="statusMessage" class="text-gray-300 mb-6">Inicializando...</p>
+			<div class="mx-auto w-12 h-12 border-4 border-gray-700 border-t-gray-400 rounded-full animate-spin"></div>
+		</div>
+
+		<!-- Step 4 -->
+		<div class="step hidden text-center" id="step4">
+			<h2 class="text-2xl font-medium mb-6">Paso 4: Descarga Resultados</h2>
+			<button id="downloadPdf"
+					class="w-full mb-4 bg-gray-800 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition">
+				Descargar Informe
+			</button>
+			<button id="downloadModel"
+					class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition">
+				Descargar Modelos
+			</button>
+		</div>
+	</div>
+</main>
+
+<!-- Footer -->
+<footer class="text-center py-6 text-sm text-gray-500">
+	© 2025 Picota Inc.
+</footer>
+
+<!-- Wizard Script -->
+<script>
+    const steps = Array.from(document.querySelectorAll('.step'));
+    let modelName = '';
+
+    function showStep(i) {
+        steps.forEach((s, idx) => s.classList.toggle('hidden', idx !== i));
+    }
+
+    showStep(0);
+    const modelIdInput = document.getElementById('modelUrl');
+    const next1 = document.getElementById('next1');
+    modelIdInput.addEventListener('input', () => next1.disabled = !modelIdInput.value);
+    next1.addEventListener('click', () => {
+        const url = modelIdInput.value.replace(/\/+$/, '');
+        const lastSegment = url.split('/').pop();
+        modelName = lastSegment.replace(/\.[^/.]+$/, '');
+        showStep(1);
+    });
+
+    const dataFileInput = document.getElementById('dataFile');
+    const prev2 = document.getElementById('prev2');
+    const next2 = document.getElementById('next2');
+    dataFileInput.addEventListener('change', () => next2.disabled = !dataFileInput.files.length);
+    prev2.addEventListener('click', () => showStep(0));
+    next2.addEventListener('click', () => {
+        showStep(2);
+        startProcessing();
+    });
+
+    function startProcessing() {
+        const url = modelIdInput.value;
+        const file = dataFileInput.files[0];
+        const form = new FormData();
+        form.append('modelUrl', url);
+        form.append('dataset', file);
+        document.getElementById('statusMessage').textContent = "Inicializando..."
+        fetch('/train', {method: 'POST', body: form})
+            .then(r => {
+                if (!r.ok) throw new Error();
+                showStep(2);
+                pollStatus();
+            })
+            .catch(() => alert('Error starting the train'));
+    }
+
+    function pollStatus() {
+        fetch('/status')
+            .then(res => res.json())
+            .then(j => {
+                if (j.message) document.getElementById('statusMessage').textContent = j.message;
+                if (j.status === 'done') showStep(3);
+                else setTimeout(pollStatus, 2000);
+            })
+            .catch(() => setTimeout(pollStatus, 2000));
+    }
+
+    document.getElementById('downloadPdf').addEventListener('click', () => {
+        window.location.href = `/results/${modelName}/report.pdf`;
+    });
+    document.getElementById('downloadModel').addEventListener('click', () => {
+        window.location.href = `/results/${modelName}/models.zip`;
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/starting-model')
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                const input = document.getElementById('modelUrl');
+                if (input && data.startingModel.length !== 0) {
+                    input.value = "https://quassar.io/commits/" + data.startingModel;
+                    var nextBtn = document.getElementById('next1');
+                    if (nextBtn) nextBtn.disabled = false;
+                }
+            })
+            .catch(function (error) {
+                console.error('Error fetching modelUrl:', error);
+            });
+    });
+</script>
+</body>
+</html>

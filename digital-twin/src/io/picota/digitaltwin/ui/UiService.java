@@ -25,6 +25,7 @@ public class UiService {
 	public void start() {
 		AlexandriaHttpServer<?> server = AlexandriaHttpServerBuilder.instance();
 		server.route("/").get(manager -> html(manager, page("/www/index.html")));
+		server.route("/starting-model").get(manager -> manager.write(new Gson().toJson(Map.of("startingModel", box.configuration().args().getOrDefault("model", "")))));
 		server.route("/wizard").get(manager -> html(manager, page("/www/wizard.html")));
 		server.route("/help").get(manager -> html(manager, page("/help.html")));
 		server.route("/train").post(this::train);

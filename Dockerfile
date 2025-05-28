@@ -18,14 +18,13 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1 && \
 
 RUN pip install --upgrade pip
 WORKDIR /app
-RUN pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu128
+RUN pip install --pre torch --index-url https://download.pytorch.org/whl/cu128
 COPY ./requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 COPY out/build/digital-twin/digital-twin.jar /app/
 COPY out/build/digital-twin/dependency /app/dependency
-COPY docker/run-dt.sh /app/run-dt.sh
-RUN chmod a+rx /app/run-dt.sh
 WORKDIR /app
+ENTRYPOINT ["java", "-jar", "/app/picota-dt.jar", "python_venv=/usr", "api_port=7070", "home=/workspace"]
 EXPOSE 7070
-#dckr_pat_OsYJ6AK2KtthuxKc9TjKT5jfkvs
+

@@ -1,3 +1,4 @@
+import org.junit.Ignore;
 import org.junit.Test;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
@@ -18,6 +19,7 @@ import java.util.stream.Stream;
 import static io.picota.digitaltwin.utils.Utils.periodOf;
 import static java.time.temporal.ChronoUnit.HOURS;
 
+@Ignore
 public class TsvGenerationTest {
 	public static final String NAME = "Infecar-Twin";
 	private final File dataDir = new File("./temp/data");

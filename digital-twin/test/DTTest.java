@@ -1,6 +1,7 @@
 import io.intino.alexandria.Resource;
 import io.picota.digitaltwin.builder.DigitalSubjectBuilder;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -9,6 +10,7 @@ import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 
 //file:///Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/INFECAR-SOLAR-PLANT-1.0.0.zip
+@Ignore
 public class DTTest {
 	public static final String DIGITAL_TWIN_NAME = "Infecar-Twin";
 

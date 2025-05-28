@@ -21,7 +21,7 @@ Artifact("io.picota", "1.0.0") digital-twin
 		Test("junit", "junit", "4.13.2")
 		Test("io.picota", "picota-api-accessor", "1.0.0")
 
-	Package(mode = ModulesAndLibrariesLinkedByManifest, attachSources = true, finalName = "ditigal-twin") as Runnable(mainClass = "io.picota.digitaltwin.Main")
+	Package(mode = ModulesAndLibrariesLinkedByManifest, finalName = "digital-twin") as Runnable(mainClass = "io.picota.digitaltwin.Main")
 	Parameter("home")
 	Parameter("api_port")
 	Parameter("python_venv")

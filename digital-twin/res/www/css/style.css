@@ -1,0 +1,153 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  color: #fff;
+  background-color: #111;
+}
+
+.container {
+  max-width: 800px;
+  margin: auto;
+  padding: 2rem;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 4rem 0;
+}
+
+.hero-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.btn {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #333;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.btn:hover {
+  background-color: #555;
+}
+
+section {
+  padding: 0;
+  text-align: center;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.feature img {
+  width: 50px;
+  margin-bottom: 1rem;
+}
+
+/* Fade-in effect */
+.fade {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.fade.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reset y fondo negro total */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #000; color: #fff; font-family: 'Poppins', sans-serif; }
+body { padding-top: 4rem; }
+
+/* Header fijo con logo y título */
+.site-header { position: fixed; top: 0; left: 0; width: 100%; padding: 1rem 10vw; background: #000; display: flex; align-items: center; gap: 0.5rem; z-index: 100; }
+.site-header .logo { height: 100px; }
+.site-header .site-title { font-size: 3rem; font-weight: 600; color: #fff; }
+
+/* Hero full viewport */
+#hero { display: flex; align-items: center; justify-content: space-between; min-height: calc(100vh - 4rem); margin: 0 10vw; }
+#hero .container { flex: 0 0 40%; display: flex; flex-direction: column; justify-content: center; max-width: 600px; }
+#hero .container h1 { font-size: 3rem; line-height: 1.2; margin-bottom: 1rem; }
+#hero .container p { font-size: 1.125rem; margin-bottom: 2rem; }
+#hero .container .btn { padding: 1rem 2rem; font-size: 1rem; }
+.hero-image { flex: 0 0 50%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.hero-image img { height: 100%; width: auto; object-fit: cover; border-radius: 8px; }
+
+.hero-image {
+  position: relative;    /* 1) establecemos stacking context */
+  overflow: hidden;      /* opcional, para recortar los bordes */
+}
+
+.hero-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.85);
+}
+
+/* 3) la capa de degradado */
+.hero-image::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;  /* que no bloquee clicks en botones, etc. */
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0.2)   30%,   /* 0%-40% transparente */
+    rgba(0, 0, 0, 0.7) 60%,   /* 40%-80% semitransparente */
+    rgba(0, 0, 0, 1)   100%   /* 80%-100% negro puro */
+  );
+}
+
+
+/* Sección ¿Por qué Picota? */
+#why .container { max-width: 600px; margin: auto; text-align: center; }
+#why .container h2 { font-size: 2.5rem; margin-bottom: 1rem; }
+#why .container p { font-size: 1.125rem; line-height: 1.5; }
+
+/* Sección features en matriz 2x2, más ancha */
+.features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; width: calc(100% - 20vw); max-width: 1200px; margin: 2rem auto; padding: 0 10vw; }
+.feature { background: rgba(255,255,255,0.05); padding: 2rem; border-radius: 8px; text-align: center; }
+.feature img { width: 50px; margin-bottom: 1rem; }
+.feature h3 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+.feature p { font-size: 1rem; line-height: 1.4; }
+
+/* Footer */
+.site-footer { text-align: center; padding: 2rem 10vw; font-size: 0.875rem; color: rgba(255,255,255,0.6); }
+
+/* Móvil: apilar y reducir márgenes */
+@media (max-width: 768px) {
+  body { padding-top: 2rem; }
+  #hero { flex-direction: column; margin: 0 2rem; min-height: auto; }
+  #hero .container { max-width: 100%; text-align: center; }
+  #hero .container h1 { font-size: 2rem; }
+  #hero .container p { font-size: 1rem; }
+  .hero-image { height: auto; margin-top: 2rem; }
+  .hero-image img { width: 100%; height: auto; }
+  .features { grid-template-columns: 1fr; width: auto; padding: 0 2rem; }
+}
