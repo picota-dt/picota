@@ -3,6 +3,7 @@ import json
 
 class DatasetLoader:
     def __init__(self, path):
+        self.input_variables = None
         self.stds = None
         self.means = None
         self.path = path
@@ -15,10 +16,11 @@ class DatasetLoader:
                 raise ValueError("The file is empty or means and stds are missing.")
             stats = json.loads(first_line)
             self.means = stats.get("means")
-            self.stds  = stats.get("stds")
+            self.stds = stats.get("stds")
+            self.input_variables = stats.get("input_variables")
             if self.means is None or self.stds is None:
                 raise KeyError("First line should contain 'means' y 'stds'.")
-            for idx, line in f:
+            for line in f:
                 line = line.strip()
                 if not line:
                     continue
@@ -26,9 +28,11 @@ class DatasetLoader:
                 data.append(obj)
         return data
 
-    def means(self):
+    def get_means(self):
         return self.means
 
-
-    def stds(self):
+    def get_stds(self):
         return self.stds
+
+    def get_input_variables(self):
+        return self.input_variables

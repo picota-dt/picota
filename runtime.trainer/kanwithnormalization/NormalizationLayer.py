@@ -2,7 +2,8 @@ import torch
 
 from torch import nn
 
-from kan.ParametricSigmoid import ParametricSigmoid
+import Device
+from kanwithnormalization.ParametricSigmoid import ParametricSigmoid
 
 
 class NormalizationParametricSigmoid(nn.Module):
@@ -11,13 +12,14 @@ class NormalizationParametricSigmoid(nn.Module):
     def __init__(self, mean, std):
         super().__init__()
         self.mean = mean
-        self.std = nn.Parameter(torch.tensor([max(std, self.eps)]))
+        self.std = nn.Parameter(torch.tensor([max(std, self.eps)], device=Device.get_device()))
         self.sigmoid = ParametricSigmoid()
 
     def forward(self, x):
         z = (x - self.mean) / self.std
         z = torch.clamp(z, min=-3.0, max=3.0)
         return self.sigmoid.forward(z)
+
 
 class NormalizationLayer(nn.Module):
     def __init__(self, means: list[float], stds: list[float]):

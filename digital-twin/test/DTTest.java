@@ -1,24 +1,19 @@
 import io.intino.alexandria.Resource;
-import io.intino.alexandria.exceptions.BadRequest;
-import io.picota.digitaltwin.DigitalTwinBox;
-import io.picota.digitaltwin.Main;
-import io.picota.digitaltwin.actions.GetStateAction;
-import io.picota.digitaltwin.actions.PostDataAction;
-import io.picota.digitaltwin.actions.PostStateAction;
-import io.picota.digitaltwin.rest.resources.PostStateResource;
+import io.picota.digitaltwin.builder.DigitalSubjectBuilder;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.concurrent.CountDownLatch;
+
 //file:///Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/INFECAR-SOLAR-PLANT-1.0.0.zip
 public class DTTest {
 	public static final String DIGITAL_TWIN_NAME = "Infecar-Twin";
-	private DigitalTwinBox box;
 
 	@Before
 	public void setUp() {
-		String[] args = args();
-		box = Main.run(args);
 	}
 
 	@Test
@@ -27,28 +22,17 @@ public class DTTest {
 	}
 
 	@Test
-	public void should_send_data() throws BadRequest, InterruptedException {
-		PostDataAction action = new PostDataAction();
-		action.digitalTwin = DIGITAL_TWIN_NAME;
-		action.box = box;
-		action.data = new Resource(DIGITAL_TWIN_NAME, "text/csv", Main.class.getResourceAsStream("/infecar.csv"));
-		action.execute();
-		Thread.sleep(10000);
+	public void should_send_data() throws InterruptedException {
+		DigitalSubjectBuilder builder = new DigitalSubjectBuilder(new File("../temp/tests"), new HashMap<>(), new File("../runtime.evaluator/.venv"));
+		builder.build("https://quassar.io/commits/5847cda2-27b0-4b82-9838-c1caa8dbb2ef", new Resource("Infecar-SolarPlant-DigitalTwin-lite.zip", new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/Infecar-SolarPlant-DigitalTwin-lite.zip")), r -> {
+			System.out.println(r.report());
+		});
+		CountDownLatch cdl = new CountDownLatch(1);
+		cdl.await();
+
 	}
 
-	@Test
-	public void should_prepare_models() throws BadRequest {
-		GetStateAction action = new GetStateAction();
-		action.box = box;
-		action.digitalTwin = DIGITAL_TWIN_NAME;
-		System.out.println(action.execute());
-		PostStateAction changeStateAction = new PostStateAction();
-		changeStateAction.box = box;
-		changeStateAction.digitalSubject = DIGITAL_TWIN_NAME;
-		changeStateAction.value = PostStateResource.Value.Training;
-		changeStateAction.execute();
-		System.out.println(action.execute());
-	}
+
 
 	private static String[] args() {
 		return new String[]{"broker_port=63000",

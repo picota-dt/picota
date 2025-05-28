@@ -34,7 +34,7 @@ public class TrainReportBuilder {
 		if (result.statusCode() != 0) doc.add(new Paragraph("Report:\n " + result.report()).setMarginBottom(12));
 		float[] colWidths = {2, 4, 2, 4};
 		Table table = new Table(UnitValue.createPercentArray(colWidths)).useAllAvailableWidth();
-		table.addHeaderCell(new Cell().add(new Paragraph("DT")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
+		table.addHeaderCell(new Cell().add(new Paragraph("Subject")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Variable")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Loss")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Contributors")).setBackgroundColor(ColorConstants.LIGHT_GRAY));

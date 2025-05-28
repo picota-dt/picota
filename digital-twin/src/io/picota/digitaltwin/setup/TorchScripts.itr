@@ -5,15 +5,15 @@ rule type(evaluator)
     import KanEvaluator
     from DatasetLoader import DatasetLoader
 
-    dt = DatasetLoader(sys.argv[2], "\\t").load()
-    tensor = torch.tensor(np.array(list(dt.values())), dtype=torch.float32).squeeze(1)
+    dataset = DatasetLoader(sys.argv[2], "\\t").load()
+    tensor = torch.tensor(np.array(list(dataset.values())), dtype=torch.float32).squeeze(1)
 	$variable+evaluate...[$NL]
 
 rule type(supermain)
 	import sys
-	$dt+import...[$NL]
+	$subject+import...[$NL]
 
-	$dt+call...[$NL]
+	$subject+call...[$NL]
 
 rule trigger(import)
 	import $this+camelcase+firstLowercase.main
@@ -21,25 +21,12 @@ rule trigger(import)
 rule trigger(call)
 	$this+camelcase+firstLowercase.main.train(sys.argv[1], sys.argv[2] + "/$this")
 
-rule type(digitalTwin)
+rule type(subject)
 	import os
 	from DatasetLoader import DatasetLoader
 	$variable+importVariable...[$NL]
 
-	def variables(dict, output):
-		return {
-			key: value for key, value in dict.items()
-			if "+" not in key or key == output
-		}
-
 	def train(source, modeldir):
-		if not os.path.exists(source):
-			print("$name	No data")
-			return
-		loader = DatasetLoader(source)
-		dataset = loader.load()
-		means = loader.means()
-		stds = loader.stds()
 		$variable+callVariable...[$NL]
 
 rule trigger(quoted)
@@ -49,23 +36,27 @@ rule trigger(importVariable)
 	import $<container>name+camelcase+firstLowercase.$name
 
 rule trigger(callVariable)
-	$<container>name+camelcase+firstLowercase.$name.train(variables(dataset, "$name~$timeHorizon"), loader.means(), loader.stds(), modeldir)
+	if not os.path.exists(source + "/$<container>name~_$name" + ".jsonl"):
+		print("$<container>name	$name	NaN")
+		return
+	loader = DatasetLoader(source + "/$<container>name~_$name" + ".jsonl")
+	$<container>name+camelcase+firstLowercase.$name.train(loader.load(), loader.get_input_variables(), loader.get_means(), loader.get_stds(), modeldir)
 
 rule trigger(evaluate)
 	print("$name	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$viewPoint/$name~$timeHorizon.bin", tensor)))
 
 rule type(variable)
 	import torch
-	import os
-	import Device
 	from torch import nn
-	from InputDataset import InputDataset
+
+	import Device
+	from TimeSeriesDataset import TimeSeriesDataset
 	from kan.KanTrainer import KanTrainer
 
 	def input_variables(dict, output):
 		return {key: valor for key, valor in dict.items() if key != output}
 
-	def train(dataset, means, stds, modeldir):
+	def train(datasource, input_variables, means, stds, modeldir):
 		model_path = modeldir + "$name~$timeHorizon.bin"
 		output_variable = "$name~$timeHorizon"
 		device = Device.get_device()
@@ -75,9 +66,9 @@ rule type(variable)
 		loss_fn = nn.MSELoss()
 		validation_loss_fn = nn.L1Loss()
 		test_proportion = 0.3
-		dataset = TimeSeriesDataset(dataset)
+		dataset = TimeSeriesDataset(datasource)
 		model, loss, features = (
-                KanTrainer("$subject", input_variables(dataset, output_variable), means, stds, output_variable,
+                KanTrainer("$subject", input_variables, output_variable, means, stds,
                            batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
                 .train(dataset))
 		torch.save(model.state_dict(), model_path)

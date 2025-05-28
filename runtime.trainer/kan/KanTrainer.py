@@ -3,68 +3,55 @@ import math
 import numpy as np
 import shap
 import torch
-
-from TimeSeriesDataset import TimeSeriesDataset
-from kan.KAN import KAN
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
+from trainer.kan.KAN import KAN
+
 
 class KanTrainer:
-    def __init__(self, name, input_variables, output_variable, means, stds, batch_size, epochs, device, test_proportion,
-                 lr,
+    def __init__(self, name, inputVariables, outputVariable, batch_size, epochs, device, test_proportion, lr,
                  loss_fn,
                  validation_loss_fn):
         self.name = name
-        self.inputVariables = list(input_variables)
-        self.outputVariable = output_variable
-        self.means = means
-        self.stds = stds
+        self.inputVariables = list(inputVariables)
+        self.outputVariable = outputVariable
         self.batch_size = batch_size
         self.epochs = epochs
         self.device = device
         self.test_proportion = test_proportion
         self.train_proportion = 1 - test_proportion
-        self.criterion = torch.nn.MSELoss()
         self.lr = lr
         self.loss_fn = loss_fn
         self.validation_loss_fn = validation_loss_fn
 
     def train(self, dataset):
         torch.device(self.device)
-        val_ratio = 0.2
-        val_size = int(len(dataset) * val_ratio)
-        train_size = len(dataset) - val_size
-        train_data, val_data = random_split(dataset, [train_size, val_size])
-        train_dataset = TimeSeriesDataset(train_data)
-        val_dataset = TimeSeriesDataset(val_data)
+        train_length = int(self.train_proportion * len(dataset))
+        test_length = len(dataset) - train_length
+        train_dataset, test_dataset = random_split(dataset, [train_length, test_length])
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=32)
-        architecture = KAN(len(self.inputVariables), self.means, self.stds, 1)
+        test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
+        architecture = KAN(len(self.inputVariables), 1)
         architecture.to(self.device)
         optimizer = torch.optim.Adam(architecture.parameters(), lr=self.lr)
         last_arch = (architecture, None)
         for epoch in range(self.epochs):
             architecture.train()
-            total_loss = 0.0
-            for batch in train_loader:
-                out = batch['out']
-                now_cond = batch['t_features']
-                now_time = batch['t']
-                ctx_cond = batch['lookback_features']
-                ctx_time = batch['lookback_t']
+            epoch_loss = 0.0
+            for inputs, targets in train_loader:
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                predictions = architecture(inputs)
+                loss = self.loss_fn(predictions, targets)
                 optimizer.zero_grad()
-                pred = architecture(now_cond, ctx_cond, now_time, ctx_time).squeeze()
-                loss = self.criterion(pred, out)
                 loss.backward()
                 optimizer.step()
-                total_loss += loss.item() * out.size(0)
-
-            val_loss = self.validate(architecture, val_loader)
-            if last_arch[1] is None or last_arch[1] > val_loss:
+                epoch_loss += loss.item()
+            val_loss = self.validate(architecture, test_loader)
+            if (last_arch[1] == None or last_arch[1] > val_loss):
                 last_arch = (self.copy(architecture), val_loss)
 
-        features = self.explain_features(architecture, val_dataset, train_dataset)
+        features = self.explain_features(architecture, test_dataset, train_dataset)
         return last_arch[0], math.sqrt(last_arch[1]), features
 
     def explain_features(self, architecture, test_dataset, train_dataset):
@@ -75,24 +62,20 @@ class KanTrainer:
         return {self.inputVariables[i]: shap_importance[i] for i in range(len(shap_importance)) if
                 shap_importance[i] > threshold}
 
-    def validate(self, architecture, val_loader):
+    def validate(self, architecture, test_loader):
         architecture.eval()
         val_loss = 0.0
         size = 0.0
         with torch.no_grad():
-            for batch in val_loader:
-                out = batch['out']
-                now_cond = batch['now_conditions']
-                now_time = batch['now_time']
-                ctx_cond = batch['context_conditions']
-                ctx_time = batch['context_time']
-                pred = architecture(now_cond, ctx_cond, now_time, ctx_time).squeeze()
-                loss = torch.nn.L1Loss()(pred, out)
-                val_loss += loss.item() * out.size(0)
+            for inputs, targets in test_loader:
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                predictions = architecture(inputs)
+                loss = self.validation_loss_fn(predictions, targets)
+                val_loss += loss.item()
                 size += 1
         return val_loss / size
 
     def copy(self, architecture):
-        cloned = KAN(len(self.inputVariables), self.means(), self.stds(), 1)  # TODO
+        cloned = KAN(len(self.inputVariables), 1)
         cloned.load_state_dict(architecture.state_dict())
         return cloned

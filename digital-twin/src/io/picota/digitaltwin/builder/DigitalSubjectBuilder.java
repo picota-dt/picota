@@ -100,7 +100,7 @@ public class DigitalSubjectBuilder {
 
 	private File findFile(File datasets, String subject, String variable) {
 		File file = new File(datasets, subject + "_" + variable + ".csv");
-		return file.exists() ? file : new File(datasets, subject + variable + ".tsv");
+		return file.exists() ? file : new File(datasets, subject + "_" + variable + ".tsv");
 	}
 
 	@NotNull
@@ -117,7 +117,7 @@ public class DigitalSubjectBuilder {
 	private PicotaGraph buildModel(String url) {
 		try {
 			return ModelReader.loadFromURL(new URI(url).toURL());
-		} catch (URISyntaxException | IOException e) {
+		} catch (Throwable e) {
 			Logger.error(e);
 			return null;
 		}
@@ -138,12 +138,14 @@ public class DigitalSubjectBuilder {
 		File scriptPath = new File(dtDirectory, "scripts/trainer/main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
 		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), new File(dtDirectory, "data").getAbsolutePath(), modelsDir.getAbsolutePath())
-				.redirectErrorStream(true)
 				.directory(scripts)
 				.start();
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
-		return new Result(dtDirectory.getName(), code, report, trainings(code, report));
+		String errors = new String(process.getErrorStream().readAllBytes());
+		System.out.println(report);
+		System.out.println(errors);
+		return new Result(dtDirectory.getName(), code, report, errors, trainings(code, report));
 	}
 
 	public boolean isRunning() {
@@ -158,7 +160,7 @@ public class DigitalSubjectBuilder {
 		return status;
 	}
 
-	public record Result(String model, int statusCode, String report, List<Training> trainings) {
+	public record Result(String model, int statusCode, String report, String errors, List<Training> trainings) {
 		public record Training(String dt, String variable, double loss, String[] contributors) {
 		}
 	}
@@ -181,7 +183,15 @@ public class DigitalSubjectBuilder {
 	}
 
 	private Training trainingResultOf(String[] fields) {
-		return new Training(fields[0], fields[1], Double.parseDouble(fields[2]), Arrays.stream(fields).skip(3).toArray(String[]::new));
+		return new Training(fields[0], fields[1], getLoss(fields), Arrays.stream(fields).skip(3).toArray(String[]::new));
+	}
+
+	private static double getLoss(String[] fields) {
+		try {
+			return Double.parseDouble(fields[2]);
+		} catch (NumberFormatException e) {
+			return Double.NaN;
+		}
 	}
 
 	public interface OnFinished {

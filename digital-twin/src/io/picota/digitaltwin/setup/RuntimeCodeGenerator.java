@@ -55,11 +55,11 @@ public class RuntimeCodeGenerator {
 	}
 
 	private void createEvaluatorScripts() throws IOException {
-		for (DigitalSubject dt : graph.digitalTwin().digitalSubjectList()) {
-			File file = new File(evaluatorDir, dt.name$() + ".py");
+		for (DigitalSubject subject : graph.digitalTwin().digitalSubjectList()) {
+			File file = new File(evaluatorDir, subject.name$() + ".py");
 			FrameBuilder frame = new FrameBuilder("evaluator");
-			frame.add("name", dt.name$());
-			dt.inferenceModelList().forEach(i -> {
+			frame.add("name", subject.name$());
+			subject.inferenceModelList().forEach(i -> {
 				FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
 				if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
 				frame.add("variable", builder.toFrame());
@@ -76,7 +76,7 @@ public class RuntimeCodeGenerator {
 	private void createMainScript() throws IOException {
 		File main = new File(trainerDir, "main.py");
 		FrameBuilder frame = new FrameBuilder("supermain");
-		frame.add("dt", graph.digitalTwin().digitalSubjectList().stream().map(Layer::name$).toArray(String[]::new));
+		frame.add("subject", graph.digitalTwin().digitalSubjectList().stream().map(Layer::name$).toArray(String[]::new));
 		Files.writeString(main.toPath(), new Engine(template).render(frame));
 	}
 
@@ -124,8 +124,8 @@ public class RuntimeCodeGenerator {
 
 	private Frame frameOf(InferenceModel i) {
 		FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
-		DigitalSubject dt = i.core$().ownerAs(DigitalSubject.class);
-		builder.add("subject", dt.name$());
+		DigitalSubject subject = i.core$().ownerAs(DigitalSubject.class);
+		builder.add("subject", subject.name$());
 		if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
 		return builder.toFrame();
 	}

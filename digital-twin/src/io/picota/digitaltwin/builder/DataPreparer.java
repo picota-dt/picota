@@ -7,11 +7,13 @@ import io.picota.digitaltwin.TemporalColumns;
 import io.quassar.DigitalTwin;
 import io.quassar.DigitalTwin.DigitalSubject;
 import io.quassar.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.Variable;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
+import org.jetbrains.annotations.NotNull;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
+import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter;
+import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNormalizationFilter;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.io.*;
@@ -49,45 +51,56 @@ public class DataPreparer {
 		checkColumns(subject);
 		ChronoUnit scale = chronoUnitOf(subject.resolution().scale());
 		var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
+		var outName = timeHorizon == 0 ? inferenceModel.variable().name$() : inferenceModel.variable().name$() + "+" + timeHorizon;
 		File file = new File(dataDir, history.name() + "_" + inferenceModel.variable().name$() + ".csv");
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale))
 				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, scale))
 				.period(period(subject.resolution()))
 				.add(TemporalColumns.get())
-				.add(history.tags().stream().map(DataPreparer::columnOf).toList())
-				.add(timeHorizonColumns(history, timeHorizon))
+				.add(inputVariables(history, inferenceModel))
+				.add(outputVariable(inferenceModel))
 				.export()
 				.onlyCompleteRows()
 				.to(new FileOutputStream(file));
 		double[] means = history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
 		double[] stds = history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().sd()).toArray();
-		Map<String, double[]> normal = Map.of("means", means, "stds", stds);
-		transformToJsonl(file, inferenceModel.variable(), normal, inferenceModel.asType().lookBack());
+		Map<String, Object> normal = new HashMap<>(Map.of("means", means, "stds", stds));
+		transformToJsonl(file, outName, normal, inferenceModel.asType().lookBack());
+		vault.close();
 	}
 
-	private void transformToJsonl(File source, Variable outputVariable, Map<String, double[]> normal, int lookback) throws IOException {
+	@NotNull
+	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel) {
+		boolean prediction = inferenceModel.isPrediction();
+		return history.tags().stream()
+				.filter(t -> prediction || !t.equals(inferenceModel.variable().name$()))
+				.map(DataPreparer::columnOf).toList();
+	}
+
+	private void transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues, int lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(".csv", ".jsonl"));
 		String[] header = Files.lines(source.toPath()).findFirst().get().split("\t");
-		Set<String> features = Arrays.stream(header).filter(f -> !f.contains("+") && !f.equals(outputVariable.name$()) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
+		headerValues.put("input_variables", Arrays.stream(header).filter(f -> !f.equals(outputVariable)).toArray(String[]::new));
+		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
 		BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl));
-		writer.write(new Gson().toJson(normal) + "\n");
+		writer.write(new Gson().toJson(headerValues) + "\n");
 		if (lookback > 0) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
 		else writeWithoutLookBack(source, outputVariable, header, features, writer);
 		writer.close();
 	}
 
-	private void writeWithoutLookBack(File source, Variable outputVariable, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
+	private void writeWithoutLookBack(File source, String outputVariable, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
 		Gson gson = new Gson();
 		Files.lines(source.toPath())
 				.skip(1)
 				.map(l -> rowOf(header, l.split("\t")))
-				.map(r -> inputDataOf(r, outputVariable.name$(), null, features))
+				.map(r -> inputDataOf(r, outputVariable, null, features))
 				.map(i -> gson.toJson(i) + "\n")
 				.forEach(c -> write(c, writer));
 	}
 
-	private void writeWithLookBack(File source, Variable outputVariable, int lookback, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
+	private void writeWithLookBack(File source, String outputVariable, int lookback, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
 		Gson gson = new Gson();
 		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookback);
 		Files.lines(source.toPath())
@@ -95,7 +108,7 @@ public class DataPreparer {
 				.map(l -> rowOf(header, l.split("\t")))
 				.peek(queue::add)
 				.skip(lookback)
-				.map(r -> inputDataOf(r, outputVariable.name$(), queue, features))
+				.map(r -> inputDataOf(r, outputVariable, queue, features))
 				.map(i -> gson.toJson(i) + "\n")
 				.forEach(c -> write(c, writer));
 	}
@@ -162,10 +175,13 @@ public class DataPreparer {
 		batch.terminate();
 	}
 
-	private static List<ColumnDefinition> timeHorizonColumns(SubjectHistory history, int timeHorizon) {
-		return history.tags().stream()
-				.map(t -> columnOf(t + "+" + timeHorizon, t).add())
-				.toList();
+	private static ColumnDefinition outputVariable(InferenceModel inference) {
+		String name = inference.variable().name$();
+		String colName = name + (inference.isPrediction() ? "+" + inference.asPrediction().timeHorizon() : "");
+		ColumnDefinition column = columnOf(colName, name);
+		if (inference.isPrediction()) column.add(new LeadFilter(inference.asPrediction().timeHorizon()));
+		column.add(new MinMaxNormalizationFilter());
+		return column;
 	}
 
 	private static ColumnDefinition columnOf(String t) {
