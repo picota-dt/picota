@@ -5,9 +5,13 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.apache.commons.compress.utils.IOUtils;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.Stream;
 
 public class Compression {
 
@@ -19,23 +23,38 @@ public class Compression {
 		try (InputStream fis = new FileInputStream(zipFile);
 			 BufferedInputStream bis = new BufferedInputStream(fis);
 			 ZipArchiveInputStream zis = new ZipArchiveInputStream(bis, "UTF-8", true, true)) {
-
 			ZipArchiveEntry entry;
 			while ((entry = zis.getNextZipEntry()) != null) {
 				File outFile = new File(destDir, entry.getName());
-
-				if (entry.isDirectory()) {
-					outFile.mkdirs();
-				} else {
+				if (entry.isDirectory()) outFile.mkdirs();
+				else {
 					File parent = outFile.getParentFile();
-					if (parent != null && !parent.exists()) {
-						parent.mkdirs();
-					}
+					if (parent != null && !parent.exists()) parent.mkdirs();
 					try (OutputStream os = new FileOutputStream(outFile)) {
 						IOUtils.copy(zis, os);
 					}
 				}
 			}
+		}
+	}
+
+	public static void zipDir(Path sourceDir, Path zipFile) throws IOException {
+		try (ZipArchiveOutputStream zipOut =
+					 new ZipArchiveOutputStream(Files.newOutputStream(zipFile));
+			 Stream<Path> paths = Files.walk(sourceDir)) {
+			zipOut.setLevel(5);
+			paths.filter(Files::isRegularFile)
+					.forEach(path -> {
+						ZipArchiveEntry entry = new ZipArchiveEntry(sourceDir.relativize(path).toString());
+						try {
+							zipOut.putArchiveEntry(entry);
+							Files.copy(path, zipOut);
+							zipOut.closeArchiveEntry();
+						} catch (IOException e) {
+							throw new UncheckedIOException(e);
+						}
+					});
+			zipOut.finish();
 		}
 	}
 
@@ -75,6 +94,7 @@ public class Compression {
 			}
 		}
 	}
+
 
 	private static void addFilesToTar(File rootDir, File currentFile, TarArchiveOutputStream tos) throws IOException {
 		String entryName = rootDir.toURI().relativize(currentFile.toURI()).getPath();

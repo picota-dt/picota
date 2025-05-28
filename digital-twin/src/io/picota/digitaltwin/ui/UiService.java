@@ -8,6 +8,7 @@ import io.intino.alexandria.http.server.AlexandriaHttpManager;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.builder.TrainReportBuilder;
+import io.picota.digitaltwin.utils.Compression;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -63,6 +64,7 @@ public class UiService {
 			buildTask = box.dtBuilder().build(modelUrl, dataset, result -> {
 				try {
 					new TrainReportBuilder().generate(result, new File(box.workingDir(), result.model() + "/report.pdf"));
+					Compression.zipDir(result.modelsDir().toPath(), new File(box.workingDir(), result.model() + "/models.zip").toPath());
 				} catch (IOException e) {
 					Logger.error(e);
 				}
@@ -75,14 +77,11 @@ public class UiService {
 	private void loadDigitalTwin(AlexandriaHttpManager<?> ctx) {
 		ctx.writeHeader("Content-Type", "application/zip");
 		ctx.writeHeader("Content-Disposition", "attachment; filename=\"digital-models.zip\"");
-		File dtDir = new File(box.workingDir(), ctx.fromPath("model"));
-		File file = new File(dtDir, "models/models.zip");
+		String model = ctx.fromPath("model");
+		File dtDir = new File(box.workingDir(), model);
+		File file = new File(dtDir, "models.zip");
 		if (!file.exists()) ctx.response().error(404, "digital models not found");
-		else try (InputStream is = new FileInputStream(file)) {
-			ctx.write(is);
-		} catch (IOException e) {
-			Logger.error(e);
-		}
+		ctx.write(new Resource(model + ".zip", file));
 	}
 
 	private void loadReport(AlexandriaHttpManager<?> ctx) {

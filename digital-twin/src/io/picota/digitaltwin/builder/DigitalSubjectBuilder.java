@@ -59,11 +59,11 @@ public class DigitalSubjectBuilder {
 		PicotaGraph graph = buildModel(url);
 		if (graph == null) throw new IllegalStateException(this.status = "Impossible to load model");
 		File dtDirectory = new File(workingDir, modelName(new URI(url)));
+		clean(dtDirectory);
 		File datasets = downloadDataset(resource, dtDirectory);
 		new RuntimeCodeGenerator(dtDirectory, graph).generate();
 		for (DigitalSubject subject : graph.digitalTwin().digitalSubjectList())
 			processDigitalSubject(subject, dtDirectory, datasets, onFinished);
-		clean(dtDirectory);
 	}
 
 	private void processDigitalSubject(DigitalSubject subject, File dtDirectory, File datasets, OnFinished onFinished) throws IOException, InterruptedException {
@@ -145,7 +145,7 @@ public class DigitalSubjectBuilder {
 		String errors = new String(process.getErrorStream().readAllBytes());
 		System.out.println(report);
 		System.out.println(errors);
-		return new Result(dtDirectory.getName(), code, report, errors, trainings(code, report));
+		return new Result(dtDirectory.getName(), code, report, errors, trainings(code, report), modelsDir);
 	}
 
 	public boolean isRunning() {
@@ -160,7 +160,8 @@ public class DigitalSubjectBuilder {
 		return status;
 	}
 
-	public record Result(String model, int statusCode, String report, String errors, List<Training> trainings) {
+	public record Result(String model, int statusCode, String report, String errors, List<Training> trainings,
+						 File modelsDir) {
 		public record Training(String dt, String variable, double loss, String[] contributors) {
 		}
 	}
@@ -189,7 +190,7 @@ public class DigitalSubjectBuilder {
 	private static double getLoss(String[] fields) {
 		try {
 			return Double.parseDouble(fields[2]);
-		} catch (NumberFormatException e) {
+		} catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
 			return Double.NaN;
 		}
 	}

@@ -32,28 +32,47 @@ import static io.picota.digitaltwin.utils.Utils.periodOf;
 import static java.time.temporal.ChronoUnit.HOURS;
 
 public class DataPreparer {
+	public static final String TSV = ".tsv";
+	public static final String JSONL = ".jsonl";
+	private final File temp;
 	private final File dataDir;
-	private final SubjectHistoryVault vault;
 	private final Gson gson = new Gson();
 
 	public DataPreparer(File temp, File dataDir) {
-		this.vault = subjectStore(temp);
+		this.temp = temp;
 		this.dataDir = dataDir;
 		this.dataDir.mkdirs();
 	}
 
 	void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File dataset) throws IOException {
+		SubjectHistoryVault vault = subjectStore(temp);
 		SubjectHistory history = vault.open(subject.name$());
 		if (dataset == null || dataset.length() == 0) {
 			Logger.warn("No data found for " + subject.name$());
 			return;
 		}
 		fillHistory(history, dataset);
-		checkColumns(subject);
+		checkColumns(history, subject);
 		ChronoUnit scale = chronoUnitOf(subject.resolution().scale());
 		var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
 		var outName = timeHorizon == 0 ? outputVariableName(inferenceModel) : outputVariableName(inferenceModel) + "+" + timeHorizon;
-		File file = new File(dataDir, history.name() + "_" + outputVariableName(inferenceModel) + ".tsv");
+		File file = new File(dataDir, history.name() + "_" + outputVariableName(inferenceModel) + TSV);
+		createInitialTsv(subject, inferenceModel, history, scale, timeHorizon, file);
+		File jsonl = transformToJsonl(file, outName, new HashMap<>(Map.of("means", means(history), "stds", stds(history))), inferenceModel.asType().lookBack());
+		file.delete();
+		transformToTsv(jsonl, outName);
+		vault.close();
+	}
+
+	private static double[] stds(SubjectHistory history) {
+		return history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().sd()).toArray();
+	}
+
+	private static double[] means(SubjectHistory history) {
+		return history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
+	}
+
+	private void createInitialTsv(DigitalSubject subject, InferenceModel inferenceModel, SubjectHistory history, ChronoUnit scale, int timeHorizon, File file) throws IOException {
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale))
 				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, scale))
@@ -64,13 +83,6 @@ public class DataPreparer {
 				.export()
 				.onlyCompleteRows()
 				.to(new FileOutputStream(file));
-		double[] means = history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
-		double[] stds = history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().sd()).toArray();
-		Map<String, Object> normal = new HashMap<>(Map.of("means", means, "stds", stds));
-		File jsonl = transformToJsonl(file, outName, normal, inferenceModel.asType().lookBack());
-		transformToTsv(jsonl, outName);
-		vault.close();
-		file.delete();
 	}
 
 	private static String outputVariableName(InferenceModel inferenceModel) {
@@ -99,7 +111,7 @@ public class DataPreparer {
 	}
 
 	private File transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues, int lookback) throws IOException {
-		File jsonl = new File(source.getParentFile(), source.getName().replace(".csv", ".jsonl"));
+		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
 		String[] header = Files.lines(source.toPath()).findFirst().get().split("\t");
 		headerValues.put("input_variables", Arrays.stream(header).filter(f -> !f.equals(outputVariable)).toArray(String[]::new));
 		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
@@ -169,9 +181,8 @@ public class DataPreparer {
 							 double[] lookback_t) {
 	}
 
-	private void checkColumns(DigitalSubject subject) {
-		List<String> variables = subject.inferenceModelList().stream().map(i -> outputVariableName(i)).toList();
-		SubjectHistory history = vault.open(subject.name$());
+	private void checkColumns(SubjectHistory history, DigitalSubject subject) {
+		List<String> variables = subject.inferenceModelList().stream().map(DataPreparer::outputVariableName).toList();
 		if (history.tags().isEmpty()) return;
 		for (String variable : variables) {
 			if (!history.tags().contains(variable)) {
