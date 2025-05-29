@@ -4,11 +4,11 @@ import com.google.gson.Gson;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.TemporalColumns;
-import io.quassar.picota.DigitalTwin;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
-import org.jetbrains.annotations.NotNull;
+import org.apache.commons.io.FilenameUtils;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
@@ -34,6 +34,7 @@ import static java.time.temporal.ChronoUnit.HOURS;
 public class DataPreparer {
 	public static final String TSV = ".tsv";
 	public static final String JSONL = ".jsonl";
+	public static final String LAYER_SEPARATOR = ":";
 	private final File temp;
 	private final File dataDir;
 	private final Gson gson = new Gson();
@@ -44,72 +45,72 @@ public class DataPreparer {
 		this.dataDir.mkdirs();
 	}
 
-	void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File dataset) throws IOException {
+	void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File subjectDataset) throws IOException {
+		String subjectName = FilenameUtils.removeExtension(subjectDataset.getName());
 		SubjectHistoryVault vault = subjectStore(temp);
-		SubjectHistory history = vault.open(subject.name$());
-		if (dataset == null || dataset.length() == 0) {
-			Logger.warn("No data found for " + subject.name$());
-			return;
+		SubjectHistory history = vault.open(subjectName);
+		fillHistory(history, subjectDataset);
+		String[] outputVariables = outputVariables(inferenceModel);
+		checkColumns(history, subjectName, outputVariables);
+		for (String outputVariable : outputVariables) {
+			var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
+			var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
+			File file = new File(dataDir, history.name() + "_" + outputVariable + TSV);
+			createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, file);
+			File jsonl = transformToJsonl(file, outName, new HashMap<>(Map.of("means", means(history, outName), "stds", stds(history, outName))), inferenceModel.asType().lookBack());
+			file.delete();
+			transformToTsv(jsonl, outName);
 		}
-		fillHistory(history, dataset);
-		checkColumns(history, subject);
-		ChronoUnit scale = chronoUnitOf(subject.resolution().scale());
-		var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
-		var outName = timeHorizon == 0 ? outputVariableName(inferenceModel) : outputVariableName(inferenceModel) + "+" + timeHorizon;
-		File file = new File(dataDir, history.name() + "_" + outputVariableName(inferenceModel) + TSV);
-		createInitialTsv(subject, inferenceModel, history, scale, timeHorizon, file);
-		File jsonl = transformToJsonl(file, outName, new HashMap<>(Map.of("means", means(history), "stds", stds(history))), inferenceModel.asType().lookBack());
-		file.delete();
-		transformToTsv(jsonl, outName);
 		vault.close();
+
 	}
 
-	private static double[] stds(SubjectHistory history) {
-		return history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().sd()).toArray();
+	private static double[] stds(SubjectHistory history, String outName) {
+		return history.tags().stream().filter(t -> !t.equals(outName)).mapToDouble(t -> history.query().number(t).all().summary().sd()).toArray();
 	}
 
-	private static double[] means(SubjectHistory history) {
-		return history.tags().stream().mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
+	private static double[] means(SubjectHistory history, String outName) {
+		return history.tags().stream().filter(t -> !t.equals(outName)).mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
 	}
 
-	private void createInitialTsv(DigitalSubject subject, InferenceModel inferenceModel, SubjectHistory history, ChronoUnit scale, int timeHorizon, File file) throws IOException {
+	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, SubjectHistory history, File file) throws IOException {
+		ChronoUnit scale = chronoUnitOf(resolution.scale());
+		var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale))
-				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, scale))
-				.period(period(subject.resolution()))
+				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, chronoUnitOf(resolution.scale())))
+				.period(period(resolution))
 				.add(TemporalColumns.get())
-				.add(inputVariables(history, inferenceModel))
-				.add(outputVariable(inferenceModel))
+				.add(inputVariables(history, inferenceModel, outputVariable))
+				.add(outputVariable(inferenceModel, outputVariable))
 				.export()
 				.onlyCompleteRows()
 				.to(new FileOutputStream(file));
 	}
 
-	private static String outputVariableName(InferenceModel inferenceModel) {
-		if (inferenceModel.variable().isNumeric() && inferenceModel.variable().asNumeric().isLayered()) {
+	public static String[] outputVariables(InferenceModel inferenceModel) {
+		if (inferenceModel.variable().isLayered()) {
 			List<String> layers = inferenceModel.layers();
-			if (layers == null || layers.isEmpty()) {
-				Logger.warn("No layers found for " + inferenceModel.name$() + ". Logic not implemented yet");
-				//TODO
-				return inferenceModel.variable().name$();
-			} else return inferenceModel.variable().name$() + "+" + layers.get(0);
-
-		} else return inferenceModel.variable().name$();
+			if (layers == null || layers.isEmpty())
+				layers = inferenceModel.variable().asLayered().layerList().stream().flatMap(l -> l.values().stream()).toList();
+			return layers.stream().map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l).toArray(String[]::new);
+		}
+		return new String[]{inferenceModel.variable().name$()};
 	}
 
 	private void transformToTsv(File jsonl, String outName) {
 
 	}
 
-	@NotNull
-	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel) {
+	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, String outputVariable) {
 		boolean prediction = inferenceModel.isPrediction();
 		return history.tags().stream()
-				.filter(t -> prediction || !t.equals(outputVariableName(inferenceModel)))
-				.map(DataPreparer::columnOf).toList();
+				.filter(t -> prediction || !t.equals(outputVariable))
+				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
 	}
 
-	private File transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues, int lookback) throws IOException {
+	private File transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues,
+								  int lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
 		String[] header = Files.lines(source.toPath()).findFirst().get().split("\t");
 		headerValues.put("input_variables", Arrays.stream(header).filter(f -> !f.equals(outputVariable)).toArray(String[]::new));
@@ -122,7 +123,8 @@ public class DataPreparer {
 		return jsonl;
 	}
 
-	private void writeWithoutLookBack(File source, String outputVariable, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
+	private void writeWithoutLookBack(File source, String outputVariable, String[]
+			header, Set<String> features, BufferedWriter writer) throws IOException {
 		Files.lines(source.toPath())
 				.skip(1)
 				.map(l -> rowOf(header, l.split("\t")))
@@ -131,7 +133,8 @@ public class DataPreparer {
 				.forEach(c -> write(c, writer));
 	}
 
-	private void writeWithLookBack(File source, String outputVariable, int lookback, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
+	private void writeWithLookBack(File source, String outputVariable, int lookback, String[]
+			header, Set<String> features, BufferedWriter writer) throws IOException {
 		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookback);
 		Files.lines(source.toPath())
 				.skip(1)
@@ -151,7 +154,8 @@ public class DataPreparer {
 		}
 	}
 
-	private InputData inputDataOf(Map<String, Double> row, String outputVariable, Queue<Map<String, Double>> queue, Set<String> features) {
+	private InputData inputDataOf(Map<String, Double> row, String
+			outputVariable, Queue<Map<String, Double>> queue, Set<String> features) {
 		return new InputData(row.get(outputVariable), features(row, features), time(row), queue == null ? new double[0] : lookBackFeatures(queue, features), queue == null ? new double[0] : lookBackTime(queue));
 	}
 
@@ -180,14 +184,13 @@ public class DataPreparer {
 							 double[] lookback_t) {
 	}
 
-	private void checkColumns(SubjectHistory history, DigitalSubject subject) {
-		List<String> variables = subject.inferenceModelList().stream().map(DataPreparer::outputVariableName).toList();
+	private void checkColumns(SubjectHistory history, String subject, String[] outputVariables) {
 		if (history.tags().isEmpty()) return;
-		for (String variable : variables) {
-			if (!history.tags().contains(variable)) {
-				throw new IllegalStateException("Column " + variable + "not found in the dataset of" + subject.name$());
-			}
-		}
+		Arrays.stream(outputVariables)
+				.filter(variable -> !history.tags().contains(variable))
+				.forEach(variable -> {
+					throw new IllegalStateException("Column " + variable + " not found in the dataset of " + subject);
+				});
 	}
 
 	private static void fillHistory(SubjectHistory history, File dataset) throws IOException {
@@ -195,33 +198,26 @@ public class DataPreparer {
 		String separator = firstLine.contains("\t") ? "\t" : ",";
 		String[] header = firstLine.split(separator);
 		SubjectHistory.Batch batch = history.batch();
-		Files.lines(dataset.toPath()).skip(1).map(l -> l.split(separator)).forEach(line -> {
-			SubjectHistory.Transaction t = batch.on(Instant.parse(line[0]), "");
-			for (int i = 1; i < header.length; i++)
-				if (!line[i].trim().isEmpty()) t.put(header[i].trim(), Double.parseDouble(line[i].trim()));
-			t.terminate();
-		});
+		Files.lines(dataset.toPath()).skip(1)
+				.map(l -> l.split(separator, -1))
+				.forEach(line -> {
+					SubjectHistory.Transaction t = batch.on(Instant.parse(line[0]), "");
+					for (int i = 1; i < header.length; i++)
+						if (!line[i].trim().isEmpty()) t.put(header[i].trim(), Double.parseDouble(line[i].trim()));
+					t.terminate();
+				});
 		batch.terminate();
 	}
 
-	private static ColumnDefinition outputVariable(InferenceModel inference) {
-		String name = outputVariableName(inference);
+	private static ColumnDefinition outputVariable(InferenceModel inference, String name) {
 		String colName = name + (inference.isPrediction() ? "+" + inference.asPrediction().timeHorizon() : "");
-		ColumnDefinition column = columnOf(colName, name);
+		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
 		if (inference.isPrediction()) column.add(new LeadFilter(inference.asPrediction().timeHorizon()));
 		column.add(new MinMaxNormalizationFilter());
 		return column;
 	}
 
-	private static ColumnDefinition columnOf(String t) {
-		return new ColumnDefinition(t, t + ".first");
-	}
-
-	private static ColumnDefinition columnOf(String name, String source) {
-		return new ColumnDefinition(name, source + ".first");
-	}
-
-	private TemporalAmount period(DigitalTwin.DigitalSubject.Resolution resolution) {
+	private TemporalAmount period(Resolution resolution) {
 		var scale = resolution.scale();
 		return scale.ordinal() > Scale.Day.ordinal() ? Duration.of(resolution.amount(), chronoUnitOf(scale)) : periodOf(resolution.amount(), chronoUnitOf(scale));
 	}

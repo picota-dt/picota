@@ -24,9 +24,9 @@ public class DTTest {
 	}
 
 	@Test
-	public void should_send_data() throws InterruptedException {
-		DigitalSubjectBuilder builder = new DigitalSubjectBuilder(new File("../temp/tests"), new HashMap<>(), new File("../runtime.evaluator/.venv"));
-		builder.build("https://quassar.io/commits/5847cda2-27b0-4b82-9838-c1caa8dbb2ef", new Resource("Infecar-SolarPlant-DigitalTwin-lite.zip", new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/Infecar-SolarPlant-DigitalTwin-lite.zip")), r -> {
+	public void should_send_data() throws InterruptedException, IOException {
+		DigitalSubjectBuilder builder = new DigitalSubjectBuilder(new File("../temp/tests"), new HashMap<>(), new File("../.venv").getCanonicalFile());
+		builder.build("https://quassar.io/commits/d36f0eec-2197-4235-bf46-236ece739fe7", new Resource("Camera_acc_alo.tsv.zip", new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/Camera_acc_alo.tsv.zip")), r -> {
 			System.out.println(r.report());
 		});
 		CountDownLatch cdl = new CountDownLatch(1);

@@ -6,11 +6,11 @@ import io.picota.digitaltwin.DigitalTwinBox.State;
 import io.picota.digitaltwin.builder.DigitalSubjectBuilder.Result.Training;
 import io.picota.digitaltwin.setup.RuntimeCodeGenerator;
 import io.picota.digitaltwin.utils.Compression;
+import io.picota.digitaltwin.utils.Utils;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.ModelReader;
 import io.quassar.picota.PicotaGraph;
 import org.apache.commons.io.FileUtils;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,13 +19,13 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+
+import static org.apache.commons.io.FilenameUtils.removeExtension;
 
 public class DigitalSubjectBuilder {
 	private final File workingDir;
@@ -61,26 +61,30 @@ public class DigitalSubjectBuilder {
 		File dtDirectory = new File(workingDir, modelName(new URI(url)));
 		clean(dtDirectory);
 		File datasets = downloadDataset(resource, dtDirectory);
-		new RuntimeCodeGenerator(dtDirectory, graph).generate();
+		Map<DigitalSubject, List<String>> subjectTargets = new HashMap<>();
 		for (DigitalSubject subject : graph.digitalTwin().digitalSubjectList())
-			processDigitalSubject(subject, dtDirectory, datasets, onFinished);
+			subjectTargets.put(subject, prepareDigitalSubject(subject, dtDirectory, datasets));
+		new RuntimeCodeGenerator(dtDirectory, graph, subjectTargets).generate();
+		Result result = train(dtDirectory);
+		onFinished.onFinished(result);
 	}
 
-	private void processDigitalSubject(DigitalSubject subject, File dtDirectory, File datasets, OnFinished onFinished) throws IOException, InterruptedException {
-		states.put(subject, State.Training);
-		File temp = new File(dtDirectory, "temp");
-		File data = new File(dtDirectory, "data");
+	private List<String> prepareDigitalSubject(DigitalSubject subject, File dtDirectory, File datasets) throws IOException {
+		List<File> files = findFiles(datasets, subject);
+		for (File subjectData : files) prepareDataOf(subject, dtDirectory, subjectData);
+		return files.stream().map(f -> removeExtension(f.getName())).toList();
+	}
+
+	private void prepareDataOf(DigitalSubject subject, File dtDirectory, File subjectData) throws IOException {
 		for (DigitalSubject.InferenceModel inferenceModel : subject.inferenceModelList()) {
-			File dataset = findFile(datasets, subject.name$(), inferenceModel.variable().name$());
-			if (!dataset.exists() || dataset.length() == 0) {
+			if (!subjectData.exists() || subjectData.length() == 0) {
 				states.put(subject, State.WaitingData);
-				Logger.warn("Dataset does not exist or is empty: " + dataset.getName());
+				Logger.warn("Dataset does not exist or is empty: " + subjectData.getName());
 				continue;
 			}
-			new DataPreparer(temp, data).prepareData(subject, inferenceModel, dataset);
+			new DataPreparer(new File(dtDirectory, "temp"), new File(dtDirectory, "data"))
+					.prepareData(subject, inferenceModel, subjectData);
 		}
-		onFinished.onFinished(train(subject, dtDirectory));
-		states.put(subject, State.Prepared);
 	}
 
 	private String modelName(URI uri) {
@@ -98,12 +102,14 @@ public class DigitalSubjectBuilder {
 		}
 	}
 
-	private File findFile(File datasets, String subject, String variable) {
-		File file = new File(datasets, subject + "_" + variable + ".csv");
-		return file.exists() ? file : new File(datasets, subject + "_" + variable + ".tsv");
+	private List<File> findFiles(File datasets, DigitalSubject ds) {
+		if (ds.subject().isPrototype()) return Utils.getFilesWithPrefix(datasets, ds.subject().name$());
+		else {
+			File file = new File(datasets, ds + ".csv");
+			return Collections.singletonList(file.exists() ? file : new File(datasets, ds + ".tsv"));
+		}
 	}
 
-	@NotNull
 	private File downloadDataset(Resource dataset, File subjectDirectory) throws IOException {
 		File temp = new File(subjectDirectory, "temp");
 		temp.mkdirs();
@@ -123,10 +129,10 @@ public class DigitalSubjectBuilder {
 		}
 	}
 
-	private Result train(DigitalSubject subject, File dtDirectory) throws IOException, InterruptedException {
-		Logger.info(this.status = "Training " + subject.name$() + "...");
+	private Result train(File dtDirectory) throws IOException, InterruptedException {
+		Logger.info(this.status = "Training subjects...");
 		Result result = runTrain(dtDirectory);
-		Logger.info(this.status = "Finished training of " + subject.name$() + ". Code: " + result.statusCode);
+		Logger.info(this.status = "Finished training. Code: " + result.statusCode);
 		return result;
 	}
 
@@ -137,7 +143,7 @@ public class DigitalSubjectBuilder {
 		modelsDir.mkdirs();
 		File scriptPath = new File(dtDirectory, "scripts/trainer/main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
-		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), new File(dtDirectory, "data").getAbsolutePath(), modelsDir.getAbsolutePath())
+		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), new File(dtDirectory, "data").getCanonicalPath(), modelsDir.getAbsolutePath())
 				.directory(scripts)
 				.start();
 		int code = process.waitFor();

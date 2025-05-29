@@ -2,10 +2,14 @@ package io.picota.digitaltwin.utils;
 
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
 
+import java.io.File;
 import java.time.Duration;
 import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static java.time.temporal.ChronoUnit.*;
 
@@ -30,5 +34,16 @@ public class Utils {
 			case Minutes -> MINUTES;
 			case Seconds -> SECONDS;
 		};
+	}
+
+	public static List<File> getFilesWithPrefix(File dir, String prefix) {
+		List<File> result = new ArrayList<>();
+		if (dir != null && dir.isDirectory()) {
+			File[] files = dir.listFiles((d, name) -> name.startsWith(prefix));
+			if (files != null) {
+				result.addAll(Arrays.asList(files));
+			}
+		}
+		return result;
 	}
 }

@@ -5,7 +5,6 @@ import io.intino.itrules.Engine;
 import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
-import io.intino.magritte.framework.Layer;
 import io.picota.digitaltwin.utils.Compression;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
@@ -16,6 +15,8 @@ import org.apache.commons.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
+import java.util.Map;
 
 import static io.intino.alexandria.logger.Logger.error;
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
@@ -27,9 +28,11 @@ public class RuntimeCodeGenerator {
 	private final File trainerDir;
 	private final File evaluatorDir;
 	private final File scriptsDir;
+	private final Map<DigitalSubject, List<String>> subjectTargets;
 
-	public RuntimeCodeGenerator(File workingDir, PicotaGraph graph) {
+	public RuntimeCodeGenerator(File workingDir, PicotaGraph graph, Map<DigitalSubject, List<String>> subjectTargets) {
 		this.graph = graph;
+		this.subjectTargets = subjectTargets;
 		this.template = new TorchScriptsTemplate();
 		this.scriptsDir = new File(workingDir, "scripts");
 		this.trainerDir = new File(scriptsDir, "trainer");
@@ -60,7 +63,7 @@ public class RuntimeCodeGenerator {
 			FrameBuilder frame = new FrameBuilder("evaluator");
 			frame.add("name", subject.name$());
 			subject.inferenceModelList().forEach(i -> {
-				FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
+				FrameBuilder builder = frameBuilderOf(subject, i.variable(), "inference");
 				if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
 				frame.add("variable", builder.toFrame());
 			});
@@ -76,13 +79,13 @@ public class RuntimeCodeGenerator {
 	private void createMainScript() throws IOException {
 		File main = new File(trainerDir, "main.py");
 		FrameBuilder frame = new FrameBuilder("supermain");
-		frame.add("subject", graph.digitalTwin().digitalSubjectList().stream().map(Layer::name$).toArray(String[]::new));
+		frame.add("subject", graph.digitalTwin().digitalSubjectList().stream().map(ds -> ds.subject().name$()).toArray(String[]::new));
 		Files.writeString(main.toPath(), new Engine(template).render(frame));
 	}
 
 	private void createDigitalSubjectScripts() throws IOException {
 		for (DigitalSubject subject : graph.digitalTwin().digitalSubjectList()) {
-			File dtDir = new File(trainerDir, normalize(subject.name$()));
+			File dtDir = new File(trainerDir, normalize(subject.subject().name$()));
 			dtDir.mkdirs();
 			createPackage(dtDir);
 			renderInferences(subject, dtDir);
@@ -111,27 +114,29 @@ public class RuntimeCodeGenerator {
 		Files.writeString(file.toPath(), new Engine(template).render(frameOf(dt)));
 	}
 
-	private Frame frameOf(DigitalSubject subject) {
-		FrameBuilder builder = new FrameBuilder("subject").add("name", subject.name$());
+	private Frame frameOf(DigitalSubject ds) {
+		FrameBuilder builder = new FrameBuilder("subject").add("name", ds.subject().name$());
 		//		Reality reality = dt.entity().core$().ownerAs(Reality.class);
 //		Stream.concat(reality.viewPointList().stream(), dt.entity().viewPointList().stream())
 //				.flatMap(vp -> vp.variableList().stream())
 //				.filter(v -> infers.stream().noneMatch(i -> i.variable().equals(v)))
 //				.forEach(v -> builder.add("variable", frameOf(v, "entity")));
-		subject.inferenceModelList().forEach(i -> builder.add("variable", frameOf(i)));
+		ds.inferenceModelList().forEach(i -> builder.add("variable", frameOf(i)));
 		return builder.toFrame();
 	}
 
 	private Frame frameOf(InferenceModel i) {
-		FrameBuilder builder = frameBuilderOf(i.variable(), "inference");
-		DigitalSubject subject = i.core$().ownerAs(DigitalSubject.class);
-		builder.add("subject", subject.name$());
+		FrameBuilder builder = frameBuilderOf(i.core$().ownerAs(DigitalSubject.class), i.variable(), "inference");
+		DigitalSubject ds = i.core$().ownerAs(DigitalSubject.class);
+		builder.add("subject", ds.subject().name$());
 		if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
 		return builder.toFrame();
 	}
 
-	private static FrameBuilder frameBuilderOf(Variable v, String tag) {
-		return new FrameBuilder(tag, "variable").add("name", v.name$());
+	private FrameBuilder frameBuilderOf(DigitalSubject ds, Variable v, String tag) {
+		return new FrameBuilder(tag, "variable")
+				.add("subjects", subjectTargets.get(ds).toArray(new String[0]))
+				.add("name", v.name$());
 	}
 
 	private void clean() {
