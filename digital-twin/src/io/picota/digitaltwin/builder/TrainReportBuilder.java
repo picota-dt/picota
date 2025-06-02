@@ -17,6 +17,8 @@ import io.picota.digitaltwin.builder.DigitalSubjectBuilder.Result;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Comparator;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class TrainReportBuilder {
@@ -33,7 +35,7 @@ public class TrainReportBuilder {
 		doc.add(title);
 		doc.add(new Paragraph("Status: " + (result.statusCode() == 0 ? "Success" : "Failure")).setMarginTop(12));
 		if (result.statusCode() != 0) doc.add(new Paragraph("Report:\n " + result.report()).setMarginBottom(12));
-		float[] colWidths = {2, 4, 2, 4};
+		float[] colWidths = {2, 2, 2, 5};
 		Table table = new Table(UnitValue.createPercentArray(colWidths)).useAllAvailableWidth();
 		table.addHeaderCell(new Cell().add(new Paragraph("Subject")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Variable")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
@@ -50,6 +52,9 @@ public class TrainReportBuilder {
 	}
 
 	private static String contributors(Result.Training t) {
-		return t.contributors().entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining("\n"));
+		return t.contributors().entrySet().stream()
+				.sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
+				.map(e -> e.getKey() + ": " + String.format("%.2f", e.getValue()))
+				.collect(Collectors.joining("\n"));
 	}
 }

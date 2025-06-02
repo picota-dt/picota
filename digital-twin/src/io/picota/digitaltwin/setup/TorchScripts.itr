@@ -84,5 +84,5 @@ rule type(variable)
 		torch.save(model.state_dict(), model_path)
 		print(
             f"{subject}\t{output_variable}\t{loss}\t" +
-            ", ".join(f"{k}:{float(v):.2f}" for k, v in sorted(features.items(), key=lambda x: float(x[1]), reverse=True))
+            ",".join(f"{k}###{float(v):.2f}" for k, v in sorted(features.items(), key=lambda x: float(x[1]), reverse=True))
         )

@@ -151,7 +151,6 @@ public class DigitalSubjectBuilder {
 		String report = new String(process.getInputStream().readAllBytes());
 		String errors = new String(process.getErrorStream().readAllBytes());
 		System.out.println(report);
-		System.out.println(errors);
 		return new Result(dtDirectory.getName(), code, report, errors, trainings(code, report), modelsDir);
 	}
 
@@ -196,9 +195,21 @@ public class DigitalSubjectBuilder {
 
 	private static Map<String, Double> contributors(String[] fields) {
 		if (fields.length < 4) return Collections.emptyMap();
-		return Arrays.stream(fields[3].split(",", -1))
-				.map(t -> t.split(":"))
+		Map<String, Double> collect = Arrays.stream(fields[3].split(",", -1))
+				.map(t -> t.trim().split("###"))
 				.collect(Collectors.toMap(t -> t[0].trim(), t -> toDouble(t[1].trim())));
+		return merge(collect);
+	}
+
+	private static Map<String, Double> merge(Map<String, Double> original) {
+		Map<String, Double> merged = new HashMap<>();
+		original.forEach((key, value) -> {
+			if (key.endsWith("_sin") || key.endsWith("_cos"))
+				merged.merge(key.substring(0, key.length() - 4), value, Double::sum);
+			else merged.merge(key, value, Double::sum);
+		});
+		return merged;
+
 	}
 
 	private static double toDouble(String field) {
