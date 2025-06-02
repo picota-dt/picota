@@ -151,6 +151,7 @@ public class DigitalSubjectBuilder {
 		String report = new String(process.getInputStream().readAllBytes());
 		String errors = new String(process.getErrorStream().readAllBytes());
 		System.out.println(report);
+		System.out.println(errors);
 		return new Result(dtDirectory.getName(), code, report, errors, trainings(code, report), modelsDir);
 	}
 

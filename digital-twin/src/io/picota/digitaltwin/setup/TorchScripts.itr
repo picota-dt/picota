@@ -26,7 +26,7 @@ rule type(subject)
 	from kan.DatasetLoader import DatasetLoader
 	$variable+importVariable...[$NL]
 
-	def train(source, modeldir):
+	def train(source, modelsdir):
 		$subjectName...[$NL]
 		$variable+callVariable...[$NL]
 
@@ -50,13 +50,14 @@ rule trigger(callVariable)
 			loader.get_input_variables(),
 			loader.get_means(),
 			loader.get_stds(),
-			modeldir
+			modelsdir
 		)
 rule trigger(evaluate)
 	print("$name	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$viewPoint/$name~$timeHorizon.bin", tensor)))
 
 rule type(variable)
 	import torch
+	import os
 	from torch import nn
 
 	import Device
@@ -66,8 +67,9 @@ rule type(variable)
 	def input_variables(dict, output):
 		return {key: valor for key, valor in dict.items() if key != output}
 
-	def train(subject, datasource, input_variables, means, stds, modeldir):
-		model_path = modeldir + "$name~$timeHorizon.bin"
+	def train(subject, datasource, input_variables, means, stds, model_dir):
+		model_path = model_dir + "/$name~$timeHorizon.bin"
+		os.makedirs(model_dir, exist_ok=True)
 		output_variable = "$name~$timeHorizon"
 		device = Device.get_device()
 		batch_size = 32
