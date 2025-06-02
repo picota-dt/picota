@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+import java.util.stream.Collectors;
 
 import static org.apache.commons.io.FilenameUtils.removeExtension;
 
@@ -168,7 +169,7 @@ public class DigitalSubjectBuilder {
 
 	public record Result(String model, int statusCode, String report, String errors, List<Training> trainings,
 						 File modelsDir) {
-		public record Training(String dt, String variable, double loss, String[] contributors) {
+		public record Training(String dt, String variable, double loss, Map<String, Double> contributors) {
 		}
 	}
 
@@ -190,12 +191,19 @@ public class DigitalSubjectBuilder {
 	}
 
 	private Training trainingResultOf(String[] fields) {
-		return new Training(fields[0], fields[1], getLoss(fields), Arrays.stream(fields).skip(3).toArray(String[]::new));
+		return new Training(fields[0], fields[1], toDouble(fields[2]), contributors(fields));
 	}
 
-	private static double getLoss(String[] fields) {
+	private static Map<String, Double> contributors(String[] fields) {
+		if (fields.length < 4) return Collections.emptyMap();
+		return Arrays.stream(fields[3].split(",", -1))
+				.map(t -> t.split(":"))
+				.collect(Collectors.toMap(t -> t[0].trim(), t -> toDouble(t[1].trim())));
+	}
+
+	private static double toDouble(String field) {
 		try {
-			return Double.parseDouble(fields[2]);
+			return Double.parseDouble(field);
 		} catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
 			return Double.NaN;
 		}

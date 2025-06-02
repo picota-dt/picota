@@ -17,6 +17,7 @@ import io.picota.digitaltwin.builder.DigitalSubjectBuilder.Result;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.stream.Collectors;
 
 public class TrainReportBuilder {
 	public void generate(Result result, File destination) throws IOException {
@@ -42,9 +43,13 @@ public class TrainReportBuilder {
 			table.addCell(new Cell().add(new Paragraph(t.dt())));
 			table.addCell(new Cell().add(new Paragraph(t.variable())));
 			table.addCell(new Cell().add(new Paragraph(String.format("%.4f", t.loss()))));
-			table.addCell(new Cell().add(new Paragraph(String.join(", ", t.contributors()))));
+			table.addCell(new Cell().add(new Paragraph(contributors(t))));
 		}
 		doc.add(table);
 		doc.close();
+	}
+
+	private static String contributors(Result.Training t) {
+		return t.contributors().entrySet().stream().map(e -> e.getKey() + ": " + e.getValue()).collect(Collectors.joining("\n"));
 	}
 }

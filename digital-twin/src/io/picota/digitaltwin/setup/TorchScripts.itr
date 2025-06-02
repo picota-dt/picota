@@ -82,4 +82,7 @@ rule type(variable)
                            batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
                 .train(dataset))
 		torch.save(model.state_dict(), model_path)
-		print(f"{subject}\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))
+		print(
+            f"{subject}\t{output_variable}\t{loss}\t" +
+            ", ".join(f"{k}:{float(v):.2f}" for k, v in sorted(features.items(), key=lambda x: float(x[1]), reverse=True))
+        )
