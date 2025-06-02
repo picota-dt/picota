@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 import Device
-from kanwithnormalization.ParametricSigmoid import ParametricSigmoid
+from kan.ParametricSigmoid import ParametricSigmoid
 
 
 class NormalizationParametricSigmoid(nn.Module):

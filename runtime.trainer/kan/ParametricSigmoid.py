@@ -1,6 +1,6 @@
-import torch
 from torch import nn
 
+import torch
 
 class ParametricSigmoid(nn.Module):
     def __init__(self, alpha_init=1.0, beta_init=0.0):

@@ -114,6 +114,7 @@ public class DataPreparer {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
 		String[] header = Files.lines(source.toPath()).findFirst().get().split("\t");
 		headerValues.put("input_variables", Arrays.stream(header).filter(f -> !f.equals(outputVariable)).toArray(String[]::new));
+		headerValues.put("lookback_size", lookback);
 		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
 			writer.write(gson.toJson(headerValues) + "\n");
@@ -156,15 +157,15 @@ public class DataPreparer {
 
 	private InputData inputDataOf(Map<String, Double> row, String
 			outputVariable, Queue<Map<String, Double>> queue, Set<String> features) {
-		return new InputData(row.get(outputVariable), features(row, features), time(row), queue == null ? new double[0] : lookBackFeatures(queue, features), queue == null ? new double[0] : lookBackTime(queue));
+		return new InputData(row.get(outputVariable), features(row, features), time(row), queue == null ? new double[0][0] : lookBackFeatures(queue, features), queue == null ? new double[0][0] : lookBackTime(queue));
 	}
 
-	private double[] lookBackTime(Queue<Map<String, Double>> queue) {
-		return queue.stream().flatMapToDouble(row -> Arrays.stream(time(row))).toArray();
+	private double[][] lookBackTime(Queue<Map<String, Double>> queue) {
+		return queue.stream().map(this::time).toArray(double[][]::new);
 	}
 
-	private double[] lookBackFeatures(Queue<Map<String, Double>> queue, Set<String> features) {
-		return queue.stream().flatMapToDouble(row -> Arrays.stream(features(row, features))).toArray();
+	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Set<String> features) {
+		return queue.stream().map(row -> features(row, features)).toArray(double[][]::new);
 	}
 
 	private double[] time(Map<String, Double> row) {
@@ -180,8 +181,8 @@ public class DataPreparer {
 				.collect(Collectors.toMap(i -> header[i], i -> Double.parseDouble(values[i]), (a, b) -> b));
 	}
 
-	private record InputData(double out, double[] t_features, double[] t, double[] lookback_features,
-							 double[] lookback_t) {
+	private record InputData(double out, double[] t_features, double[] t, double[][] lookback_features,
+							 double[][] lookback_t) {
 	}
 
 	private void checkColumns(SubjectHistory history, String subject, String[] outputVariables) {

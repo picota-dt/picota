@@ -129,6 +129,7 @@ public class RuntimeCodeGenerator {
 		FrameBuilder builder = frameBuilderOf(i.core$().ownerAs(DigitalSubject.class), i.variable(), "inference");
 		DigitalSubject ds = i.core$().ownerAs(DigitalSubject.class);
 		builder.add("subject", ds.subject().name$());
+		builder.add("lookback", i.asType().lookBack());
 		if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
 		return builder.toFrame();
 	}

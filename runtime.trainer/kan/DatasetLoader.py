@@ -1,20 +1,43 @@
-from kan.FloatCaster import register_cast
+import json
 
 
 class DatasetLoader:
-    def __init__(self, path, col_sep):
+    def __init__(self, path):
+        self.lookback = None
+        self.input_variables = None
+        self.stds = None
+        self.means = None
         self.path = path
-        self.col_sep = col_sep
 
     def load(self):
-        with open(self.path) as dataset:
-            data = list(
-                map(lambda row: list(map(lambda register: register_cast(register), row.split(self.col_sep))),
-                    dataset.readlines()))
-            head = data[0]
-            dataframe = {column: [] for column in head}
-            for index in range(len(head)):
-                for row in data[1:]:
-                    dataframe[head[index]].append(row[index])
-        dataframe = {key: value for key, value in dataframe.items()}
-        return dataframe
+        data = []
+        with open(self.path, 'r', encoding='utf-8') as f:
+            first_line = next(f).strip()
+            if not first_line:
+                raise ValueError("The file is empty or means and stds are missing.")
+            stats = json.loads(first_line)
+            self.means = stats.get("means")
+            self.stds = stats.get("stds")
+            self.lookback = stats.get("lookback_size")
+            self.input_variables = stats.get("input_variables")
+            if self.means is None or self.stds is None:
+                raise KeyError("First line should contain 'means' y 'stds'.")
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                data.append(obj)
+        return data
+
+    def get_means(self):
+        return self.means
+
+    def get_stds(self):
+        return self.stds
+
+    def get_input_variables(self):
+        return self.input_variables
+
+    def get_lookback(self):
+        return self.lookback

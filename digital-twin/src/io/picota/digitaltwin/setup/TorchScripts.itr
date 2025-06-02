@@ -3,7 +3,7 @@ rule type(evaluator)
     import torch
     import numpy as np
     import KanEvaluator
-    from kanwithnormalization.DatasetLoader import DatasetLoader
+    from kan.DatasetLoader import DatasetLoader
 
     dataset = DatasetLoader(sys.argv[2], "\\t").load()
     tensor = torch.tensor(np.array(list(dataset.values())), dtype=torch.float32).squeeze(1)
@@ -23,7 +23,7 @@ rule trigger(call)
 
 rule type(subject)
 	import os
-	from kanwithnormalization.DatasetLoader import DatasetLoader
+	from kan.DatasetLoader import DatasetLoader
 	$variable+importVariable...[$NL]
 
 	def train(source, modeldir):
@@ -45,6 +45,7 @@ rule trigger(callVariable)
 			continue
 		loader = DatasetLoader(jsonl_path)
 		camera.$name.train(
+			s,
 			loader.load(),
 			loader.get_input_variables(),
 			loader.get_means(),
@@ -59,26 +60,26 @@ rule type(variable)
 	from torch import nn
 
 	import Device
-	from kanwithnormalization.TimeSeriesDataset import TimeSeriesDataset
-	from kanwithnormalization.KanTrainer import KanTrainer
+	from kan.TimeSeriesDataset import TimeSeriesDataset
+	from kan.KanTrainer import KanTrainer
 
 	def input_variables(dict, output):
 		return {key: valor for key, valor in dict.items() if key != output}
 
-	def train(datasource, input_variables, means, stds, modeldir):
+	def train(subject, datasource, input_variables, means, stds, modeldir):
 		model_path = modeldir + "$name~$timeHorizon.bin"
 		output_variable = "$name~$timeHorizon"
 		device = Device.get_device()
-		batch_size = 2
-		epochs = 10
-		lr = 0.001
+		batch_size = 32
+		epochs = 50
+		lr = 0.0001
 		loss_fn = nn.MSELoss()
 		validation_loss_fn = nn.L1Loss()
 		test_proportion = 0.3
 		dataset = TimeSeriesDataset(datasource)
 		model, loss, features = (
-                KanTrainer("$subject", input_variables, output_variable, means, stds,
+                KanTrainer(subject, input_variables, output_variable, $lookback, means, stds,
                            batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
                 .train(dataset))
 		torch.save(model.state_dict(), model_path)
-		print(f"$subject\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))
+		print(f"{subject}\\t{output_variable}\t{loss}\t" + "\t".join(features.keys()))
