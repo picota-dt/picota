@@ -7,10 +7,7 @@
 	<script src="https://cdn.tailwindcss.com"></script>
 	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
-<style>
-    body {
-        font-family: 'Poppins', sans-serif;
-    }
+<style>body {font-family: 'Poppins', sans-serif;}
 
 </style>
 <body class="bg-black text-white flex flex-col min-h-screen">
@@ -39,7 +36,6 @@
 				</div>
 			</section>
 
-			<!-- Section 2: Evaluate the Model -->
 			<section class="mb-8">
 				<h2 class="text-2xl font-semibold text-blue-400 mb-4">2. Evaluate the model</h2>
 				<div class="bg-black p-6 rounded-lg border border-gray-600">
@@ -47,7 +43,7 @@
 					<label for="curlCommand"></label><textarea
 							id="curlCommand"
 							class="w-full bg-black border border-gray-600 rounded-lg p-4 placeholder-gray-400 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-							rows="6">curl -X POST -H "Content-Type: application/json" -d '{"foo":"bar"}' https://picota.io/api/inference/$id</textarea>
+							rows="6">curl -X POST -H "Content-Type: application/json" -d '{"foo":"bar"}' https://picota.io/api/digital-twin/$id/inference</textarea>
 					<button id="runCurl"
 							class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2 rounded-md transition">
 						Test Model
@@ -56,23 +52,20 @@
 				</div>
 			</section>
 
-			<!-- Section 3: API Information -->
 			<section class="mb-8">
 				<h2 class="text-2xl font-semibold text-blue-400 mb-4">3. API Information</h2>
 				<div class="bg-black p-6 rounded-lg border border-gray-600">
 					<p class="mb-2"><strong>Evaluate endpoint:</strong></p>
 					<code class="block bg-black p-2 rounded text-sm mb-4">POST
-						https://picota.io/api/inference/$id</code>
+						https://picota.io/api/digital-twin/$id/inference</code>
 					<p class="mb-2"><strong>Train endpoint:</strong></p>
-					<code class="block bg-black p-2 rounded text-sm mb-4">POST https://picota.io/api/train/$id</code>
+					<code class="block bg-black p-2 rounded text-sm mb-4">POST https://picota.io/api/digital-twin/$id/build</code>
 					<p class="text-gray-400 text-sm">
 						If your model is protected, include your token in the <code class="bg-black px-1 rounded">Authorization</code>
 						header.
 					</p>
 				</div>
 			</section>
-
-			<!-- Section 4: Protect Your Model -->
 			<section class="mb-8">
 				<h2 class="text-2xl font-semibold text-blue-400 mb-4">4. Protect your model</h2>
 				<div class="bg-black p-6 rounded-lg border border-gray-600">
@@ -137,8 +130,6 @@
             const urlMatch = cmd.match(/https?:\/\/[^\s'"]+/);
             if (!urlMatch) throw new Error('No se encontró URL válida en el comando curl.');
             const url = urlMatch[0];
-
-            // Extraer JSON payload después de -d o --data
             const dataMatch = cmd.match(/-d\s+'([^']*)'|--data\s+'([^']*)'/)
                 || cmd.match(/-d\s+"([^"]*)"|--data\s+"([^"]*)"/);
             let payload = null;
