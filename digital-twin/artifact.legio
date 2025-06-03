@@ -7,7 +7,7 @@ Artifact("io.picota", "1.0.0") digital-twin
 		Compile("org.apache.commons", "commons-collections4", "4.5.0")
 		Compile("io.quassar.picota", "reader-java", "1.0.6")
 		Compile("io.intino.itrules", "engine", "2.0.2")
-		Compile("systems.intino.datamarts", "subject-store", "2.0.16")
+		Compile("systems.intino.datamarts", "subject-store", "2.0.18")
         Compile("org.xerial", "sqlite-jdbc", "3.49.1.0")
 		Compile("io.intino.alexandria", "rest", "4.2.5")
 		Compile("io.intino.alexandria", "zip", "1.0.5")

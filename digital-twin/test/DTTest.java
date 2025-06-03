@@ -1,13 +1,8 @@
-import io.intino.alexandria.Resource;
-import io.picota.digitaltwin.builder.DigitalSubjectBuilder;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.concurrent.CountDownLatch;
 
 //file:///Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/INFECAR-SOLAR-PLANT-1.0.0.zip
 @Ignore
@@ -25,12 +20,12 @@ public class DTTest {
 
 	@Test
 	public void should_send_data() throws InterruptedException, IOException {
-		DigitalSubjectBuilder builder = new DigitalSubjectBuilder(new File("../temp/tests"), new HashMap<>(), new File("../.venv").getCanonicalFile());
-		builder.build("https://quassar.io/commits/d36f0eec-2197-4235-bf46-236ece739fe7", new Resource("Camera_acc_alo.tsv.zip", new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/Camera_acc_alo.tsv.zip")), r -> {
-			System.out.println(r.report());
-		});
-		CountDownLatch cdl = new CountDownLatch(1);
-		cdl.await();
+//		DigitalSubjectTrainer builder = new DigitalSubjectTrainer(new File("../temp/tests"), new File("../.venv").getCanonicalFile());
+//		builder.build("https://quassar.io/commits/d36f0eec-2197-4235-bf46-236ece739fe7", new Resource("Camera_acc_alo.tsv.zip", new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/Camera_acc_alo.tsv.zip")), r -> {
+//			System.out.println(r.report());
+//		});
+//		CountDownLatch cdl = new CountDownLatch(1);
+//		cdl.await();
 
 	}
 

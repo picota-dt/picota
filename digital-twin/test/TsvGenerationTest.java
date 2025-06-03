@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static io.picota.digitaltwin.utils.Utils.periodOf;
+import static io.picota.digitaltwin.control.utils.Utils.periodOf;
 import static java.time.temporal.ChronoUnit.HOURS;
 
 @Ignore

@@ -1,9 +1,8 @@
-package io.picota.digitaltwin.builder;
+package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
 import com.google.gson.Gson;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
-import io.picota.digitaltwin.TemporalColumns;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution;
@@ -27,8 +26,8 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static io.picota.digitaltwin.utils.Utils.chronoUnitOf;
-import static io.picota.digitaltwin.utils.Utils.periodOf;
+import static io.picota.digitaltwin.control.utils.Utils.chronoUnitOf;
+import static io.picota.digitaltwin.control.utils.Utils.periodOf;
 import static java.time.temporal.ChronoUnit.HOURS;
 
 public class DataPreparer {
@@ -45,7 +44,7 @@ public class DataPreparer {
 		this.dataDir.mkdirs();
 	}
 
-	void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File subjectDataset) throws IOException {
+	public void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File subjectDataset) throws IOException {
 		String subjectName = FilenameUtils.removeExtension(subjectDataset.getName());
 		SubjectHistoryVault vault = subjectStore(temp);
 		SubjectHistory history = vault.open(subjectName);
@@ -57,12 +56,10 @@ public class DataPreparer {
 			var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 			File file = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 			createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, file);
-			File jsonl = transformToJsonl(file, outName, new HashMap<>(Map.of("means", means(history, outName), "stds", stds(history, outName))), inferenceModel.asType().lookBack());
+			transformToJsonl(file, outName, new HashMap<>(Map.of("means", means(history, outName), "stds", stds(history, outName))), inferenceModel.asType().lookBack());
 			file.delete();
-			transformToTsv(jsonl, outName);
 		}
 		vault.close();
-
 	}
 
 	private static double[] stds(SubjectHistory history, String outName) {
@@ -96,10 +93,6 @@ public class DataPreparer {
 			return layers.stream().map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l).toArray(String[]::new);
 		}
 		return new String[]{inferenceModel.variable().name$()};
-	}
-
-	private void transformToTsv(File jsonl, String outName) {
-
 	}
 
 	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, String outputVariable) {

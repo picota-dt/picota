@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<title>Digital Twin</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<style>
+    body {
+        font-family: 'Poppins', sans-serif;
+    }
+
+</style>
+<body class="bg-black text-white flex flex-col min-h-screen">
+<header class="fixed top-0 left-0 w-full bg-black py-4 px-[10vw] flex items-center gap-2 z-50">
+	<img src="images/logo.png" alt="Picota Logo" class="h-24">
+	<span class="text-4xl font-semibold">picota</span>
+</header>
+
+<main class="flex-grow pt-24 pb-12 px-8">
+	<div class="max-w-3xl mx-auto space-y-8 rounded-2xl p-8">
+
+		<div class="bg-[#1c1c1c] rounded-2xl p-8">
+			<h1 class="text-3xl font-semibold mb-6 text-center">$name $version</h1>
+
+			<section class="mb-8">
+				<h2 class="text-2xl font-semibold text-blue-400 mb-4">1. Training Report</h2>
+				<div class="bg-black p-6 rounded-lg border border-gray-600">
+					<p class="mb-4"><strong>Validation Loss:</strong> $validationLoss</p>
+					<p class="mb-2"><strong>Best feature:</strong> $feature</p>
+					<a id="downloadReportLink"
+					   href="#"
+					   target="_blank"
+					   class="text-white underline hover:text-blue-300">
+						Download full report (PDF)
+					</a>
+				</div>
+			</section>
+
+			<!-- Section 2: Evaluate the Model -->
+			<section class="mb-8">
+				<h2 class="text-2xl font-semibold text-blue-400 mb-4">2. Evaluate the model</h2>
+				<div class="bg-black p-6 rounded-lg border border-gray-600">
+					<p class="mb-2">Send a JSON payload to test your model in real time:</p>
+					<label for="curlCommand"></label><textarea
+							id="curlCommand"
+							class="w-full bg-black border border-gray-600 rounded-lg p-4 placeholder-gray-400 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+							rows="6">curl -X POST -H "Content-Type: application/json" -d '{"foo":"bar"}' https://picota.io/api/inference/$id</textarea>
+					<button id="runCurl"
+							class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2 rounded-md transition">
+						Test Model
+					</button>
+					<div id="curlResult" class="bg-black mt-12 p-4 rounded-lg border border-gray-600 text-sm text-gray-200 hidden"></div>
+				</div>
+			</section>
+
+			<!-- Section 3: API Information -->
+			<section class="mb-8">
+				<h2 class="text-2xl font-semibold text-blue-400 mb-4">3. API Information</h2>
+				<div class="bg-black p-6 rounded-lg border border-gray-600">
+					<p class="mb-2"><strong>Evaluate endpoint:</strong></p>
+					<code class="block bg-black p-2 rounded text-sm mb-4">POST
+						https://picota.io/api/inference/$id</code>
+					<p class="mb-2"><strong>Train endpoint:</strong></p>
+					<code class="block bg-black p-2 rounded text-sm mb-4">POST https://picota.io/api/train/$id</code>
+					<p class="text-gray-400 text-sm">
+						If your model is protected, include your token in the <code class="bg-black px-1 rounded">Authorization</code>
+						header.
+					</p>
+				</div>
+			</section>
+
+			<!-- Section 4: Protect Your Model -->
+			<section class="mb-8">
+				<h2 class="text-2xl font-semibold text-blue-400 mb-4">4. Protect your model</h2>
+				<div class="bg-black p-6 rounded-lg border border-gray-600">
+					<p class="mb-2">Enter a token to secure access to your model:</p>
+					<input
+							type="password"
+							placeholder="Enter your token"
+							class="w-full bg-black border border-gray-600 rounded-md p-2 text-white mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+					<button
+							class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2 rounded-md transition">
+						Set Token
+					</button>
+				</div>
+			</section>
+
+			<section>
+				<h2 class="text-2xl font-semibold text-blue-400 mb-4">5. Credits and Usage</h2>
+				<div class="bg-black p-6 rounded-lg border border-gray-600 space-y-6">
+					<p><strong>Available credits:</strong> 240</p>
+
+					<table class="w-full text-left border-collapse">
+						<thead>
+						<tr class="border-b border-gray-600">
+							<th class="py-2">Type</th>
+							<th class="py-2">Usage</th>
+							<th class="py-2">Credits</th>
+						</tr>
+						</thead>
+						<tbody>
+						<tr class="border-b border-gray-600">
+							<td class="py-2">Evaluation</td>
+							<td class="py-2">32 requests</td>
+							<td class="py-2">64</td>
+						</tr>
+						<tr>
+							<td class="py-2">Retraining</td>
+							<td class="py-2">2 trainings</td>
+							<td class="py-2">80</td>
+						</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+		</div>
+	</div>
+</main>
+
+<footer class="text-center py-6 text-sm text-gray-500">
+	© 2025 Monentia Inc.
+</footer>
+
+<script>
+    document.getElementById('runCurl').addEventListener('click', () => {
+        const cmd = document.getElementById('curlCommand').value.trim();
+        const resultDiv = document.getElementById('curlResult');
+        resultDiv.classList.add('hidden');
+        resultDiv.innerHTML = '';
+
+        try {
+            const urlMatch = cmd.match(/https?:\/\/[^\s'"]+/);
+            if (!urlMatch) throw new Error('No se encontró URL válida en el comando curl.');
+            const url = urlMatch[0];
+
+            // Extraer JSON payload después de -d o --data
+            const dataMatch = cmd.match(/-d\s+'([^']*)'|--data\s+'([^']*)'/)
+                || cmd.match(/-d\s+"([^"]*)"|--data\s+"([^"]*)"/);
+            let payload = null;
+            if (dataMatch) {
+                const raw = dataMatch[1] || dataMatch[2];
+                payload = JSON.parse(raw);
+            }
+
+            let method = 'GET';
+            const methodMatch = cmd.match(/-X\s+([A-Z]+)/);
+            if (methodMatch) method = methodMatch[1];
+
+            const options = { method };
+            if (payload) {
+                options.headers = { 'Content-Type': 'application/json' };
+                options.body = JSON.stringify(payload);
+            }
+            fetch(url, options)
+                .then(async (res) => {
+                    const contentType = res.headers.get('Content-Type') || '';
+                    let body;
+                    if (contentType.includes('application/json')) {
+                        body = JSON.stringify(await res.json(), null, 2);
+                    } else {
+                        body = await res.text();
+                    }
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.innerHTML = `
+            <p class="font-semibold mb-2">Respuesta (${res.status} ${res.statusText}):</p>
+            <pre class="whitespace-pre-wrap">${body}</pre>
+          `;
+                })
+                .catch((err) => {
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.innerHTML = `
+            <p class="font-semibold text-red-500 mb-2">Error al ejecutar petición:</p>
+            <pre class="whitespace-pre-wrap">${err.message}</pre>
+          `;
+                });
+        } catch (err) {
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = `
+        <p class="font-semibold text-red-500 mb-2">Error en el comando:</p>
+        <pre class="whitespace-pre-wrap">${err.message}</pre>
+      `;
+        }
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        const pathSegments = window.location.pathname.split('/').filter(seg => seg !== '');
+        const dtId = pathSegments[pathSegments.length - 1];
+        const reportLink = document.getElementById('downloadReportLink');
+        if (reportLink) {
+            reportLink.href = `/digital-twin/${dtId}/report`;
+        }
+    });
+</script>
+</body>
+</html>

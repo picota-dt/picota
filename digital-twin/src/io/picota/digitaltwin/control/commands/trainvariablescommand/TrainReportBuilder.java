@@ -1,4 +1,4 @@
-package io.picota.digitaltwin.builder;
+package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
 import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.kernel.colors.ColorConstants;
@@ -13,16 +13,17 @@ import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
-import io.picota.digitaltwin.builder.DigitalSubjectBuilder.Result;
+import io.picota.digitaltwin.model.DigitalTwin.TrainingReport;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 public class TrainReportBuilder {
-	public void generate(Result result, File destination) throws IOException {
+	public void generate(TrainingReport report, File destination) throws IOException {
 		PdfWriter writer = new PdfWriter(destination);
 		PdfDocument pdf = new PdfDocument(writer);
 		Document doc = new Document(pdf, PageSize.A4);
@@ -33,17 +34,17 @@ public class TrainReportBuilder {
 				.setFontSize(18)
 				.setTextAlignment(TextAlignment.CENTER);
 		doc.add(title);
-		doc.add(new Paragraph("Status: " + (result.statusCode() == 0 ? "Success" : "Failure")).setMarginTop(12));
-		if (result.statusCode() != 0) doc.add(new Paragraph("Report:\n " + result.report()).setMarginBottom(12));
+		doc.add(new Paragraph("Status: " + report.state().name()).setMarginTop(12));
+		if (!report.state().equals(Future.State.SUCCESS)) doc.add(new Paragraph("Report:\n " + report.report()).setMarginBottom(12));
 		float[] colWidths = {2, 2, 2, 5};
 		Table table = new Table(UnitValue.createPercentArray(colWidths)).useAllAvailableWidth();
 		table.addHeaderCell(new Cell().add(new Paragraph("Subject")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Variable")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Loss")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
 		table.addHeaderCell(new Cell().add(new Paragraph("Contributors")).setBackgroundColor(ColorConstants.LIGHT_GRAY));
-		for (Result.Training t : result.trainings()) {
+		for (TrainingReport.Variable t : report.trainings()) {
 			table.addCell(new Cell().add(new Paragraph(t.dt())));
-			table.addCell(new Cell().add(new Paragraph(t.variable())));
+			table.addCell(new Cell().add(new Paragraph(t.name())));
 			table.addCell(new Cell().add(new Paragraph(String.format("%.4f", t.loss()))));
 			table.addCell(new Cell().add(new Paragraph(contributors(t))));
 		}
@@ -51,8 +52,8 @@ public class TrainReportBuilder {
 		doc.close();
 	}
 
-	private static String contributors(Result.Training t) {
-		return t.contributors().entrySet().stream()
+	private static String contributors(TrainingReport.Variable variable) {
+		return variable.contributors().entrySet().stream()
 				.sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
 				.map(e -> e.getKey() + ": " + String.format("%.2f", e.getValue()))
 				.collect(Collectors.joining("\n"));

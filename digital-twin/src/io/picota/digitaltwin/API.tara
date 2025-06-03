@@ -1,0 +1,15 @@
+dsl Konos
+
+Service DigitalTwin as REST(host = empty, port = "{api_port}")
+	Authentication as Bearer
+	Resource("digital-twin/:id/inference") inference
+		Post
+			Parameter(in = path, isRequired = true) id as Text
+			Parameter(in = body, isRequired = true) values as Map
+				Key as Text
+				Value as Text
+			Exception(code = BadRequest)
+	Resource("digital-twin/:id/build") build
+		Post
+			Parameter(in = path, isRequired = true) id as Text
+			Exception(code = BadRequest)

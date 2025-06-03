@@ -111,6 +111,7 @@
     <orderEntry type="library" name="Intino: io.intino.magritte:framework:5.2.1" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:ui-framework:6.5.7" level="project" />
     <orderEntry type="library" name="Intino: io.quassar.picota:reader-java:1.0.6" level="project" />
-    <orderEntry type="library" name="Intino: systems.intino.datamarts:subject-store:2.0.16" level="project" />
+    <orderEntry type="library" name="Intino: systems.intino.datamarts:subject-store:2.0.18" level="project" />
+    <orderEntry type="library" name="font-awesome" level="application" />
   </component>
 </module>

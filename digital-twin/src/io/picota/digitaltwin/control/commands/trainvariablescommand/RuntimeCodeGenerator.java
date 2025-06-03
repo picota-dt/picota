@@ -1,16 +1,14 @@
-package io.picota.digitaltwin.setup;
+package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
-import io.intino.alexandria.logger.Logger;
 import io.intino.itrules.Engine;
 import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
-import io.picota.digitaltwin.utils.Compression;
+import io.picota.digitaltwin.model.DigitalTwin;
+import io.picota.digitaltwin.control.utils.Compression;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.picota.PicotaGraph;
 import io.quassar.picota.Variable;
-import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,23 +21,18 @@ import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
 
 public class RuntimeCodeGenerator {
-	private final PicotaGraph graph;
 	private final Template template;
-	private final File trainerDir;
-	private final File evaluatorDir;
-	private final File scriptsDir;
+	private final File evaluatorScriptDir;
+	private final File trainScriptDir;
+	private final DigitalTwin digitalTwin;
 	private final Map<DigitalSubject, List<String>> subjectTargets;
 
-	public RuntimeCodeGenerator(File workingDir, PicotaGraph graph, Map<DigitalSubject, List<String>> subjectTargets) {
-		this.graph = graph;
-		this.subjectTargets = subjectTargets;
+	public RuntimeCodeGenerator(DigitalTwin digitalTwin, Map<DigitalSubject, List<String>> subjectTargets) {
+		this.digitalTwin = digitalTwin;
 		this.template = new TorchScriptsTemplate();
-		this.scriptsDir = new File(workingDir, "scripts");
-		this.trainerDir = new File(scriptsDir, "trainer");
-		this.evaluatorDir = new File(scriptsDir, "evaluator");
-		clean();
-		this.evaluatorDir.mkdirs();
-		this.trainerDir.mkdirs();
+		this.subjectTargets = subjectTargets;
+		this.evaluatorScriptDir = digitalTwin.archetype().evaluatorScriptsDirectory();
+		this.trainScriptDir = digitalTwin.archetype().trainerScriptsDirectory();
 	}
 
 	public void generate() {
@@ -54,12 +47,12 @@ public class RuntimeCodeGenerator {
 	private void createTrainerScripts() throws IOException {
 		createDigitalSubjectScripts();
 		createMainScript();
-		extract("trainer", trainerDir);
+		extract("trainer", trainScriptDir);
 	}
 
 	private void createEvaluatorScripts() throws IOException {
-		for (DigitalSubject subject : graph.digitalTwin().digitalSubjectList()) {
-			File file = new File(evaluatorDir, subject.name$() + ".py");
+		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList()) {
+			File file = new File(evaluatorScriptDir, subject.name$() + ".py");
 			FrameBuilder frame = new FrameBuilder("evaluator");
 			frame.add("name", subject.name$());
 			subject.inferenceModelList().forEach(i -> {
@@ -69,7 +62,7 @@ public class RuntimeCodeGenerator {
 			});
 			Files.writeString(file.toPath(), new Engine(template).render(frame));
 		}
-		extract("evaluator", evaluatorDir);
+		extract("evaluator", evaluatorScriptDir);
 	}
 
 	private void extract(String lib, File dir) throws IOException {
@@ -77,15 +70,15 @@ public class RuntimeCodeGenerator {
 	}
 
 	private void createMainScript() throws IOException {
-		File main = new File(trainerDir, "main.py");
+		File main = new File(trainScriptDir, "main.py");
 		FrameBuilder frame = new FrameBuilder("supermain");
-		frame.add("subject", graph.digitalTwin().digitalSubjectList().stream().map(ds -> ds.subject().name$()).toArray(String[]::new));
+		frame.add("subject", digitalTwin.graph().digitalTwin().digitalSubjectList().stream().map(ds -> ds.subject().name$()).toArray(String[]::new));
 		Files.writeString(main.toPath(), new Engine(template).render(frame));
 	}
 
 	private void createDigitalSubjectScripts() throws IOException {
-		for (DigitalSubject subject : graph.digitalTwin().digitalSubjectList()) {
-			File dtDir = new File(trainerDir, normalize(subject.subject().name$()));
+		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList()) {
+			File dtDir = new File(trainScriptDir, normalize(subject.subject().name$()));
 			dtDir.mkdirs();
 			createPackage(dtDir);
 			renderInferences(subject, dtDir);
@@ -138,13 +131,5 @@ public class RuntimeCodeGenerator {
 		return new FrameBuilder(tag, "variable")
 				.add("subjects", subjectTargets.get(ds).toArray(new String[0]))
 				.add("name", v.name$());
-	}
-
-	private void clean() {
-		try {
-			FileUtils.deleteDirectory(this.scriptsDir);
-		} catch (IOException e) {
-			Logger.error(e);
-		}
 	}
 }

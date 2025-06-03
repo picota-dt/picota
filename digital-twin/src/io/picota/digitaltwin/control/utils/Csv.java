@@ -1,4 +1,4 @@
-package io.picota.digitaltwin.utils;
+package io.picota.digitaltwin.control.utils;
 
 import static java.lang.String.format;
 import static java.util.Arrays.stream;

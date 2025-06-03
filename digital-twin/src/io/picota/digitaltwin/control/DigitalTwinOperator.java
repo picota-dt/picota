@@ -1,7 +1,8 @@
-package io.picota.digitaltwin;
+package io.picota.digitaltwin.control;
 
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TemporalColumns;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
@@ -20,8 +21,8 @@ import java.time.temporal.TemporalAmount;
 import java.util.List;
 import java.util.stream.IntStream;
 
-import static io.picota.digitaltwin.utils.Utils.chronoUnitOf;
-import static io.picota.digitaltwin.utils.Utils.periodOf;
+import static io.picota.digitaltwin.control.utils.Utils.chronoUnitOf;
+import static io.picota.digitaltwin.control.utils.Utils.periodOf;
 
 public class DigitalTwinOperator {
 	private final File scriptsDir;

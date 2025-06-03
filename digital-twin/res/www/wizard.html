@@ -1,172 +1,337 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Picota - Wizard</title>
-	<!-- Tailwind CSS CDN -->
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<title>Picota – Wizard</title>
 	<script src="https://cdn.tailwindcss.com"></script>
-	<!-- Google Font Poppins -->
 	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 	<style>
         body {
             font-family: 'Poppins', sans-serif;
         }
+
+        .error-box {
+            background: #2c2c2c;
+            border: 1px solid #b91c1c;
+            padding: 1em;
+            border-radius: 6px;
+            margin-top: 1em;
+            color: #fca5a5;
+            font-size: 0.95em;
+            text-align: left;
+        }
+
+        .step-container {
+            background: #1c1c1c;
+            padding: 2em;
+            border-radius: 12px;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .step-container h1 {
+            font-size: 1.8em;
+            margin-bottom: 0.5em;
+            color: white;
+        }
+
+        .step-container p {
+            margin: 0.8em 0;
+            line-height: 1.5;
+            color: white;
+        }
+
+        .step-container a {
+            color: #60a5fa;
+            text-decoration: underline;
+        }
+
+        .step-container input[type="url"],
+        .step-container input[type="file"] {
+            width: 100%;
+            padding: 0.7em;
+            font-size: 1em;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #111;
+            color: white;
+            margin-top: 0.5em;
+            margin-bottom: 1.2em;
+        }
+
+        .step-container button {
+            background: #3b82f6;
+            color: white;
+            padding: 0.8em 1.5em;
+            border: none;
+            font-size: 1em;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .step-container .subtle {
+            color: #ccc;
+            font-size: 0.9em;
+        }
 	</style>
 </head>
 <body class="bg-black text-white flex flex-col min-h-screen">
-<!-- Header fijo -->
 <header class="fixed top-0 left-0 w-full bg-black py-4 px-[10vw] flex items-center gap-2 z-50">
 	<a href="/" class="flex items-center">
-		<img src="images/logo.png" alt="Picota logo" class="h-10 w-10 mr-2">
-		<span class="text-3xl font-semibold uppercase">picota</span>
+		<img src="images/logo.png" alt="Picota logo" class="h-24">
+		<span class="text-4xl font-semibold">picota</span>
 	</a>
 </header>
+
 <main class="flex-grow flex items-center justify-center pt-32 px-[10vw] pb-12">
-	<div class="w-full max-w-2xl bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg p-8">
-		<h1 class="text-3xl md:text-4xl font-semibold text-center mb-8">Crea tu Gemelo Digital</h1>
+	<div class="w-full max-w-2xl">
 		<div class="step" id="step1">
-			<h2 class="text-2xl font-medium mb-4">Paso 1: URL del modelo Quassar</h2>
-			<p class="text-gray-300 mb-4">
-				Si no tienes ninguno, créalo en
-				<a href="https://quassar.io" class="text-blue-400 hover:underline">quassar.io</a>
-			</p>
-			<input type="url" id="modelUrl"
-				   placeholder="https://quassar.io/commits/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-				   class="w-full bg-transparent border border-gray-600 rounded-lg p-3 mb-6 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500">
-			<button id="next1" disabled
-					class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition">
-				Siguiente
-			</button>
-		</div>
-		<div class="step hidden" id="step2">
-			<h2 class="text-2xl font-medium mb-4">Paso 2: Selecciona fichero ZIP</h2>
-			<p class="text-gray-300 mb-4">
-				Ficheros ZIP para cada sujeto. Las cabeceras deben corresponder a las variables.
-			</p>
-			<input type="file" id="dataFile" accept=".zip"
-				   class="w-full mb-6 text-gray-200">
-			<div class="flex justify-between">
-				<button id="prev2"
-						class="bg-gray-700 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
-					Anterior
-				</button>
-				<button id="next2" disabled
-						class="bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
-					Siguiente
+			<div class="step-container">
+				<h1>Step 1: Define your descriptive model</h1>
+				<p>To begin building your digital twin, you need to define a descriptive model. This model specifies the
+					input and output variables, and acts as the blueprint for your inference engine.</p>
+				<p>Click below to open the modeling environment in Quassar<br/>
+					<button id="createModel" onclick="location.href='https://quassar.io/models/picota/new'"
+							class="bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition"
+							style="margin: inherit;width: 50% ">Create descriptive model
+					</button>
+				</p>
+				<p>Once your model is committed, you’ll automatically return here to continue.</p>
+
+				<p class="subtle">Advanced: If you already have a model and prefer to enter the commit URL manually, you
+					can do so below:</p>
+				<div class="relative">
+					<input
+							type="url"
+							id="modelUrl"
+							placeholder="https://quassar.io/commits/your-uuid-here"
+							class="bg-transparent border border-gray-600 rounded-lg p-4 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 text-lg"
+							style="padding-right:3em"/>
+					<i id="validIcon"
+					   class="fas fa-check-circle text-green-500 text-xl absolute right-4 top-1/2 transform -translate-y-1/2 hidden"></i>
+					<i id="invalidIcon"
+					   class="fas fa-exclamation-circle text-red-500 text-xl absolute right-4 top-1/2 transform -translate-y-1/2 hidden"></i>
+				</div>
+				<p id="validationMessage" class="text-red-500 text-sm mb-4 hidden"></p>
+				<button id="next1" disabled
+						class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+					Continue
 				</button>
 			</div>
 		</div>
 
-		<!-- Step 3 -->
-		<div class="step hidden text-center" id="step3">
-			<h2 class="text-2xl font-medium mb-4">Paso 3: Generando Modelo</h2>
-			<p id="statusMessage" class="text-gray-300 mb-6">Inicializando...</p>
-			<div class="mx-auto w-12 h-12 border-4 border-gray-700 border-t-gray-400 rounded-full animate-spin"></div>
+		<div class="step hidden" id="step2">
+			<div class="step-container">
+				<h1>Step 2: Upload your dataset</h1>
+				<p>Now that your model is defined, it's time to provide training data. The dataset must match the
+					structure defined in your descriptive model.</p>
+				<p>You can use the following template as a reference. It contains the required column headers based on
+					your model's inputs and outputs.</p>
+				<button id="downloadTemplate" disabled
+						class="w-1/2 bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+					Download CSV Template
+				</button>
+				<p class="subtle">Only Zip files containing CSV or TSV are accepted.</p>
+				<input
+						type="file"
+						id="dataFile"
+						accept=".zip"
+						class="bg-transparent border border-gray-600 rounded-lg p-4 text-lg"
+				/>
+				<p class="subtle">Note: Your data will be permanently deleted after training is complete. No records are
+					stored or shared.</p>
+				<div class="flex justify-between mt-4">
+					<button id="buildDigitalTwin" disabled
+							class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+						Proceed to build your digital twin
+					</button>
+				</div>
+			</div>
 		</div>
 
-		<!-- Step 4 -->
-		<div class="step hidden text-center" id="step4">
-			<h2 class="text-2xl font-medium mb-6">Paso 4: Descarga Resultados</h2>
-			<button id="downloadPdf"
-					class="w-full mb-4 bg-gray-800 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition">
-				Descargar Informe
-			</button>
-			<button id="downloadModel"
-					class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition">
-				Descargar Modelos
-			</button>
+		<div class="step hidden text-center" id="step3">
+			<div class="bg-[#1c1c1c] p-8 rounded-2xl shadow-lg max-w-xl mx-auto">
+				<h2 class="text-2xl font-medium mb-4 text-white">Training in progress</h2>
+				<p class="text-gray-300 mb-6">Your inference model is being built based on the dataset you provided.</p>
+				<div class="relative bg-gray-800 rounded-lg overflow-hidden h-5 mb-6">
+					<div id="progressBar" class="bg-blue-500 h-full w-0 transition-all duration-400 ease-in-out"></div>
+				</div>
+				<p id="statusMessage" class="text-gray-400 text-sm">Initializing...</p>
+			</div>
+		</div>
+
+		<div class="step hidden" id="stepError">
+			<div class="step-container">
+				<h1>Training failed</h1>
+				<h2 id="modelInfoError" class="text-3xl font-semibold mb-6 text-center"></h2>
+				<p>Something went wrong during the training process. Your model could not be created.</p>
+				<div class="error-box" id="errorBoxContent"></div>
+				<p>You can try again checking data:</p>
+				<button id="tryAgainBtn" type="button" class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">Try again</button>
+			</div>
+		</div>
+
+		<div class="step hidden" id="stepSuccess">
+			<div class="step-container">
+				<h1>Training completed successfully</h1>
+				<h2 id="modelInfoSuccess" class="text-3xl font-semibold mb-6 text-center"></h2>
+				<p>Your inference model has been created and is now ready to use as a digital twin.</p>
+				<button
+						id="gotoDigitalTwin"
+						class="w-50 bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition"
+						style="display: block; margin: 0 auto;">
+					Go to your digital twin
+				</button>
+				<p>&nbsp;</p>
+				<p class="subtle">Note: Your dataset has been permanently deleted</p>
+			</div>
 		</div>
 	</div>
 </main>
 
 <footer class="text-center py-6 text-sm text-gray-500">
-	© 2025 Picota Inc.
+	© 2025 Monentia Inc.
 </footer>
+
 <script>
-    const steps = Array.from(document.querySelectorAll('.step'));
-    let modelName = '';
+    const statusMessage = document.getElementById('statusMessage');
+    const progressBar = document.getElementById('progressBar');
+    const gotoDigitalTwin = document.getElementById('gotoDigitalTwin');
+
+    const modelUrlInput = document.getElementById('modelUrl');
+    const next1 = document.getElementById('next1');
+    const validIcon = document.getElementById('validIcon');
+    const invalidIcon = document.getElementById('invalidIcon');
+    const validationMessage = document.getElementById('validationMessage');
+
+    const modelInfoSuccess = document.getElementById('modelInfoSuccess');
+    const modelInfoError = document.getElementById('modelInfoError');
+
+    const dataFileInput = document.getElementById('dataFile');
+    const buildDigitalTwin = document.getElementById('buildDigitalTwin');
+    const errorBoxContent = document.getElementById('errorBoxContent');
 
     function showStep(i) {
         steps.forEach((s, idx) => s.classList.toggle('hidden', idx !== i));
     }
 
-    showStep(0);
-    const modelIdInput = document.getElementById('modelUrl');
-    const next1 = document.getElementById('next1');
-    modelIdInput.addEventListener('input', () => next1.disabled = !modelIdInput.value);
+    const steps = Array.from(document.querySelectorAll('.step'));
+    const params = new URLSearchParams(window.location.search);
+    let dtId = params.get('model') || '';
+    let step1State = ''
+    const stepParam = parseInt(params.get('step'), 10);
+    if (!isNaN(stepParam) && stepParam >= 1 && stepParam <= steps.length) showStep(stepParam - 1); else showStep(0);
+
+    next1.disabled = true;
+
+    function validateUrl() {
+        const url = modelUrlInput.value.trim();
+        next1.disabled = true;
+        validIcon.classList.add('hidden');
+        invalidIcon.classList.add('hidden');
+        validationMessage.classList.add('hidden');
+        if (!url) return;
+
+        const form = new FormData();
+        form.append('modelUrl', url);
+
+        fetch(`/digital-twin`, {method: 'POST', body: form})
+            .then(res => res.json())
+            .then(json => {
+                if (json.status === 'SUCCESS') {
+                    validIcon.classList.remove('hidden');
+                    next1.disabled = false;
+                    step1State = json.state;
+                } else {
+                    invalidIcon.classList.remove('hidden');
+                    validationMessage.textContent = json.message || 'invalid URL';
+                    validationMessage.classList.remove('hidden');
+                }
+            })
+            .catch(() => {
+                invalidIcon.classList.remove('hidden');
+                validationMessage.textContent = 'Error validating URL';
+                validationMessage.classList.remove('hidden');
+            });
+    }
+
+    modelUrlInput.addEventListener('input', () => validateUrl());
+    if (dtId) {
+        modelUrlInput.value = "https://quassar.io/commits/" + dtId;
+        validateUrl()
+    }
     next1.addEventListener('click', () => {
-        const url = modelIdInput.value.replace(/\/+$/, '');
-        const lastSegment = url.split('/').pop();
-        modelName = lastSegment.replace(/\.[^/.]+$/, '');
-        showStep(1);
+        const trimmedUrl = modelUrlInput.value.replace(/\/+$/, '');
+        const lastSegment = trimmedUrl.split('/').pop();
+        dtId = lastSegment.replace(/\.[^/.]+$/, '');
+        if (step1State === "Training") showStep(2);
+        else showStep(1);
+
     });
 
-    const dataFileInput = document.getElementById('dataFile');
-    const prev2 = document.getElementById('prev2');
-    const next2 = document.getElementById('next2');
-    dataFileInput.addEventListener('change', () => next2.disabled = !dataFileInput.files.length);
-    prev2.addEventListener('click', () => showStep(0));
-    next2.addEventListener('click', () => {
+    dataFileInput.addEventListener('change', () => {
+        buildDigitalTwin.disabled = !dataFileInput.files.length;
+    });
+    buildDigitalTwin.addEventListener('click', () => {
         showStep(2);
         startProcessing();
     });
+    gotoDigitalTwin.addEventListener('click', () => {
+        window.location.href = `/digital-twin/${dtId}`;
+    });
+
+    document.getElementById('tryAgainBtn').addEventListener('click', () => {
+        location.reload();
+    });
 
     function startProcessing() {
-        const url = modelIdInput.value;
+        const url = modelUrlInput.value;
         const file = dataFileInput.files[0];
         const form = new FormData();
         form.append('modelUrl', url);
-        form.append('dataset', file);
-        document.getElementById('statusMessage').textContent = "Inicializando..."
-        fetch('/train', {method: 'POST', body: form})
+        if (file) form.append('dataset', file);
+        statusMessage.textContent = 'Initializing…';
+        progressBar.style.width = '0%';
+
+        fetch(`/digital-twin/${dtId}/state/build`, {method: 'POST', body: form})
             .then(r => {
-                if (!r.ok) throw new Error();
+                if (!r.ok) {
+                    r.json().then(err => showError(err.message));
+                    return;
+                }
                 showStep(2);
                 pollStatus();
             })
-            .catch(() => alert('Error starting the train'));
+            .catch(() => {
+            });
     }
 
     function pollStatus() {
-        fetch('/status')
+        fetch(`/digital-twin/${dtId}/info`)
             .then(res => res.json())
             .then(j => {
-                if (j.message) document.getElementById('statusMessage').textContent = j.message;
-                if (j.status === 'done') showStep(3);
-                else setTimeout(pollStatus, 2000);
+                statusMessage.textContent = j.progressMessage;
+                progressBar.style.width = j.progress + '%';
+                if (j.state === 'Prepared') {
+                    modelInfoSuccess.textContent = `${j.name} ${j.version}`;
+                    showStep(4);
+                } else if (j.state === 'WaitingData' || j.state === 'DownloadedData' || j.state === 'Training') {
+                    setTimeout(pollStatus, 1000);
+                } else {
+                    modelInfoError.textContent = `${j.name} ${j.version}`;
+                    errorBoxContent.textContent = j.progressMessage;
+                    showStep(3);
+                }
             })
-            .catch(() => setTimeout(pollStatus, 2000));
+            .catch(() => setTimeout(pollStatus, 1000));
     }
 
-    document.getElementById('downloadPdf').addEventListener('click', () => {
-        window.location.href = `/results/${modelName}/report.pdf`;
-    });
-    document.getElementById('downloadModel').addEventListener('click', () => {
-        window.location.href = `/results/${modelName}/models.zip`;
-    });
-</script>
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        fetch('/starting-model')
-            .then(function (response) {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(function (data) {
-                const input = document.getElementById('modelUrl');
-                if (input && data.startingModel.length !== 0) {
-                    input.value = "https://quassar.io/commits/" + data.startingModel;
-                    var nextBtn = document.getElementById('next1');
-                    if (nextBtn) nextBtn.disabled = false;
-                }
-            })
-            .catch(function (error) {
-                console.error('Error fetching modelUrl:', error);
-            });
-    });
+    function showError(msg) {
+        statusMessage.textContent = msg;
+    }
 </script>
 </body>
 </html>

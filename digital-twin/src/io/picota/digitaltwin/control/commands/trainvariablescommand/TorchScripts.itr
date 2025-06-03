@@ -44,7 +44,7 @@ rule trigger(callVariable)
 			print(f"{s}	$name	NaN")
 			continue
 		loader = DatasetLoader(jsonl_path)
-		camera.$name.train(
+		$<container>name+camelcase+firstLowercase.$name.train(
 			s,
 			loader.load(),
 			loader.get_input_variables(),

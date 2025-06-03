@@ -1,4 +1,4 @@
-package io.picota.digitaltwin;
+package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
 import systems.intino.datamarts.subjectstore.calculator.model.filters.CosFilter;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.SinFilter;

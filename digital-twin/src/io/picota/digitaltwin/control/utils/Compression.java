@@ -1,4 +1,4 @@
-package io.picota.digitaltwin.utils;
+package io.picota.digitaltwin.control.utils;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
