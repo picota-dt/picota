@@ -43,7 +43,7 @@
 					<label for="curlCommand"></label><textarea
 							id="curlCommand"
 							class="w-full bg-black border border-gray-600 rounded-lg p-4 placeholder-gray-400 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-							rows="6">curl -X POST -H "Content-Type: application/json" -d '{"foo":"bar"}' https://picota.io/api/digital-twin/$id/inference</textarea>
+							rows="6">curl -X POST -H "Content-Type: application/json" -d '{"instant":"2000-01-01T12:00:00.000Z", "key":"value"}' https://picota.io/api/digital-twin/$id/inference</textarea>
 					<button id="runCurl"
 							class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2 rounded-md transition">
 						Test Model
@@ -130,6 +130,7 @@
             const urlMatch = cmd.match(/https?:\/\/[^\s'"]+/);
             if (!urlMatch) throw new Error('No se encontró URL válida en el comando curl.');
             const url = urlMatch[0];
+
             const dataMatch = cmd.match(/-d\s+'([^']*)'|--data\s+'([^']*)'/)
                 || cmd.match(/-d\s+"([^"]*)"|--data\s+"([^"]*)"/);
             let payload = null;
@@ -142,11 +143,29 @@
             const methodMatch = cmd.match(/-X\s+([A-Z]+)/);
             if (methodMatch) method = methodMatch[1];
 
-            const options = { method };
+            // Inicializa headers y parsea Authorization si existe
+            const headers = {};
+
+            const contentTypeMatch = cmd.match(/-H\s+"Content-Type:\s*([^"]+)"/i)
+                || cmd.match(/-H\s+'Content-Type:\s*([^']+)'/i);
+            if (contentTypeMatch) {
+                headers['Content-Type'] = contentTypeMatch[1];
+            } else if (payload) {
+                headers['Content-Type'] = 'application/json';
+            }
+
+            const authMatch = cmd.match(/-H\s+"Authorization:\s*Bearer\s+([^"]+)"|--header\s+"Authorization:\s*Bearer\s+([^"]+)"/i)
+                || cmd.match(/-H\s+'Authorization:\s*Bearer\s+([^']+)'|--header\s+'Authorization:\s*Bearer\s+([^']+)'/i);
+            if (authMatch) {
+                const token = authMatch[1] || authMatch[2];
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const options = {method, headers};
             if (payload) {
-                options.headers = { 'Content-Type': 'application/json' };
                 options.body = JSON.stringify(payload);
             }
+
             fetch(url, options)
                 .then(async (res) => {
                     const contentType = res.headers.get('Content-Type') || '';
@@ -158,23 +177,22 @@
                     }
                     resultDiv.classList.remove('hidden');
                     resultDiv.innerHTML = `
-            <p class="font-semibold mb-2">Respuesta (${res.status} ${res.statusText}):</p>
-            <pre class="whitespace-pre-wrap">${body}</pre>
-          `;
-                })
-                .catch((err) => {
-                    resultDiv.classList.remove('hidden');
-                    resultDiv.innerHTML = `
-            <p class="font-semibold text-red-500 mb-2">Error al ejecutar petición:</p>
-            <pre class="whitespace-pre-wrap">${err.message}</pre>
-          `;
-                });
+                <p class="font-semibold mb-2">Respuesta (${res.status} ${res.statusText}):</p>
+                <pre class="whitespace-pre-wrap">${body}</pre>
+            `;
+                }).catch((err) => {
+                resultDiv.classList.remove('hidden');
+                resultDiv.innerHTML = `
+                <p class="font-semibold text-red-500 mb-2">Error al ejecutar petición:</p>
+                <pre class="whitespace-pre-wrap">${err.message}</pre>
+            `;
+            });
         } catch (err) {
             resultDiv.classList.remove('hidden');
             resultDiv.innerHTML = `
         <p class="font-semibold text-red-500 mb-2">Error en el comando:</p>
         <pre class="whitespace-pre-wrap">${err.message}</pre>
-      `;
+    `;
         }
     });
     document.addEventListener('DOMContentLoaded', () => {

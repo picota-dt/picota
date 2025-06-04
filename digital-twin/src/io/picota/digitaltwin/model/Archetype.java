@@ -28,6 +28,10 @@ public record Archetype(File dir) {
 		return data;
 	}
 
+	public File metadataFile(String subject, String variable) {
+		return new File(dataDirectory(), subject + "_" + variable + ".md");
+	}
+
 	public File rawDataDirectory() {
 		File data = new File(dataDirectory(), "raw");
 		data.mkdirs();

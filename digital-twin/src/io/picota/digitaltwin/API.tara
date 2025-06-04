@@ -1,6 +1,6 @@
 dsl Konos
 
-Service DigitalTwin as REST(host = empty, port = "{api_port}")
+Service Digitaltwin as REST(host = empty, port = "{api_port}")
 	Authentication as Bearer
 	Resource("digital-twin/:id/inference") inference
 		Post
@@ -9,7 +9,12 @@ Service DigitalTwin as REST(host = empty, port = "{api_port}")
 				Key as Text
 				Value as Text
 			Exception(code = BadRequest)
+			Response as Object(Inference) List
 	Resource("digital-twin/:id/build") build
 		Post
 			Parameter(in = path, isRequired = true) id as Text
 			Exception(code = BadRequest)
+Schema Inference
+	Attribute subject as Text
+	Attribute variable as Text
+	Attribute value as Real

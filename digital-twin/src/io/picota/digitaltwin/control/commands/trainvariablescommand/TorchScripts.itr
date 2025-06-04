@@ -1,12 +1,9 @@
 rule type(evaluator)
 	import sys
-    import torch
-    import numpy as np
-    import KanEvaluator
+
+    import kan.KanEvaluator as KanEvaluator
     from kan.DatasetLoader import DatasetLoader
 
-    dataset = DatasetLoader(sys.argv[2], "\\t").load()
-    tensor = torch.tensor(np.array(list(dataset.values())), dtype=torch.float32).squeeze(1)
 	$variable+evaluate...[$NL]
 
 rule type(supermain)
@@ -52,8 +49,16 @@ rule trigger(callVariable)
 			loader.get_stds(),
 			modelsdir
 		)
+
 rule trigger(evaluate)
-	print("$name	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$viewPoint/$name~$timeHorizon.bin", tensor)))
+	loader = DatasetLoader(sys.argv[2]+"/$<container>name~_~$name.jsonl")
+	data = loader.load()
+	print("$<container>name	$name~$timeHorizon	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$name~$timeHorizon.bin",
+																		data,
+																	  	loader.get_input_variables(),
+																	  	loader.get_means(),
+																	  	loader.get_stds(),
+																	  	loader.get_lookback())))
 
 rule type(variable)
 	import torch

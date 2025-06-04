@@ -1,16 +1,19 @@
 package io.picota.digitaltwin.control.commands;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.DigitalTwinBox;
-import io.picota.digitaltwin.control.commands.trainvariablescommand.DataPreparer;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.RuntimeCodeGenerator;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.DigitalTwin;
-import io.picota.digitaltwin.control.utils.Utils;
-import io.quassar.picota.DigitalTwin.DigitalSubject;
+import io.picota.digitaltwin.model.DigitalTwin.TrainingReport.Variable;
+import org.apache.commons.io.FileUtils;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.Future.State;
@@ -18,7 +21,8 @@ import java.util.stream.Collectors;
 
 import static io.picota.digitaltwin.control.utils.Utils.toDouble;
 import static io.picota.digitaltwin.model.DigitalTwin.State.Training;
-import static org.apache.commons.io.FilenameUtils.removeExtension;
+import static io.picota.digitaltwin.model.MetadataFields.OUT_MAX;
+import static io.picota.digitaltwin.model.MetadataFields.OUT_MIN;
 
 public class TrainSubjectsCommand implements Command {
 	private final DigitalTwinBox box;
@@ -36,16 +40,14 @@ public class TrainSubjectsCommand implements Command {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		try {
-			Map<DigitalSubject, List<String>> subjectTargets = new HashMap<>();
-			for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList())
-				subjectTargets.put(subject, prepareDigitalSubject(digitalTwin, subject));
-			new RuntimeCodeGenerator(digitalTwin, subjectTargets).generate();
+			new RuntimeCodeGenerator(digitalTwin).generateTrainer();
 			DigitalTwin.TrainingReport report = train(digitalTwin);
 			digitalTwin.report(report);
 			box.store().save();
 			return Command.success();
-		} catch (IOException | InterruptedException | IllegalArgumentException e) {
-			Logger.error(e.getMessage());
+		} catch (Throwable e) {
+			Logger.error(e);
+			removeAllData(digitalTwin);
 			digitalTwin.state(DigitalTwin.State.TrainFinished);
 			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
 			return new Result(false, "Error during building process.\n" + e.getMessage());
@@ -57,7 +59,7 @@ public class TrainSubjectsCommand implements Command {
 		digitalTwin.progressMessage("Training subjects...");
 		Logger.info("Training subjects of " + digitalTwin.id() + "...");
 		digitalTwin.state(Training);
-		DigitalTwin.TrainingReport result = runTrain(dtDirectory);
+		DigitalTwin.TrainingReport result = runTrain(digitalTwin, dtDirectory);
 		Logger.info("Training subjects of " + digitalTwin.id() + ": Done");
 		digitalTwin.progressMessage("Finished training. State: " + result.state());
 		digitalTwin.state(DigitalTwin.State.TrainFinished);
@@ -66,31 +68,63 @@ public class TrainSubjectsCommand implements Command {
 		return result;
 	}
 
-	private DigitalTwin.TrainingReport runTrain(File dtDirectory) throws IOException, InterruptedException {
-		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
-		File scripts = new File(dtDirectory, "scripts");
-		File modelsDir = new File(dtDirectory, "models");
+	private DigitalTwin.TrainingReport runTrain(DigitalTwin digitalTwin, File dtDirectory) throws IOException, InterruptedException {
+		File scripts = digitalTwin.archetype().trainerScriptsDirectory();
+		File modelsDir = digitalTwin.archetype().trainedVariablesDirectory();
+		File dataDir = digitalTwin.archetype().dataDirectory();
 		modelsDir.mkdirs();
 		File scriptPath = new File(dtDirectory, "scripts/trainer/main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
-		Process process = new ProcessBuilder(pythonExecutable, scriptPath.getAbsolutePath(), new File(dtDirectory, "data").getCanonicalPath(), modelsDir.getAbsolutePath())
+		Process process = new ProcessBuilder(pythonVenv.getAbsolutePath() + "/bin/python",
+				scriptPath.getAbsolutePath(),
+				dataDir.getCanonicalPath(),
+				modelsDir.getAbsolutePath())
 				.directory(scripts)
 				.start();
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
-		String errors = new String(process.getErrorStream().readAllBytes());
-		System.out.println(report);
-		System.out.println(errors);
-		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? State.SUCCESS : State.FAILED, report, errors, trainedVariables(code, report), modelsDir);
+		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> l.contains("UserWarning")).collect(Collectors.joining("\n"));
+		cleanData(digitalTwin.archetype());
+		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? State.SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
 	}
 
-
-	private List<DigitalTwin.TrainingReport.Variable> trainedVariables(int code, String report) {
-		return code != 0 ? List.of() : report.lines().map(l -> variable(l.split("\t"))).toList();
+	private List<Variable> trainedVariables(DigitalTwin digitalTwin, int code, String report) {
+		return code != 0 ? List.of() : report.lines().map(l -> variable(digitalTwin, l.split("\t"))).toList();
 	}
 
-	private DigitalTwin.TrainingReport.Variable variable(String[] fields) {
-		return new DigitalTwin.TrainingReport.Variable(fields[0], fields[1], toDouble(fields[2]), contributors(fields));
+	private void cleanData(Archetype archetype) {
+		try {
+			FileUtils.listFiles(archetype.dataDirectory(), new String[]{".jsonl", ".csv", ".tsv"}, true).forEach(File::delete);
+			FileUtils.deleteDirectory(archetype.rawDataDirectory());
+			FileUtils.deleteDirectory(archetype.tempDirectory());
+			FileUtils.deleteDirectory(archetype.scriptsDirectory());
+		} catch (IOException e) {
+			Logger.error(e);
+		}
+
+	}
+
+	private static void removeAllData(DigitalTwin digitalTwin) {
+		try {
+			FileUtils.deleteDirectory(digitalTwin.archetype().dataDirectory());
+			FileUtils.deleteDirectory(digitalTwin.archetype().tempDirectory());
+		} catch (IOException e) {
+			Logger.error(e.getMessage());
+		}
+	}
+
+	private Variable variable(DigitalTwin digitalTwin, String[] fields) {
+		JsonObject metadata = metadata(digitalTwin, fields);
+		return new Variable(fields[0], fields[1], toDouble(fields[2]), metadata.get(OUT_MIN).getAsDouble(), metadata.get(OUT_MAX).getAsDouble(), contributors(fields));
+	}
+
+	private static JsonObject metadata(DigitalTwin digitalTwin, String[] fields) {
+		try {
+			File file = digitalTwin.archetype().metadataFile(fields[0], fields[1]);
+			return new Gson().fromJson(new FileReader(file), JsonObject.class);
+		} catch (FileNotFoundException e) {
+			return new JsonObject();
+		}
 	}
 
 	private static Map<String, Double> contributors(String[] fields) {
@@ -109,26 +143,5 @@ public class TrainSubjectsCommand implements Command {
 		return merged;
 	}
 
-	private List<String> prepareDigitalSubject(DigitalTwin digitalTwin, DigitalSubject subject) throws IOException {
-		List<File> files = findFiles(digitalTwin.archetype(), subject);
-		for (File subjectDataset : files) prepareDataOf(digitalTwin.archetype(), subject, subjectDataset);
-		return files.stream().map(f -> removeExtension(f.getName())).toList();
-	}
 
-	private List<File> findFiles(Archetype archetype, DigitalSubject ds) {
-		File rawDataDir = archetype.rawDataDirectory();
-		if (ds.subject().isPrototype()) return Utils.getFilesWithPrefix(rawDataDir, ds.subject().name$());
-		else {
-			File file = new File(rawDataDir, ds.subject().name$() + ".csv");
-			return Collections.singletonList(file.exists() ? file : new File(rawDataDir, ds.subject().name$() + ".tsv"));
-		}
-	}
-
-	private void prepareDataOf(Archetype archetype, DigitalSubject subject, File subjectDataset) throws IOException {
-		for (DigitalSubject.InferenceModel inferenceModel : subject.inferenceModelList())
-			if (!subjectDataset.exists() || subjectDataset.length() == 0)
-				throw new IllegalArgumentException("Expected dataset " + subjectDataset.getName() + ", but it does not exist or is empty.");
-			else new DataPreparer(archetype.tempDirectory(), archetype.dataDirectory())
-					.prepareData(subject, inferenceModel, subjectDataset);
-	}
 }

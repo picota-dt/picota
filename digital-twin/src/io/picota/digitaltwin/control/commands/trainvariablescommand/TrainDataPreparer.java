@@ -3,6 +3,8 @@ package io.picota.digitaltwin.control.commands.trainvariablescommand;
 import com.google.gson.Gson;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
+import io.picota.digitaltwin.model.Archetype;
+import io.picota.digitaltwin.model.MetadataFields;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution;
@@ -13,6 +15,7 @@ import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNormalizationFilter;
+import systems.intino.datamarts.subjectstore.model.signals.NumericalSignal.Summary;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.io.*;
@@ -28,38 +31,58 @@ import java.util.stream.IntStream;
 
 import static io.picota.digitaltwin.control.utils.Utils.chronoUnitOf;
 import static io.picota.digitaltwin.control.utils.Utils.periodOf;
+import static io.picota.digitaltwin.model.MetadataFields.MEANS;
+import static io.picota.digitaltwin.model.MetadataFields.STDS;
 import static java.time.temporal.ChronoUnit.HOURS;
 
-public class DataPreparer {
+public class TrainDataPreparer {
 	public static final String TSV = ".tsv";
 	public static final String JSONL = ".jsonl";
 	public static final String LAYER_SEPARATOR = ":";
 	private final File temp;
+	private final Archetype archetype;
 	private final File dataDir;
 	private final Gson gson = new Gson();
 
-	public DataPreparer(File temp, File dataDir) {
-		this.temp = temp;
-		this.dataDir = dataDir;
-		this.dataDir.mkdirs();
+	public TrainDataPreparer(Archetype archetype) {
+		this.archetype = archetype;
+		this.temp = archetype.tempDirectory();
+		this.dataDir = archetype.dataDirectory();
 	}
 
 	public void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File subjectDataset) throws IOException {
 		String subjectName = FilenameUtils.removeExtension(subjectDataset.getName());
-		SubjectHistoryVault vault = subjectStore(temp);
-		SubjectHistory history = vault.open(subjectName);
-		fillHistory(history, subjectDataset);
-		String[] outputVariables = outputVariables(inferenceModel);
-		checkColumns(history, subjectName, outputVariables);
-		for (String outputVariable : outputVariables) {
-			var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
-			var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
-			File file = new File(dataDir, history.name() + "_" + outputVariable + TSV);
-			createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, file);
-			transformToJsonl(file, outName, new HashMap<>(Map.of("means", means(history, outName), "stds", stds(history, outName))), inferenceModel.asType().lookBack());
-			file.delete();
+		try (SubjectHistoryVault vault = subjectVault(temp)) {
+			SubjectHistory history = vault.open(subjectName);
+			fillHistory(history, subjectDataset);
+			String[] outputVariables = outputVariables(inferenceModel);
+			checkColumns(history, subjectName, outputVariables);
+			for (String outputVariable : outputVariables) {
+				var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
+				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
+				File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
+				createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, tsv);
+				String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
+				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, history, outName, header);
+				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
+				transformToJsonl(tsv, outName, header, metadata, inferenceModel.asType().lookBack());
+				tsv.delete();
+			}
+		} catch (IOException e) {
+			throw e;
 		}
-		vault.close();
+	}
+
+	private static HashMap<String, Object> metadata(InferenceModel inferenceModel, String outputVariable, SubjectHistory history, String outName, String[] header) {
+		Summary summary = history.query().number(outputVariable).all().summary();
+		HashMap<String, Object> metadata = new HashMap<>();
+		metadata.put(MEANS, means(history, outName));
+		metadata.put(STDS, stds(history, outName));
+		metadata.put(MetadataFields.INPUT_VARIABLES, Arrays.stream(header).filter(f -> !f.equals(outName)).toArray(String[]::new));
+		metadata.put(MetadataFields.LOOKBACK_SIZE, inferenceModel.asType().lookBack());
+		metadata.put(MetadataFields.OUT_MIN, summary.min().value());
+		metadata.put(MetadataFields.OUT_MAX, summary.max().value());
+		return metadata;
 	}
 
 	private static double[] stds(SubjectHistory history, String outName) {
@@ -67,7 +90,9 @@ public class DataPreparer {
 	}
 
 	private static double[] means(SubjectHistory history, String outName) {
-		return history.tags().stream().filter(t -> !t.equals(outName)).mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
+		return history.tags().stream()
+				.filter(t -> !t.equals(outName))
+				.mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
 	}
 
 	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, SubjectHistory history, File file) throws IOException {
@@ -102,15 +127,12 @@ public class DataPreparer {
 				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
 	}
 
-	private File transformToJsonl(File source, String outputVariable, Map<String, Object> headerValues,
+	private File transformToJsonl(File source, String outputVariable, String[] header, Map<String, Object> metadata,
 								  int lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
-		String[] header = Files.lines(source.toPath()).findFirst().get().split("\t");
-		headerValues.put("input_variables", Arrays.stream(header).filter(f -> !f.equals(outputVariable)).toArray(String[]::new));
-		headerValues.put("lookback_size", lookback);
 		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
-			writer.write(gson.toJson(headerValues) + "\n");
+			writer.write(gson.toJson(metadata) + "\n");
 			if (lookback > 0) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
 			else writeWithoutLookBack(source, outputVariable, header, features, writer);
 		}
@@ -216,7 +238,11 @@ public class DataPreparer {
 		return scale.ordinal() > Scale.Day.ordinal() ? Duration.of(resolution.amount(), chronoUnitOf(scale)) : periodOf(resolution.amount(), chronoUnitOf(scale));
 	}
 
-	private static SubjectHistoryVault subjectStore(File workspace) {
+	private static SubjectHistoryVault subjectVault(File workspace) {
 		return new SubjectHistoryVault("jdbc:sqlite:" + new File(workspace, "subjects.ddb"));
+	}
+
+	private static SubjectHistoryVault subjectVault() {
+		return new SubjectHistoryVault("jdbc:sqlite:memory");
 	}
 }

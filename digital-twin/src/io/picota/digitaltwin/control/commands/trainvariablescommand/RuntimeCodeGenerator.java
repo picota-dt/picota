@@ -1,11 +1,14 @@
 package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
+import io.intino.alexandria.logger.Logger;
 import io.intino.itrules.Engine;
 import io.intino.itrules.Frame;
 import io.intino.itrules.FrameBuilder;
 import io.intino.itrules.template.Template;
-import io.picota.digitaltwin.model.DigitalTwin;
 import io.picota.digitaltwin.control.utils.Compression;
+import io.picota.digitaltwin.control.utils.Utils;
+import io.picota.digitaltwin.model.Archetype;
+import io.picota.digitaltwin.model.DigitalTwin;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
 import io.quassar.picota.Variable;
@@ -13,35 +16,86 @@ import io.quassar.picota.Variable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static io.intino.alexandria.logger.Logger.error;
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
+import static org.apache.commons.io.FilenameUtils.removeExtension;
 
 public class RuntimeCodeGenerator {
 	private final Template template;
 	private final File evaluatorScriptDir;
 	private final File trainScriptDir;
 	private final DigitalTwin digitalTwin;
-	private final Map<DigitalSubject, List<String>> subjectTargets;
+	private Map<DigitalSubject, List<String>> subjectTargets;
 
-	public RuntimeCodeGenerator(DigitalTwin digitalTwin, Map<DigitalSubject, List<String>> subjectTargets) {
+	public RuntimeCodeGenerator(DigitalTwin digitalTwin) {
 		this.digitalTwin = digitalTwin;
 		this.template = new TorchScriptsTemplate();
-		this.subjectTargets = subjectTargets;
 		this.evaluatorScriptDir = digitalTwin.archetype().evaluatorScriptsDirectory();
 		this.trainScriptDir = digitalTwin.archetype().trainerScriptsDirectory();
 	}
 
-	public void generate() {
+	public void generateTrainer() {
 		try {
+			loadSubjectTargetsForTrain();
 			createTrainerScripts();
+		} catch (Throwable e) {
+			error("Error during script generation: " + e.getMessage(), e);
+		}
+	}
+
+	public void generateEvaluator() {
+		try {
+			loadSubjectTargetsForEvaluator();
 			createEvaluatorScripts();
 		} catch (Throwable e) {
 			error("Error during script generation: " + e.getMessage(), e);
 		}
+	}
+
+	private void loadSubjectTargetsForTrain() {
+		this.subjectTargets = new HashMap<>();
+		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList()) {
+			try {
+				subjectTargets.put(subject, prepareDigitalSubject(digitalTwin, subject));
+			} catch (IOException e) {
+				Logger.error(e);
+			}
+		}
+	}
+
+	private void loadSubjectTargetsForEvaluator() {
+		this.subjectTargets = new HashMap<>();
+		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList()) {
+			subjectTargets.put(subject, Collections.singletonList(subject.subject().name$()));
+		}
+	}
+
+	private List<String> prepareDigitalSubject(DigitalTwin digitalTwin, DigitalSubject subject) throws IOException {
+		List<File> files = findFiles(digitalTwin.archetype(), subject);
+		for (File subjectDataset : files) subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+		return files.stream().map(f -> removeExtension(f.getName())).toList();
+	}
+
+	private List<File> findFiles(Archetype archetype, DigitalSubject ds) {
+		File rawDataDir = archetype.rawDataDirectory();
+		if (ds.subject().isPrototype()) return Utils.getFilesWithPrefix(rawDataDir, ds.subject().name$());
+		else {
+			File file = new File(rawDataDir, ds.subject().name$() + ".csv");
+			return Collections.singletonList(file.exists() ? file : new File(rawDataDir, ds.subject().name$() + ".tsv"));
+		}
+	}
+
+	private void subjectSources(Archetype archetype, DigitalSubject subject, File subjectDataset) throws IOException {
+		for (DigitalSubject.InferenceModel inferenceModel : subject.inferenceModelList())
+			if (!subjectDataset.exists() || subjectDataset.length() == 0)
+				throw new IllegalArgumentException("Expected dataset " + subjectDataset.getName() + ", but it does not exist or is empty.");
+			else new TrainDataPreparer(archetype).prepareData(subject, inferenceModel, subjectDataset);
 	}
 
 	private void createTrainerScripts() throws IOException {
@@ -52,9 +106,9 @@ public class RuntimeCodeGenerator {
 
 	private void createEvaluatorScripts() throws IOException {
 		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList()) {
-			File file = new File(evaluatorScriptDir, subject.name$() + ".py");
+			File file = new File(evaluatorScriptDir, subject.subject().name$() + ".py");
 			FrameBuilder frame = new FrameBuilder("evaluator");
-			frame.add("name", subject.name$());
+			frame.add("name", subject.subject().name$());
 			subject.inferenceModelList().forEach(i -> {
 				FrameBuilder builder = frameBuilderOf(subject, i.variable(), "inference");
 				if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());

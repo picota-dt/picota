@@ -7,7 +7,7 @@ import java.io.IOException;
 //file:///Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/INFECAR-SOLAR-PLANT-1.0.0.zip
 @Ignore
 public class DTTest {
-	public static final String DIGITAL_TWIN_NAME = "Infecar-Twin";
+	public static final String DIGITAL_TWIN_NAME = "5847cda2-27b0-4b82-9838-c1caa8dbb2ef";
 
 	@Before
 	public void setUp() {
