@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Picota - Gemelos Digitales</title>
+	<title>Picota – Digital Twins</title>
 	<script src="https://cdn.tailwindcss.com"></script>
 	<link rel="icon" href="images/favicon.ico" type="image/x-icon"/>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
 	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-	<style>body {
-        font-family: 'Poppins', sans-serif;
-    }
+	<style>
+        html {
+            scroll-padding-top: 20rem;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
 	</style>
 </head>
 <body class="bg-black text-white">
@@ -25,19 +31,22 @@
 			 class="flex flex-col-reverse md:flex-row items-center justify-between min-h-[calc(100vh-4rem)] px-[10vw]">
 		<div class="md:w-2/5 space-y-6 opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
 			<h1 class="text-3xl md:text-5xl font-semibold center fade">
-				Transforma datos en sistemas digitales autónomos
+				Turn Your Data into Intelligent Digital Twins
 			</h1>
 			<p class="text-lg md:text-xl">
-				Picota te permite convertir tus activos en gemelos digitales inteligentes mediante modelos de
-				aprendizaje automático.
+				Picota allows you to turn your assets into intelligent digital twins through machine learning
+				models.Picota transforms your datasets into custom neural network models that serve as digital twins of
+				your physical systems.
+				We train estimation and prediction models that replicate the behavior of your assets, enabling advanced
+				analysis, simulation, and optimization.
 			</p>
 			<button onclick="window.location.href='#features'"
 					class="inline-block bg-gray-800 hover:bg-gray-600 text-white font-medium py-4 px-8 rounded transition-colors duration-300">
-				Ver más
+				Learn more
 			</button>
 		</div>
 		<div class="md:w-1/2 relative overflow-hidden mb-8 md:mb-0 opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
-			<img src="images/hero.png" alt="Monitorización de infraestructuras"
+			<img src="images/hero.png" alt="Infrastructure monitoring"
 				 class="w-full h-full object-cover rounded-lg filter brightness-90">
 			<div class="absolute inset-0 pointer-events-none"
 				 style="background: radial-gradient(circle at center, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,1) 100%);">
@@ -45,48 +54,109 @@
 		</div>
 	</section>
 
-	<section id="why" class="py-16">
+	<section id="why" class="py-16 scroll-mt-50">
 		<div class="max-w-xl mx-auto text-center space-y-4 opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
-			<h2 class="text-3xl md:text-4xl font-semibold">¿Por qué Picota?</h2>
+			<h2 class="text-3xl md:text-4xl font-semibold">Why Picota?</h2>
 			<p class="text-lg md:text-xl">
-				Nuestros gemelos digitales enriquecen tus recursos con datos en tiempo real, proporcionando control y
-				eficiencia revolucionarios.
+				Our digital twins enrich your assets with real-time data, providing revolutionary control and
+				efficiency.
 			</p>
 		</div>
 	</section>
 
 	<section id="features" class="py-16 px-[10vw]">
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-			<div class="bg-white/5 p-8 rounded-lg text-center opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
-				<img src="icons/modelos.svg" alt="Modelos avanzados" class="w-12 mx-auto mb-4">
-				<h3 class="text-xl font-semibold mb-2">Modelos avanzados</h3>
-				<p>Obtén predicciones precisas con redes neuronales de vanguardia.</p>
+			<div class="bg-white/5 p-8 rounded-lg text-center">
+				<i class="fas fa-brain text-4xl mb-4"></i>
+				<h3 class="text-xl font-semibold mb-2 text-white">Train a Digital Twin</h3>
+				<p class="text-gray-300">
+					We use your data to build a neural network that captures the dynamics of your asset or process.
+				</p>
 			</div>
-			<div class="bg-white/5 p-8 rounded-lg text-center opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
-				<img src="icons/implementacion.svg" alt="Implementación sencilla" class="w-12 mx-auto mb-4">
-				<h3 class="text-xl font-semibold mb-2">Implementación sencilla</h3>
-				<p>Descubre el valor de los gemelos digitales rápidamente.</p>
+			<div class="bg-white/5 p-8 rounded-lg text-center">
+				<i class="fas fa-vial text-4xl mb-4"></i>
+				<h3 class="text-xl font-semibold mb-2 text-white">Simulate</h3>
+				<p class="text-gray-300">
+					Use your trained model to simulate behavior, forecast outcomes, or explore what-if scenarios without
+					real-world risk.
+				</p>
 			</div>
-			<div class="bg-white/5 p-8 rounded-lg text-center opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
-				<img src="icons/tiempo-real.svg" alt="Datos en tiempo real" class="w-12 mx-auto mb-4">
-				<h3 class="text-xl font-semibold mb-2">Datos en tiempo real</h3>
-				<p>Supervisa rendimiento y estado de cada activo de forma continua.</p>
+			<div class="bg-white/5 p-8 rounded-lg text-center">
+				<i class="fas fa-plug text-4xl mb-4"></i>
+				<h3 class="text-xl font-semibold mb-2 text-white">Integrate Easily</h3>
+				<p class="text-gray-300">
+					Your model is delivered in a ready-to-use web service, compatible with modern tools and workflows.
+				</p>
 			</div>
-			<div class="bg-white/5 p-8 rounded-lg text-center opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
-				<img src="icons/retorno.svg" alt="Mayor retorno" class="w-12 mx-auto mb-4">
-				<h3 class="text-xl font-semibold mb-2">Mayor retorno</h3>
-				<p>Reduce costos operativos y optimiza la vida útil de tus activos.</p>
+			<div class="bg-white/5 p-8 rounded-lg text-center">
+				<i class="fas fa-unlock-alt text-4xl mb-4"></i>
+				<h3 class="text-xl font-semibold mb-2 text-white">Unlock New Value</h3>
+				<p class="text-gray-300">
+					Enhance decision-making, reduce uncertainty, and gain insights directly from your historical data.
+				</p>
 			</div>
 		</div>
 	</section>
-	<section id="start" class="py-8">
-		<div class="max-w-xl mx-auto text-center space-y-4 opacity-0 translate-y-5 transition-opacity transition-transform duration-600 ease-out fade">
+	<section id="how-it-works" class="py-16 px-[10vw] bg-black">
+		<div class="max-w-3xl mx-auto space-y-12">
+
+			<h2 class="text-3xl md:text-4xl font-semibold text-white text-center">How Picota Works</h2>
+
+			<div class="space-y-8">
+				<!-- Card 1 -->
+				<div class="flex items-start bg-white/5 p-6 rounded-2xl shadow-lg hover:bg-white/10 transition">
+					<div class="flex-shrink-0">
+						<i class="fas fa-pencil-alt text-3xl text-gray-300"></i>
+					</div>
+					<div class="ml-4">
+						<h3 class="text-xl font-semibold text-white mb-2">1. Define your model</h3>
+						<p class="text-gray-300 leading-relaxed">
+							Start by describing the structure of your system: what inputs it observes and what outputs
+							you want it to predict.
+							You’ll do this in Quassar.io using Picota’s own modeling language. This model becomes the
+							blueprint for your digital twin.
+						</p>
+					</div>
+				</div>
+
+				<!-- Card 2 -->
+				<div class="flex items-start bg-white/5 p-6 rounded-2xl shadow-lg hover:bg-white/10 transition">
+					<div class="flex-shrink-0">
+						<i class="fas fa-database text-3xl text-gray-300"></i>
+					</div>
+					<div class="ml-4">
+						<h3 class="text-xl font-semibold text-white mb-2">2. Train from your data</h3>
+						<p class="text-gray-300 leading-relaxed">
+							Upload a dataset that matches your model. Picota automatically builds and trains a neural
+							network based on your data.
+							Once training is complete, the dataset is deleted—your model stays, your data doesn’t.
+						</p>
+					</div>
+				</div>
+
+				<!-- Card 3 -->
+				<div class="flex items-start bg-white/5 p-6 rounded-2xl shadow-lg hover:bg-white/10 transition">
+					<div class="flex-shrink-0">
+						<i class="fas fa-rocket text-3xl text-gray-300"></i>
+					</div>
+					<div class="ml-4">
+						<h3 class="text-xl font-semibold text-white mb-2">3. Use your digital twin</h3>
+						<p class="text-gray-300 leading-relaxed">
+							Your trained model is now ready to make predictions.
+							You can test it, integrate it via API, or extend it. Every twin is versioned, traceable, and
+							fully based on your custom structure.
+						</p>
+					</div>
+				</div>
+			</div>
+
 			<button onclick="window.location.href='/wizard?step=1'"
-					class="inline-block bg-gray-800 hover:bg-gray-600 text-white font-medium py-4 px-8 rounded transition-colors duration-300">
-				Crea tu Digital Twin
+					class="mt-8 bg-blue-500 hover:bg-blue-600 text-white font-medium px-8 py-3 rounded-lg transition block mx-auto">
+				Start building your digital twin
 			</button>
 		</div>
 	</section>
+
 </main>
 <footer class="text-center py-8 text-sm text-white/60">
 	© 2025 Monentia Inc.
