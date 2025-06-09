@@ -107,11 +107,11 @@
     <orderEntry type="library" name="Intino: com.google.code.gson:gson:2.11.0" level="project" />
     <orderEntry type="library" name="Intino: io.intino.magritte:framework:5.2.1" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:ui-framework:6.5.7" level="project" />
-    <orderEntry type="library" name="Intino: io.quassar.picota:reader-java:1.0.6" level="project" />
     <orderEntry type="library" name="Intino: systems.intino.datamarts:subject-store:2.0.18" level="project" />
     <orderEntry type="library" scope="TEST" name="Intino: io.picota:picota-digitaltwin-accessor:1.0.0" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:rest:4.2.6" level="project" />
     <orderEntry type="library" name="Intino: io.intino.alexandria:http:2.2.6" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Intino: log4j:log4j:1.2.14" level="project" />
+    <orderEntry type="library" name="Intino: io.quassar.picota:parser-java:1.0.7" level="project" />
   </component>
 </module>
