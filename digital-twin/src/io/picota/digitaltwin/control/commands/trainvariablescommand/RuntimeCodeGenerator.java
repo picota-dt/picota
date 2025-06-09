@@ -24,6 +24,7 @@ import java.util.Map;
 import static io.intino.alexandria.logger.Logger.error;
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
 import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
+import static io.picota.digitaltwin.control.utils.Utils.lookbackSize;
 import static org.apache.commons.io.FilenameUtils.removeExtension;
 
 public class RuntimeCodeGenerator {
@@ -111,7 +112,7 @@ public class RuntimeCodeGenerator {
 			frame.add("name", subject.subject().name$());
 			subject.inferenceModelList().forEach(i -> {
 				FrameBuilder builder = frameBuilderOf(subject, i.variable(), "inference");
-				if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
+				if (i.timeHorizon() > 0) builder.add("timeHorizon", "+" + i.timeHorizon());
 				frame.add("variable", builder.toFrame());
 			});
 			Files.writeString(file.toPath(), new Engine(template).render(frame));
@@ -176,8 +177,8 @@ public class RuntimeCodeGenerator {
 		FrameBuilder builder = frameBuilderOf(i.core$().ownerAs(DigitalSubject.class), i.variable(), "inference");
 		DigitalSubject ds = i.core$().ownerAs(DigitalSubject.class);
 		builder.add("subject", ds.subject().name$());
-		builder.add("lookback", i.asType().lookBack());
-		if (i.isPrediction()) builder.add("timeHorizon", "+" + i.asPrediction().timeHorizon());
+		builder.add("lookback", i.lookback() != null ? lookbackSize(i) : 0);
+		if (i.timeHorizon() > 0) builder.add("timeHorizon", "+" + i.timeHorizon());
 		return builder.toFrame();
 	}
 

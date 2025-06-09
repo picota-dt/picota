@@ -33,6 +33,7 @@ public class UiService {
 		AlexandriaHttpServer<?> server = AlexandriaHttpServerBuilder.instance();
 		server.route("/").get(manager -> html(manager, page("/www/index.html")));
 		server.route("/wizard").get(manager -> customHtml(manager, page("/www/wizard.html")));
+		server.route("/wizard/{id}").get(manager -> customHtml(manager, page("/www/wizard.html")));
 		server.route("/digital-twin/{id}").get(manager -> digitalTwinHtml(manager, page("/www/digital-twin.html")));
 		server.route("/digital-twin/{id}/info").get(this::getDigitalTwin);
 		server.route("/digital-twin").post(this::postDigitalTwin);
@@ -143,7 +144,8 @@ public class UiService {
 	private static void customHtml(AlexandriaHttpManager<?> manager, String page) {
 		manager.response().header("Content-Type", "text/html");
 		String modelId = manager.fromQueryOrDefault("id", "");
-		if (modelId != null) page = page.replace("$modelId", modelId);
+		if (modelId == null || modelId.isEmpty()) modelId = manager.fromPathOrDefault("id", "");
+		if (modelId != null && !modelId.isEmpty()) page = page.replace("$modelId", modelId);
 		manager.write(page);
 	}
 

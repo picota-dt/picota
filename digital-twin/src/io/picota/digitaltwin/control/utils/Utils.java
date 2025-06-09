@@ -1,6 +1,7 @@
 package io.picota.digitaltwin.control.utils;
 
 import com.google.gson.*;
+import io.quassar.picota.DigitalTwin;
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
 
 import java.io.File;
@@ -86,6 +87,9 @@ public class Utils {
 		}
 	}
 
+	public static int lookbackSize(DigitalTwin.DigitalSubject.InferenceModel i) {
+		return i.lookback().isWindow() ? i.lookback().asWindow().size() : 1;
+	}
 
 	public static double toDouble(String value) {
 		try {

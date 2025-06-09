@@ -15,8 +15,6 @@ import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistory.Transaction;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
-import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter;
-import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNormalizationFilter;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.io.*;
@@ -49,17 +47,17 @@ public class InferenceDataPreparer {
 	public void prepareData(DigitalSubject subject, InferenceModel inferenceModel, Map<String, Object> record) throws IOException {
 		try (SubjectHistoryVault vault = subjectVault()) {
 			SubjectHistory history = vault.open(subject.subject().name$());
-			fillHistory(history, record, inferenceModel.asType().lookBack());
+			fillHistory(history, record, inferenceModel.lookback());
 			String[] outputVariables = outputVariables(inferenceModel);
 			checkColumns(history, subject.subject().name$(), outputVariables);
 			for (String outputVariable : outputVariables) {
-				var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
+				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 				File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 				createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, tsv);
 				String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
 				JsonObject metadata = getMetadata(subject.subject().name$(), outName);
-				transformToJsonl(tsv, outName, header, metadata, inferenceModel.asType().lookBack());
+				transformToJsonl(tsv, outName, header, metadata, inferenceModel.lookback());
 				tsv.delete();
 			}
 		}
@@ -83,29 +81,27 @@ public class InferenceDataPreparer {
 	}
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
-		if (inferenceModel.variable().isLayered()) {
-			List<String> layers = inferenceModel.layers();
-			if (layers == null || layers.isEmpty())
-				layers = inferenceModel.variable().asLayered().layerList().stream().flatMap(l -> l.values().stream()).toList();
+		if (inferenceModel.variable().isComposite()) {
+			List<String> layers = inferenceModel.variable().asComposite().componentsList().stream().flatMap(l -> l.values().stream()).toList();
 			return layers.stream().map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l).toArray(String[]::new);
 		}
 		return new String[]{inferenceModel.variable().name$()};
 	}
 
 	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, String outputVariable) {
-		boolean prediction = inferenceModel.isPrediction();
+		boolean prediction = inferenceModel.timeHorizon() > 0;
 		return history.tags().stream()
 				.filter(t -> prediction || !t.equals(outputVariable))
 				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
 	}
 
-	private File transformToJsonl(File source, String outputVariable, String[] header, JsonObject metadata,
-								  int lookback) throws IOException {
+	private File transformToJsonl(File source, String outputVariable, String[] header, JsonObject metadata, InferenceModel.Lookback lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
 		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
 			writer.write(gson.toJson(metadata) + "\n");
-			if (lookback > 0) writeWithLookBack(source, lookback, header, features, writer);
+			if (lookback != null && lookback.isDistance())
+				writeWithLookBack(source, lookback, header, features, writer);
 			else writeWithoutLookBack(source, header, features, writer);
 		}
 		return jsonl;
@@ -120,14 +116,15 @@ public class InferenceDataPreparer {
 				.forEach(c -> write(c, writer));
 	}
 
-	private void writeWithLookBack(File source, int lookback, String[]
+	private void writeWithLookBack(File source, InferenceModel.Lookback lookback, String[]
 			header, Set<String> features, BufferedWriter writer) throws IOException {
-		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookback);
+		int size = lookback.isDistance() ? 1 : lookback.asWindow().size();
+		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(size);
 		Files.lines(source.toPath())
 				.skip(1)
 				.map(l -> rowOf(header, l.split("\t")))
 				.peek(queue::add)
-				.skip(lookback)
+				.skip(size)
 				.map(r -> inputDataOf(r, queue, features))
 				.map(i -> gson.toJson(i) + "\n")
 				.forEach(c -> write(c, writer));
@@ -177,7 +174,7 @@ public class InferenceDataPreparer {
 				throw new IllegalStateException("Column " + variable + " not found in the dataset of " + subject);
 	}
 
-	private static void fillHistory(SubjectHistory history, Map<String, Object> dataset, int lookback) throws IOException {
+	private static void fillHistory(SubjectHistory history, Map<String, Object> dataset, InferenceModel.Lookback lookback) {
 		SubjectHistory.Batch batch = history.batch();
 		addTValues(dataset, batch);
 		addLookback(dataset, lookback, batch);
@@ -196,8 +193,8 @@ public class InferenceDataPreparer {
 		return value instanceof Number n ? n : Double.parseDouble(value.toString().trim());
 	}
 
-	private static void addLookback(Map<String, Object> dataset, int lookback, SubjectHistory.Batch batch) {
-		IntStream.range(1, lookback).forEach(l -> {
+	private static void addLookback(Map<String, Object> dataset, InferenceModel.Lookback lookback, SubjectHistory.Batch batch) {
+		IntStream.range(1, lookback.isDistance() ? 1 : lookback.asWindow().size()).forEach(l -> {
 			if (dataset.containsKey("instant-" + l)) {
 				Transaction tLookback = batch.on(Instant.parse(dataset.get("instant-" + l).toString()), "");
 				for (String key : dataset.keySet()) {
@@ -207,14 +204,6 @@ public class InferenceDataPreparer {
 				tLookback.terminate();
 			}
 		});
-	}
-
-	private static ColumnDefinition outputVariable(InferenceModel inference, String name) {
-		String colName = name + (inference.isPrediction() ? "+" + inference.asPrediction().timeHorizon() : "");
-		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
-		if (inference.isPrediction()) column.add(new LeadFilter(inference.asPrediction().timeHorizon()));
-		column.add(new MinMaxNormalizationFilter());
-		return column;
 	}
 
 	private TemporalAmount period(Resolution resolution) {

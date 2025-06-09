@@ -3,9 +3,8 @@ dsl Legio
 Artifact("io.picota", "1.0.0") digital-twin
 	Dsl("Konos", "13.4.3") > Builder(generationPackage ="")
 	Imports
-		Compile("io.quassar", "picota", "1.1.2")
 		Compile("org.apache.commons", "commons-collections4", "4.5.0")
-		Compile("io.quassar.picota", "parser-java", "1.0.7")
+		Compile("io.quassar.picota", "parser-java", "1.1.0")
 
 		Compile("io.intino.itrules", "engine", "2.0.2")
 		Compile("systems.intino.datamarts", "subject-store", "2.0.18")

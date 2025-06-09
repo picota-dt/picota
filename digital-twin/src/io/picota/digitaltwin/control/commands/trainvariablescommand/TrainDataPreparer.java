@@ -3,6 +3,7 @@ package io.picota.digitaltwin.control.commands.trainvariablescommand;
 import com.google.gson.Gson;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
+import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.MetadataFields;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
@@ -39,6 +40,7 @@ public class TrainDataPreparer {
 	public static final String TSV = ".tsv";
 	public static final String JSONL = ".jsonl";
 	public static final String LAYER_SEPARATOR = ":";
+	public static final double[][] EMPTY = new double[0][0];
 	private final File temp;
 	private final Archetype archetype;
 	private final File dataDir;
@@ -58,14 +60,14 @@ public class TrainDataPreparer {
 			String[] outputVariables = outputVariables(inferenceModel);
 			checkColumns(history, subjectName, outputVariables);
 			for (String outputVariable : outputVariables) {
-				var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
+				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 				File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 				createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, tsv);
 				String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
 				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, history, outName, header);
 				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
-				transformToJsonl(tsv, outName, header, metadata, inferenceModel.asType().lookBack());
+				transformToJsonl(tsv, outName, header, metadata, inferenceModel.lookback());
 				tsv.delete();
 			}
 		} catch (IOException e) {
@@ -79,7 +81,7 @@ public class TrainDataPreparer {
 		metadata.put(MEANS, means(history, outName));
 		metadata.put(STDS, stds(history, outName));
 		metadata.put(MetadataFields.INPUT_VARIABLES, Arrays.stream(header).filter(f -> !f.equals(outName)).toArray(String[]::new));
-		metadata.put(MetadataFields.LOOKBACK_SIZE, inferenceModel.asType().lookBack());
+		metadata.put(MetadataFields.LOOKBACK_SIZE, Utils.lookbackSize(inferenceModel));
 		metadata.put(MetadataFields.OUT_MIN, summary.min().value());
 		metadata.put(MetadataFields.OUT_MAX, summary.max().value());
 		return metadata;
@@ -97,7 +99,7 @@ public class TrainDataPreparer {
 
 	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, SubjectHistory history, File file) throws IOException {
 		ChronoUnit scale = chronoUnitOf(resolution.scale());
-		var timeHorizon = inferenceModel.isPrediction() ? inferenceModel.asPrediction().timeHorizon() : 0;
+		var timeHorizon = inferenceModel.timeHorizon();
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale))
 				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, chronoUnitOf(resolution.scale())))
@@ -111,29 +113,27 @@ public class TrainDataPreparer {
 	}
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
-		if (inferenceModel.variable().isLayered()) {
-			List<String> layers = inferenceModel.layers();
-			if (layers == null || layers.isEmpty())
-				layers = inferenceModel.variable().asLayered().layerList().stream().flatMap(l -> l.values().stream()).toList();
+		if (inferenceModel.variable().isComposite()) {
+			List<String> layers = inferenceModel.variable().asComposite().componentsList().stream().flatMap(l -> l.values().stream()).toList();
 			return layers.stream().map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l).toArray(String[]::new);
 		}
 		return new String[]{inferenceModel.variable().name$()};
 	}
 
 	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, String outputVariable) {
-		boolean prediction = inferenceModel.isPrediction();
+		int prediction = inferenceModel.timeHorizon();
 		return history.tags().stream()
-				.filter(t -> prediction || !t.equals(outputVariable))
+				.filter(t -> prediction > 0 || !t.equals(outputVariable))
 				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
 	}
 
 	private File transformToJsonl(File source, String outputVariable, String[] header, Map<String, Object> metadata,
-								  int lookback) throws IOException {
+								  InferenceModel.Lookback lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
 		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
 			writer.write(gson.toJson(metadata) + "\n");
-			if (lookback > 0) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
+			if (lookback != null) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
 			else writeWithoutLookBack(source, outputVariable, header, features, writer);
 		}
 		return jsonl;
@@ -149,14 +149,14 @@ public class TrainDataPreparer {
 				.forEach(c -> write(c, writer));
 	}
 
-	private void writeWithLookBack(File source, String outputVariable, int lookback, String[]
-			header, Set<String> features, BufferedWriter writer) throws IOException {
-		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookback);
+	private void writeWithLookBack(File source, String outputVariable, InferenceModel.Lookback lookback, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
+		int lookbackSize = lookback.isWindow() ? lookback.asWindow().size() : 1;
+		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookbackSize);
 		Files.lines(source.toPath())
 				.skip(1)
 				.map(l -> rowOf(header, l.split("\t")))
 				.peek(queue::add)
-				.skip(lookback)
+				.skip(lookbackSize)
 				.map(r -> inputDataOf(r, outputVariable, queue, features))
 				.map(i -> gson.toJson(i) + "\n")
 				.forEach(c -> write(c, writer));
@@ -170,9 +170,8 @@ public class TrainDataPreparer {
 		}
 	}
 
-	private InputData inputDataOf(Map<String, Double> row, String
-			outputVariable, Queue<Map<String, Double>> queue, Set<String> features) {
-		return new InputData(row.get(outputVariable), features(row, features), time(row), queue == null ? new double[0][0] : lookBackFeatures(queue, features), queue == null ? new double[0][0] : lookBackTime(queue));
+	private InputData inputDataOf(Map<String, Double> row, String outputVariable, Queue<Map<String, Double>> queue, Set<String> features) {
+		return new InputData(row.get(outputVariable), features(row, features), time(row), queue == null ? EMPTY : lookBackFeatures(queue, features), queue == null ? EMPTY : lookBackTime(queue));
 	}
 
 	private double[][] lookBackTime(Queue<Map<String, Double>> queue) {
@@ -180,7 +179,7 @@ public class TrainDataPreparer {
 	}
 
 	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Set<String> features) {
-		return queue.stream().map(row -> features(row, features)).toArray(double[][]::new);
+		return queue.stream().map(row -> features(row, features)).toArray(double[][]::new);//TODO check distance
 	}
 
 	private double[] time(Map<String, Double> row) {
@@ -226,9 +225,9 @@ public class TrainDataPreparer {
 	}
 
 	private static ColumnDefinition outputVariable(InferenceModel inference, String name) {
-		String colName = name + (inference.isPrediction() ? "+" + inference.asPrediction().timeHorizon() : "");
+		String colName = name + (inference.timeHorizon() > 0 ? "+" + inference.timeHorizon() : "");
 		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
-		if (inference.isPrediction()) column.add(new LeadFilter(inference.asPrediction().timeHorizon()));
+		if (inference.timeHorizon() > 0) column.add(new LeadFilter(inference.timeHorizon()));
 		column.add(new MinMaxNormalizationFilter());
 		return column;
 	}
