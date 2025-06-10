@@ -88,6 +88,7 @@ public class Utils {
 	}
 
 	public static int lookbackSize(DigitalTwin.DigitalSubject.InferenceModel i) {
+		if (i.lookback() == null) return 0;
 		return i.lookback().isWindow() ? i.lookback().asWindow().size() : 1;
 	}
 

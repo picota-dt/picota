@@ -1,8 +1,9 @@
 dsl Konos
 
-Service Digitaltwin as REST(host = empty, port = "{api_port}")
+Service Digitaltwin as REST(host = "picota.io", port = "{api_port}", basePath = "/api")
+	Info(title = "Picota API", version = "1.0.0")
 	Authentication as Bearer
-	Resource("digital-twin/:id/inference") inference
+	Resource("/digital-twin/:id/inference") inference
 		Post
 			Parameter(in = path, isRequired = true) id as Text
 			Parameter(in = body, isRequired = true) values as Map
@@ -10,7 +11,7 @@ Service Digitaltwin as REST(host = empty, port = "{api_port}")
 				Value as Text
 			Exception(code = BadRequest)
 			Response as Object(Inference) List
-	Resource("digital-twin/:id/build") build
+	Resource("/digital-twin/:id/build") build
 		Post
 			Parameter(in = path, isRequired = true) id as Text
 			Exception(code = BadRequest)

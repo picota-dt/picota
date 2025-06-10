@@ -14,7 +14,6 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Eclipse Temurin Java 21
 RUN wget -O - https://packages.adoptium.net/artifactory/api/gpg/key/public | apt-key add - && \
     echo "deb https://packages.adoptium.net/artifactory/deb jammy main" > /etc/apt/sources.list.d/adoptium.list && \
     apt-get update && \
