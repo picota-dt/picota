@@ -8,12 +8,10 @@ import io.intino.alexandria.http.server.AlexandriaHttpManager;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.control.DigitalTwinsStore;
 import io.picota.digitaltwin.control.commands.*;
+import io.picota.digitaltwin.control.commands.Command.Result;
 import io.picota.digitaltwin.model.DigitalTwin;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.Map;
@@ -34,52 +32,51 @@ public class UiService {
 		server.route("/").get(manager -> html(manager, page("/www/index.html")));
 		server.route("/wizard").get(manager -> customHtml(manager, page("/www/wizard.html")));
 		server.route("/wizard/{id}").get(manager -> customHtml(manager, page("/www/wizard.html")));
+		server.route("/wizard/{id}/template").get(this::csvTemplate);
 		server.route("/digital-twin/{id}").get(manager -> digitalTwinHtml(manager, page("/www/digital-twin.html")));
 		server.route("/digital-twin/{id}/info").get(this::getDigitalTwin);
 		server.route("/digital-twin").post(this::postDigitalTwin);
 		server.route("/digital-twin/{id}/state/{state}").post(this::postState);
-		server.route("/digital-twin/{id}/evaluation").get(this::evaluation);
 		server.route("/digital-twin/{id}/report").get(this::loadReport);
 		server.route("/evaluation").get(manager -> customHtml(manager, page("/www/evaluation.html")));
 	}
 
-	private void getDigitalTwin(AlexandriaHttpManager<?> manager) {
-		String id = manager.fromPath("id");
-		manager.response().header("Content-Type", "application/json");
-		Command command = factory.build(ReadDigitalTwinCommand.class, id);
-		Command.Result result = command.execute();
+	private void getDigitalTwin(AlexandriaHttpManager<?> ctx) {
+		String id = ctx.fromPath("id");
+		ctx.response().header("Content-Type", "application/json");
+		ReadDigitalTwinCommand command = factory.build(ReadDigitalTwinCommand.class, id);
+		Result<Map<String, ? extends Serializable>> result = command.execute();
 		if (result.success()) {
-			manager.response().status(200);
-			manager.write(new Gson().toJson(result.resource()));
+			ctx.response().status(200);
+			ctx.write(new Gson().toJson(result.resource()));
 		} else {
-			manager.response().status(404);
-			manager.write(new Gson().toJson(Map.of("status", "FAILURE", "message", result.remarks().substring(0, Math.min(result.remarks().length(), 100)))));
+			ctx.response().status(404);
+			ctx.write(new Gson().toJson(Map.of("status", "FAILURE", "message", result.remarks().substring(0, Math.min(result.remarks().length(), 100)))));
 		}
 
 	}
 
-	private void postDigitalTwin(AlexandriaHttpManager<?> manager) {
-		String modelUrl = manager.fromFormAsString("modelUrl");
-		manager.response().header("Content-Type", "application/json");
-		Command command = factory.build(ReadModelCommand.class, modelUrl);
-		Command.Result result = command.execute();
+	private void postDigitalTwin(AlexandriaHttpManager<?> ctx) {
+		String modelUrl = ctx.fromFormAsString("modelUrl");
+		ctx.response().header("Content-Type", "application/json");
+		ReadModelCommand command = factory.build(ReadModelCommand.class, modelUrl);
+		Result<DigitalTwin> result = command.execute();
 		if (result.success()) {
-			DigitalTwin resource = (DigitalTwin) result.resource();
-			manager.response().status(200);
-			manager.write(new Gson().toJson(Map.of("status", "SUCCESS", "state", resource.state().name())));
+			ctx.response().status(200);
+			ctx.write(new Gson().toJson(Map.of("status", "SUCCESS", "state", result.resource().state().name())));
 		} else {
-			manager.response().status(404);
-			manager.write(new Gson().toJson(Map.of("status", "FAILURE", "message", result.remarks().substring(0, Math.min(result.remarks().length(), 100)))));
+			ctx.response().status(404);
+			ctx.write(new Gson().toJson(Map.of("status", "FAILURE", "message", result.remarks().substring(0, Math.min(result.remarks().length(), 100)))));
 		}
 	}
 
-	private void digitalTwinHtml(AlexandriaHttpManager<?> manager, String page) {
-		manager.response().header("Content-Type", "text/html");
-		String id = manager.fromPath("id");
-		if (id == null) error(manager, 404, new Command.Result(false, ""));
+	private void digitalTwinHtml(AlexandriaHttpManager<?> ctx, String page) {
+		ctx.response().header("Content-Type", "text/html");
+		String id = ctx.fromPath("id");
+		if (id == null) error(ctx, 404, new Result<>(false, ""));
 		else {
 			DigitalTwin digitalTwin = store.get(id);
-			if (digitalTwin == null) error(manager, 404, new Command.Result(false, ""));
+			if (digitalTwin == null) error(ctx, 404, new Result<>(false, ""));
 			else {
 				page = page.replace("$id", digitalTwin.id()).replace("$name", digitalTwin.name()).replace("$version", digitalTwin.version());
 				if (digitalTwin.report() != null) page = page.replace("$validationLoss", validationLoss(digitalTwin))
@@ -87,7 +84,7 @@ public class UiService {
 				else
 					page = page.replace("$validationLoss", "-").replace("$feature", "-");
 			}
-			manager.write(page);
+			ctx.write(page);
 		}
 	}
 
@@ -104,15 +101,11 @@ public class UiService {
 		return String.format("%.2f", digitalTwin.report().trainings().stream().mapToDouble(DigitalTwin.TrainingReport.Variable::loss).average().orElse(0));
 	}
 
-	private void evaluation(AlexandriaHttpManager<?> o) {
-
-	}
-
 	private void postState(AlexandriaHttpManager<?> ctx) {
 		try {
 			Resource dataset = ctx.fromFormAsResource("dataset");
 			String id = ctx.fromPath("id");
-			Command.Result result = factory.build(BuildModelCommand.class, id, dataset).execute();
+			Result<Void> result = factory.build(BuildModelCommand.class, id, dataset).execute();
 			if (result.success()) success(ctx, result);
 			else error(ctx, 400, result);
 		} catch (Exception e) {
@@ -122,23 +115,32 @@ public class UiService {
 		}
 	}
 
-	private static void success(AlexandriaHttpManager<?> ctx, Command.Result result) {
+	private static void success(AlexandriaHttpManager<?> ctx, Result<?> result) {
 		ctx.response().status(200);
 		ctx.write(new Gson().toJson(Map.of("status", "SUCCESS", "message", result.remarks())));
 	}
 
-	private static void error(AlexandriaHttpManager<?> ctx, int code, Command.Result result) {
+	private static void error(AlexandriaHttpManager<?> ctx, int code, Result<?> result) {
 		ctx.response().status(code);
 		ctx.write(new Gson().toJson(Map.of("status", "FAILED", "message", result.remarks())));
+	}
+
+	private void csvTemplate(AlexandriaHttpManager<?> ctx) {
+		ctx.writeHeader("Content-Type", "application/zip");
+		ctx.writeHeader("Content-Disposition", "attachment; filename=\"template.zip\"");
+		String dtId = ctx.fromPath("id");
+		Result<File> result = factory.build(CsvTemplateCommand.class, dtId).execute();
+		if (!result.success()) ctx.response().error(404, "Report not found");
+		ctx.write(new Resource("templates.zip", result.resource()));
 	}
 
 	private void loadReport(AlexandriaHttpManager<?> ctx) {
 		ctx.writeHeader("Content-Type", "application/pdf");
 		ctx.writeHeader("Content-Disposition", "attachment; filename=\"report.pdf\"");
 		String dtId = ctx.fromPath("id");
-		Command.Result result = factory.build(ProvideReportCommand.class, dtId).execute();
+		Result<File> result = factory.build(ProvideReportCommand.class, dtId).execute();
 		if (!result.success()) ctx.response().error(404, "Report not found");
-		ctx.write(new Resource("report.pdf", (File) result.resource()));
+		ctx.write(new Resource("report.pdf", result.resource()));
 	}
 
 	private static void customHtml(AlexandriaHttpManager<?> manager, String page) {

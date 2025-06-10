@@ -5,7 +5,7 @@ import io.picota.digitaltwin.model.DigitalTwin;
 
 import java.io.File;
 
-public class ProvideReportCommand implements Command {
+public class ProvideReportCommand implements Command<File> {
 
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
@@ -16,11 +16,11 @@ public class ProvideReportCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<File> execute() {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		File file = digitalTwin.archetype().reportFile();
-		if (!file.exists()) return new Result(false, "Report not found", null);
-		return Command.success(file);
+		if (!file.exists()) return new Result<>(false, "Report not found", null);
+		return new Result<>(true, "", file);
 	}
 }

@@ -21,7 +21,7 @@ public class DigitalTwin {
 	private transient Archetype archetype;
 	private transient PicotaGraph graph;
 	private transient String progressMessage;
-	private transient Future<Command.Result> trainProcess;
+	private transient Future<Command.Result<Void>> trainProcess;
 
 	public DigitalTwin(File subjectsDirectory, String url, String id, String name, String version) {
 		this.subjectsDirectory = subjectsDirectory;
@@ -90,11 +90,11 @@ public class DigitalTwin {
 		return new Archetype(new File(subjectsDirectory, id));
 	}
 
-	public Future<Command.Result> trainProcess() {
+	public Future<Command.Result<Void>> trainProcess() {
 		return trainProcess;
 	}
 
-	public void trainProcess(Future<Command.Result> future) {
+	public void trainProcess(Future<Command.Result<Void>> future) {
 		this.trainProcess = future;
 	}
 

@@ -24,7 +24,7 @@ import static io.picota.digitaltwin.model.DigitalTwin.State.Training;
 import static io.picota.digitaltwin.model.MetadataFields.OUT_MAX;
 import static io.picota.digitaltwin.model.MetadataFields.OUT_MIN;
 
-public class TrainSubjectsCommand implements Command {
+public class TrainSubjectsCommand implements Command<Void> {
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
 	private final File pythonVenv;
@@ -36,7 +36,7 @@ public class TrainSubjectsCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<Void> execute() {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		try {
@@ -50,7 +50,7 @@ public class TrainSubjectsCommand implements Command {
 			removeAllData(digitalTwin);
 			digitalTwin.state(DigitalTwin.State.TrainFinished);
 			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
-			return new Result(false, "Error during building process.\n" + e.getMessage());
+			return new Result<>(false, "Error during building process.\n" + e.getMessage());
 		}
 	}
 

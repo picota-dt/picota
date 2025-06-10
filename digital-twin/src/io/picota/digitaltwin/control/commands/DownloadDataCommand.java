@@ -13,7 +13,7 @@ import java.util.Objects;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
-public class DownloadDataCommand implements Command {
+public class DownloadDataCommand implements Command<Void> {
 	private final DigitalTwinBox box;
 	private final String id;
 	private final Resource data;
@@ -25,7 +25,7 @@ public class DownloadDataCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<Void> execute() {
 		try {
 			DigitalTwin digitalTwin = box.store().get(id);
 			if (digitalTwin == null) throw new IllegalArgumentException("DigitalTwin not found");

@@ -10,7 +10,7 @@ import java.net.URI;
 
 import static io.picota.digitaltwin.control.utils.Utils.digitalTwinId;
 
-public class ReadModelCommand implements Command {
+public class ReadModelCommand implements Command<DigitalTwin> {
 	private final String url;
 	private final DigitalTwinBox box;
 	private final Gson gson;
@@ -22,19 +22,19 @@ public class ReadModelCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<DigitalTwin> execute() {
 		try {
 			URI uri = new URI(url);
 			String id = digitalTwinId(uri);
 			DigitalTwin digitalTwin = box.store().get(id);
-			if (digitalTwin != null && digitalTwin.graph() != null) return Command.success(digitalTwin);
+			if (digitalTwin != null && digitalTwin.graph() != null) return new Result<>(true, "", digitalTwin);
 			ModelParser.Model model = ModelParser.loadFromURL(uri.toURL());
-			if (model == null) return new Result(false, "Impossible to read model from " + url);
+			if (model == null) return new Result<>(false, "Impossible to read model from " + url);
 			if (digitalTwin == null) digitalTwin = create(id, model);
 			box.store().add(digitalTwin.graph(model.graph()));
-			return Command.success(digitalTwin);
+			return new Result<>(true, "", digitalTwin);
 		} catch (Throwable e) {
-			return new Result(false, "Impossible to read model from " + url + " due to " + e.getMessage());
+			return new Result<>(false, "Impossible to read model from " + url + " due to " + e.getMessage());
 		}
 	}
 

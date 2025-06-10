@@ -7,7 +7,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.Serializable;
 import java.util.Map;
 
-public class ReadDigitalTwinCommand implements Command {
+public class ReadDigitalTwinCommand implements Command<Map<String, ? extends Serializable>> {
 	private final DigitalTwinBox box;
 	private final String id;
 
@@ -17,13 +17,14 @@ public class ReadDigitalTwinCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<Map<String, ? extends Serializable>> execute() {
 		try {
 			DigitalTwin digitalTwin = box.store().get(id);
-			if (digitalTwin == null) return new Result(false, "DigitalTwin not found");
-			return Command.success(response(digitalTwin));
+			if (digitalTwin == null) return new Result<>(false, "DigitalTwin not found");
+			Map<String, ? extends Serializable> response = response(digitalTwin);
+			return new Result<>(true, "", response);
 		} catch (Throwable e) {
-			return new Result(false, "Impossible to find Digital Twin " + id + " due to " + e.getMessage());
+			return new Result<>(false, "Impossible to find Digital Twin " + id + " due to " + e.getMessage());
 		}
 	}
 

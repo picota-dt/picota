@@ -24,6 +24,7 @@ public class CommandFactory {
 		commands.put(ReadDigitalTwinCommand.class, CommandFactory::readDigitalTwin);
 		commands.put(ProvideReportCommand.class, CommandFactory::provideReport);
 		commands.put(TrainSubjectsCommand.class, CommandFactory::trainVariables);
+		commands.put(CsvTemplateCommand.class, CommandFactory::csvTemplate);
 	}
 
 	public <T extends Command> T build(Class<T> command, Object... args) {
@@ -32,31 +33,35 @@ public class CommandFactory {
 		return (T) commandBuilder.build(box, args);
 	}
 
-	private static Command readModel(DigitalTwinBox b, Object... args) {
+	private static ReadModelCommand readModel(DigitalTwinBox b, Object... args) {
 		return new ReadModelCommand(b, (String) args[0]);
 	}
 
-	private static Command readDigitalTwin(DigitalTwinBox digitalTwinBox, Object[] objects) {
+	private static ReadDigitalTwinCommand readDigitalTwin(DigitalTwinBox digitalTwinBox, Object[] objects) {
 		return new ReadDigitalTwinCommand(digitalTwinBox, (String) objects[0]);
 	}
 
-	private static Command downloadData(DigitalTwinBox b, Object... args) {
+	private static DownloadDataCommand downloadData(DigitalTwinBox b, Object... args) {
 		return new DownloadDataCommand(b, (String) args[0], (Resource) args[1]);
 	}
 
-	private static Command buildModel(DigitalTwinBox b, Object... args) {
+	private static BuildModelCommand buildModel(DigitalTwinBox b, Object... args) {
 		return new BuildModelCommand(b, (String) args[0], (Resource) args[1]);
 	}
 
-	private static Command trainVariables(DigitalTwinBox b, Object... args) {
+	private static TrainSubjectsCommand trainVariables(DigitalTwinBox b, Object... args) {
 		return new TrainSubjectsCommand(b, (String) args[0]);
 	}
 
-	private static Command provideReport(DigitalTwinBox b, Object... args) {
+	private static Command csvTemplate(DigitalTwinBox digitalTwinBox, Object... objects) {
+		return new CsvTemplateCommand(digitalTwinBox, (String) objects[0]);
+	}
+
+	private static ProvideReportCommand provideReport(DigitalTwinBox b, Object... args) {
 		return new ProvideReportCommand(b, (String) args[0]);
 	}
 
-	private static Command evaluateVariables(DigitalTwinBox b, Object... args) {
+	private static EvaluateVariablesCommand evaluateVariables(DigitalTwinBox b, Object... args) {
 		return new EvaluateVariablesCommand(b, (String) args[0], (Map<String, Object>) args[1]);
 	}
 

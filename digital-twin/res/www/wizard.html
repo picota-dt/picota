@@ -131,10 +131,11 @@
 					structure defined in your descriptive model.</p>
 				<p>You can use the following template as a reference. It contains the required column headers based on
 					your model's inputs and outputs.</p>
-				<button id="downloadTemplate" disabled
+				<button id="downloadTemplate"
 						class="w-1/2 bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
 					Download CSV Template
 				</button>
+
 				<p class="subtle">Only Zip files containing CSV or TSV are accepted.</p>
 				<input
 						type="file"
@@ -171,7 +172,10 @@
 				<p>Something went wrong during the training process. Your model could not be created.</p>
 				<div class="error-box" id="errorBoxContent"></div>
 				<p>You can try again checking data:</p>
-				<button id="tryAgainBtn" type="button" class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">Try again</button>
+				<button id="tryAgainBtn" type="button"
+						class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+					Try again
+				</button>
 			</div>
 		</div>
 
@@ -207,6 +211,7 @@
     const validIcon = document.getElementById('validIcon');
     const invalidIcon = document.getElementById('invalidIcon');
     const validationMessage = document.getElementById('validationMessage');
+    const downloadTemplate = document.getElementById('downloadTemplate');
 
     const modelInfoSuccess = document.getElementById('modelInfoSuccess');
     const modelInfoError = document.getElementById('modelInfoError');
@@ -216,6 +221,7 @@
     const errorBoxContent = document.getElementById('errorBoxContent');
 
     function showStep(i) {
+        initTemplateDownload(dtId);
         steps.forEach((s, idx) => s.classList.toggle('hidden', idx !== i));
     }
 
@@ -227,6 +233,16 @@
     if (!isNaN(stepParam) && stepParam >= 1 && stepParam <= steps.length) showStep(stepParam - 1); else showStep(0);
 
     next1.disabled = true;
+
+    function initTemplateDownload(dtId) {
+        const btn = document.getElementById('downloadTemplate');
+        if (!btn || !dtId) return;
+        btn.disabled = false;
+        btn.classList.remove('opacity-50');
+        btn.addEventListener('click', () => {
+            window.location.href = `/wizard/${dtId}/template`;
+        });
+    }
 
     function validateUrl() {
         const url = modelUrlInput.value.trim();
@@ -263,6 +279,7 @@
     if (dtId) {
         modelUrlInput.value = "https://quassar.io/commits/" + dtId;
         validateUrl()
+
     }
     next1.addEventListener('click', () => {
         const trimmedUrl = modelUrlInput.value.replace(/\/+$/, '');
@@ -333,6 +350,7 @@
     function showError(msg) {
         statusMessage.textContent = msg;
     }
+
 </script>
 </body>
 </html>

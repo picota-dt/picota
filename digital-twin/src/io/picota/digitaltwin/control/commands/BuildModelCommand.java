@@ -10,7 +10,7 @@ import io.picota.digitaltwin.model.DigitalTwin.State;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-public class BuildModelCommand implements Command {
+public class BuildModelCommand implements Command<Void> {
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
 	private final Resource resource;
@@ -24,19 +24,19 @@ public class BuildModelCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<Void> execute() {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		digitalTwin.state(State.DownloadedData);
-		Future<Result> future = Utils.createExecutor("train").submit(() -> {
+		Future<Result<Void>> future = Utils.createExecutor("train").submit(() -> {
 			try {
-				Result result = factory.build(DownloadDataCommand.class, digitalTwinId, resource).execute();
+				Result<Void> result = factory.build(DownloadDataCommand.class, digitalTwinId, resource).execute();
 				if (!result.success()) return result;
 				else return factory.build(TrainSubjectsCommand.class, digitalTwinId).execute();
 			} catch (Throwable e) {
 				Logger.error(e);
 				digitalTwin.state(State.TrainFinished);
-				return new Result(false, e.getMessage());
+				return new Result<>(false, e.getMessage());
 			}
 		});
 		digitalTwin.trainProcess(future);
@@ -49,7 +49,7 @@ public class BuildModelCommand implements Command {
 		}
 	}
 
-	private static Result defaultResult() {
-		return new Result(true, "Building Digital Twin...");
+	private static Result<Void> defaultResult() {
+		return new Result<>(true, "Building Digital Twin...");
 	}
 }

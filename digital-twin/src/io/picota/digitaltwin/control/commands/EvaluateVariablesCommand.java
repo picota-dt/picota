@@ -18,7 +18,7 @@ import java.util.Map;
 import static io.picota.digitaltwin.model.MetadataFields.OUT_MAX;
 import static io.picota.digitaltwin.model.MetadataFields.OUT_MIN;
 
-public class EvaluateVariablesCommand implements Command {
+public class EvaluateVariablesCommand implements Command<List<Inference>> {
 	private static final Object lock = new Object();
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
@@ -34,7 +34,7 @@ public class EvaluateVariablesCommand implements Command {
 	}
 
 	@Override
-	public Result execute() {
+	public Result<List<Inference>> execute() {
 		io.picota.digitaltwin.model.DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		if (digitalTwin.graph() == null) throw new IllegalArgumentException("Digital Twin has no description model");
@@ -43,7 +43,7 @@ public class EvaluateVariablesCommand implements Command {
 		List<Inference> inferences = new ArrayList<>();
 		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList())
 			inferences.addAll(infer(subject, digitalTwin.archetype()));
-		return Command.success(inferences);
+		return new Result<>(true, "", inferences);
 	}
 
 	public List<Inference> infer(DigitalSubject subject, Archetype archetype) {
