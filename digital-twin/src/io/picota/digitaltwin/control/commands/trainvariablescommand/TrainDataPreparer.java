@@ -216,12 +216,20 @@ public class TrainDataPreparer {
 		Files.lines(dataset.toPath()).skip(1)
 				.map(l -> l.split(separator, -1))
 				.forEach(line -> {
-					SubjectHistory.Transaction t = batch.on(Instant.parse(line[0]), "");
+					SubjectHistory.Transaction t = batch.on(getInstant(line[0]), "");
 					for (int i = 1; i < header.length; i++)
 						if (!line[i].trim().isEmpty()) t.put(header[i].trim(), Double.parseDouble(line[i].trim()));
 					t.terminate();
 				});
 		batch.terminate();
+	}
+
+	private static Instant getInstant(String field) {
+		try {
+			return Instant.parse(field);
+		} catch (java.time.format.DateTimeParseException e) {
+			throw new IllegalArgumentException("Could not parse " + field + ". Expected format ISO_INSTANT. The ISO instant formatter that formats or parses an instant in UTC, such as '2011-12-03T10:15:30Z'.", e);
+		}
 	}
 
 	private static ColumnDefinition outputVariable(InferenceModel inference, String name) {
