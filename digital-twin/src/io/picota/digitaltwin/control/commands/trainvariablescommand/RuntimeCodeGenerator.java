@@ -41,12 +41,13 @@ public class RuntimeCodeGenerator {
 		this.trainScriptDir = digitalTwin.archetype().trainerScriptsDirectory();
 	}
 
-	public void generateTrainer() {
+	public void generateTrainer() throws Throwable {
 		try {
 			loadSubjectTargetsForTrain();
 			createTrainerScripts();
 		} catch (Throwable e) {
-			error("Error during script generation: " + e.getMessage(), e);
+			Logger.error("Error during script generation: " + e.getMessage(), e);
+			throw e;
 		}
 	}
 
@@ -59,14 +60,10 @@ public class RuntimeCodeGenerator {
 		}
 	}
 
-	private void loadSubjectTargetsForTrain() {
+	private void loadSubjectTargetsForTrain() throws IOException {
 		this.subjectTargets = new HashMap<>();
 		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList()) {
-			try {
-				subjectTargets.put(subject, prepareDigitalSubject(digitalTwin, subject));
-			} catch (IOException e) {
-				Logger.error(e);
-			}
+			subjectTargets.put(subject, prepareDigitalSubject(digitalTwin, subject));
 		}
 	}
 

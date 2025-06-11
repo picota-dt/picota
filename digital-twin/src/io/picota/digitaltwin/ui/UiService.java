@@ -147,7 +147,8 @@ public class UiService {
 		manager.response().header("Content-Type", "text/html");
 		String modelId = manager.fromQueryOrDefault("id", "");
 		if (modelId == null || modelId.isEmpty()) modelId = manager.fromPathOrDefault("id", "");
-		if (modelId != null && !modelId.isEmpty()) page = page.replace("$modelId", modelId);
+		if (modelId == null) modelId = "";
+		page = page.replace("$modelId", modelId);
 		manager.write(page);
 	}
 
