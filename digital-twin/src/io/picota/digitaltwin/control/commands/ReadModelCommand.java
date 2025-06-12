@@ -27,7 +27,6 @@ public class ReadModelCommand implements Command<DigitalTwin> {
 			URI uri = new URI(url);
 			String id = digitalTwinId(uri);
 			DigitalTwin digitalTwin = box.store().get(id);
-			if (digitalTwin != null && digitalTwin.graph() != null) return new Result<>(true, "", digitalTwin);
 			ModelParser.Model model = ModelParser.loadFromURL(uri.toURL());
 			if (model == null) return new Result<>(false, "Impossible to read model from " + url);
 			if (digitalTwin == null) digitalTwin = create(id, model);

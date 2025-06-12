@@ -209,6 +209,7 @@ public class TrainDataPreparer {
 	}
 
 	private static void fillHistory(SubjectHistory history, File dataset) throws IOException {
+		if (!dataset.isFile()) throw new IllegalStateException("Dataset " + dataset + " is not a regular file");
 		String firstLine = Files.lines(dataset.toPath()).findFirst().get();
 		String separator = firstLine.contains("\t") ? "\t" : ",";
 		String[] header = firstLine.split(separator);

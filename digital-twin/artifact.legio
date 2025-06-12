@@ -25,10 +25,19 @@ Artifact("io.picota", "1.0.0") digital-twin
 	Parameter("home")
 	Parameter("api_port")
 	Parameter("python_venv")
-
+	Distribution
+		Artifactory ("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/release-libraries")
+	Deployment(server = megatron, runConfiguration = pro)
 Repository("quassar") > Release("https://quassar.io/artifacts/releases")
 
 RunConfiguration local
 	Argument("home", "./temp")
 	Argument("api_port", "9090")
 	Argument("python_venv", "/Users/oroncal/workspace/projects/picota-smartbeach/.venv1")
+
+RunConfiguration pro
+	Argument("home", "./temp")
+	Argument("api_port", "9090")
+	Argument("python_venv", "/Users/oroncal/workspace/projects/picota-smartbeach/.venv1")
+
+Server(type = Pro) megatron
