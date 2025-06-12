@@ -35,9 +35,9 @@ RunConfiguration local
 	Argument("api_port", "9090")
 	Argument("python_venv", "/Users/oroncal/workspace/projects/picota-smartbeach/.venv1")
 
-RunConfiguration pro
-	Argument("home", "./temp")
-	Argument("api_port", "9090")
-	Argument("python_venv", "/Users/oroncal/workspace/projects/picota-smartbeach/.venv1")
+RunConfiguration pro //m0n_214
+	Argument("home", "/home/developer/picota/picota")
+	Argument("api_port", "7070")
+	Argument("python_venv", "/home/developer/picota/.venv")
 
 Server(type = Pro) megatron
