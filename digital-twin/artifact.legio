@@ -26,7 +26,7 @@ Artifact("io.picota", "1.0.0") digital-twin
 	Parameter("api_port")
 	Parameter("python_venv")
 	Distribution
-		Artifactory ("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/release-libraries")
+		Artifactory ("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/libs-release-local")
 	Deployment(server = megatron, runConfiguration = pro)
 Repository("quassar") > Release("https://quassar.io/artifacts/releases")
 
