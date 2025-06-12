@@ -2,3 +2,6 @@ dsl Legio
 
 Project("Digital Twins made easy") picota
 	Repository("intino-maven") > Release("https://artifactory.intino.io/artifactory/releases")
+
+Project("Digital Twins made easy") picota
+	Repository("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/releases")
