@@ -29,6 +29,7 @@ Artifact("io.picota", "1.0.0") digital-twin
 		Artifactory ("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/libs-release-local")
 	Deployment(server = megatron, runConfiguration = pro)
 Repository("quassar") > Release("https://quassar.io/artifacts/releases")
+Repository("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/releases")
 
 RunConfiguration local
 	Argument("home", "./temp")

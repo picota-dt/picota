@@ -3,6 +3,10 @@ package io.picota.digitaltwin.control.utils;
 import com.google.gson.*;
 import io.quassar.picota.DigitalTwin;
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
+import io.quassar.picota.Reality;
+import io.quassar.picota.Variable;
+import io.quassar.picota.Variable.Composite.Components;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.lang.reflect.Type;
@@ -13,14 +17,19 @@ import java.time.Instant;
 import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.time.temporal.ChronoUnit.*;
+import static java.util.stream.Collectors.toMap;
 
 public class Utils {
 
@@ -61,6 +70,49 @@ public class Utils {
 			}
 		}
 		return result;
+	}
+
+	public static Map<String, Variable> variableTypes(Reality.Subject subject) {
+		Map<String, Variable> variables = subject.core$().ownerAs(Reality.class).variableList().stream()
+				.flatMap(Utils::variableType)
+				.collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue));
+		variables.putAll(subject.variableList().stream()
+				.flatMap(Utils::variableType)
+				.collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue)));
+		return variables;
+	}
+
+	@NotNull
+	private static Stream<SimpleEntry<String, Variable>> variableType(Variable v) {
+		return variableNamesOf(v).map(n -> new SimpleEntry<>(n, v));
+	}
+
+	public static List<String> variableNamesOf(Reality reality) {
+		return reality.variableList().stream().flatMap(Utils::variableNamesOf).collect(Collectors.toList());
+	}
+
+	public static Stream<String> variableNamesOf(Reality.Subject s) {
+		return s.variableList().stream().flatMap(Utils::variableNamesOf);
+	}
+
+	private static Stream<String> variableNamesOf(Variable var) {
+		if (var.isComposite()) return var.asComposite().core$().findNode(Components.class).stream()
+				.filter(c -> c.componentsList().isEmpty())
+				.flatMap(c -> pathsOf(c).stream())
+				.distinct()
+				.map(c -> var.name$() + ":" + c);
+		return Stream.of(var.name$());
+	}
+
+	private static List<String> pathsOf(Components c) {
+		Components components = c.core$().ownerAs(Components.class);
+		if (components == null) return c.values();
+		else return c.values().stream().flatMap(cv -> combine(pathsOf(components), cv)).collect(Collectors.toList());
+	}
+
+	private static Stream<String> combine(List<String> container, String vl) {
+		if (container.isEmpty()) return Stream.of(vl);
+		return container.stream().map(c -> c + ":" + vl);
 	}
 
 	public static class InstantAdapter implements JsonDeserializer<Instant>, JsonSerializer<Instant> {

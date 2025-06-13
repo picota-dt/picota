@@ -9,6 +9,7 @@ import io.picota.digitaltwin.model.MetadataFields;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution;
+import io.quassar.picota.Variable;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
 import org.apache.commons.io.FilenameUtils;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
@@ -30,8 +31,7 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static io.picota.digitaltwin.control.utils.Utils.chronoUnitOf;
-import static io.picota.digitaltwin.control.utils.Utils.periodOf;
+import static io.picota.digitaltwin.control.utils.Utils.*;
 import static io.picota.digitaltwin.model.MetadataFields.MEANS;
 import static io.picota.digitaltwin.model.MetadataFields.STDS;
 import static java.time.temporal.ChronoUnit.HOURS;
@@ -52,20 +52,21 @@ public class TrainDataPreparer {
 		this.dataDir = archetype.dataDirectory();
 	}
 
-	public void prepareData(DigitalSubject subject, InferenceModel inferenceModel, File subjectDataset) throws IOException {
+	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, File subjectDataset) throws IOException {
 		String subjectName = FilenameUtils.removeExtension(subjectDataset.getName());
+		Map<String, Variable> variableTypes = variableTypes(ds.subject());
 		try (SubjectHistoryVault vault = subjectVault(temp)) {
 			SubjectHistory history = vault.open(subjectName);
-			fillHistory(history, subjectDataset);
+			fillHistory(history, variableTypes, subjectDataset);
 			String[] outputVariables = outputVariables(inferenceModel);
 			checkColumns(history, subjectName, outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
-				File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
-				createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, tsv);
+				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, history);
 				String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
-				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, history, outName, header);
+				applyOneHotTransformations(tsv, header, variableTypes);
+				HashMap<String, Object> metadata = metadata(inferenceModel, variableTypes, outputVariable, history, outName, header);
 				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
 				transformToJsonl(tsv, outName, header, metadata, inferenceModel.lookback());
 				tsv.delete();
@@ -75,7 +76,13 @@ public class TrainDataPreparer {
 		}
 	}
 
-	private static HashMap<String, Object> metadata(InferenceModel inferenceModel, String outputVariable, SubjectHistory history, String outName, String[] header) {
+	private void applyOneHotTransformations(File tsv, String[] header, Map<String, Variable> variableTypes) throws IOException {
+		if (variableTypes.values().stream().anyMatch(v -> !v.isNumeric())) {
+			new OneHotEncoder(tsv, header, variableTypes).encode();
+		}
+	}
+
+	private static HashMap<String, Object> metadata(InferenceModel inferenceModel, Map<String, Variable> variableTypes, String outputVariable, SubjectHistory history, String outName, String[] header) {
 		Summary summary = history.query().number(outputVariable).all().summary();
 		HashMap<String, Object> metadata = new HashMap<>();
 		metadata.put(MEANS, means(history, outName));
@@ -83,7 +90,7 @@ public class TrainDataPreparer {
 		metadata.put(MetadataFields.INPUT_VARIABLES, Arrays.stream(header).filter(f -> !f.equals(outName)).toArray(String[]::new));
 		metadata.put(MetadataFields.LOOKBACK_SIZE, Utils.lookbackSize(inferenceModel));
 		metadata.put(MetadataFields.OUT_MIN, summary.min().value());
-		metadata.put(MetadataFields.OUT_MAX, summary.max().value());
+		metadata.put(MetadataFields.OUT_MAX, summary.max() != null ? summary.max().value() : 0);//FIXME
 		return metadata;
 	}
 
@@ -97,7 +104,8 @@ public class TrainDataPreparer {
 				.mapToDouble(t -> history.query().number(t).all().summary().mean()).toArray();
 	}
 
-	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, SubjectHistory history, File file) throws IOException {
+	private File createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, SubjectHistory history) throws IOException {
+		File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 		ChronoUnit scale = chronoUnitOf(resolution.scale());
 		var timeHorizon = inferenceModel.timeHorizon();
 		SubjectHistoryView.of(history)
@@ -109,7 +117,8 @@ public class TrainDataPreparer {
 				.add(outputVariable(inferenceModel, outputVariable))
 				.export()
 				.onlyCompleteRows()
-				.to(new FileOutputStream(file));
+				.to(new FileOutputStream(tsv));
+		return tsv;
 	}
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
@@ -208,7 +217,7 @@ public class TrainDataPreparer {
 				});
 	}
 
-	private static void fillHistory(SubjectHistory history, File dataset) throws IOException {
+	private static void fillHistory(SubjectHistory history, Map<String, Variable> variables, File dataset) throws IOException {
 		if (!dataset.isFile()) throw new IllegalStateException("Dataset " + dataset + " is not a regular file");
 		String firstLine = Files.lines(dataset.toPath()).findFirst().get();
 		String separator = firstLine.contains("\t") ? "\t" : ",";
@@ -218,11 +227,22 @@ public class TrainDataPreparer {
 				.map(l -> l.split(separator, -1))
 				.forEach(line -> {
 					SubjectHistory.Transaction t = batch.on(getInstant(line[0]), "");
-					for (int i = 1; i < header.length; i++)
-						if (!line[i].trim().isEmpty()) t.put(header[i].trim(), Double.parseDouble(line[i].trim()));
+					IntStream.range(1, header.length)
+							.filter(i -> !line[i].trim().isEmpty())
+							.forEach(i -> parse(history, variables, line, header, i, t));
 					t.terminate();
 				});
 		batch.terminate();
+	}
+
+	private static void parse(SubjectHistory history, Map<String, Variable> variables, String[] line, String[] header, int i, SubjectHistory.Transaction t) {
+		String varName = header[i].trim();
+		Variable type = variables.get(varName);
+		if (type != null) {
+			if (type.isNumeric()) t.put(varName, Double.parseDouble(line[i].trim()));
+			else t.put(varName, line[i].trim());
+		} else
+			throw new IllegalStateException("Variable \"" + varName + "\" found in dataset \"" + history.name() + "\", but it has not been modeled.");
 	}
 
 	private static Instant getInstant(String field) {
