@@ -6,7 +6,6 @@ import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
 import io.quassar.picota.Reality;
 import io.quassar.picota.Variable;
 import io.quassar.picota.Variable.Composite.Components;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.lang.reflect.Type;
@@ -44,7 +43,7 @@ public class Utils {
 			case YEARS -> Period.ofYears(amount);
 			case MONTHS -> Period.ofMonths(amount);
 			case DAYS -> Period.ofDays(amount);
-			case HOURS -> Period.ofDays(amount);
+			case HOURS -> Duration.ofHours(amount);
 			case MINUTES -> Duration.ofMinutes(amount);
 			default -> throw new IllegalArgumentException("Unsupported unit: " + unit);
 		};
@@ -69,7 +68,7 @@ public class Utils {
 				result.addAll(Arrays.asList(files));
 			}
 		}
-		return result;
+		return result.stream().sorted().toList();
 	}
 
 	public static Map<String, Variable> variableTypes(Reality.Subject subject) {
@@ -82,7 +81,6 @@ public class Utils {
 		return variables;
 	}
 
-	@NotNull
 	private static Stream<SimpleEntry<String, Variable>> variableType(Variable v) {
 		return variableNamesOf(v).map(n -> new SimpleEntry<>(n, v));
 	}
@@ -95,7 +93,7 @@ public class Utils {
 		return s.variableList().stream().flatMap(Utils::variableNamesOf);
 	}
 
-	private static Stream<String> variableNamesOf(Variable var) {
+	public static Stream<String> variableNamesOf(Variable var) {
 		if (var.isComposite()) return var.asComposite().core$().findNode(Components.class).stream()
 				.filter(c -> c.componentsList().isEmpty())
 				.flatMap(c -> pathsOf(c).stream())

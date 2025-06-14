@@ -44,19 +44,19 @@ public class InferenceDataPreparer {
 		this.dataDir = archetype.dataDirectory();
 	}
 
-	public void prepareData(DigitalSubject subject, InferenceModel inferenceModel, Map<String, Object> record) throws IOException {
+	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, Map<String, Object> record) throws IOException {
 		try (SubjectHistoryVault vault = subjectVault()) {
-			SubjectHistory history = vault.open(subject.subject().name$());
+			SubjectHistory history = vault.open(ds.subject().name$());
 			fillHistory(history, record, inferenceModel.lookback());
 			String[] outputVariables = outputVariables(inferenceModel);
-			checkColumns(history, subject.subject().name$(), outputVariables);
+			checkColumns(history, ds.subject().name$(), outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 				File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
-				createInitialTsv(subject.resolution(), inferenceModel, outputVariable, history, tsv);
+				createInitialTsv(ds.resolution(), inferenceModel, Set.of(outputVariables), history, tsv);
 				String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
-				JsonObject metadata = getMetadata(subject.subject().name$(), outName);
+				JsonObject metadata = getMetadata(ds.subject().name$(), outName);
 				transformToJsonl(tsv, outName, header, metadata, inferenceModel.lookback());
 				tsv.delete();
 			}
@@ -67,14 +67,14 @@ public class InferenceDataPreparer {
 		return gson.fromJson(Files.readString(archetype.metadataFile(subject, variable).toPath()), JsonObject.class);
 	}
 
-	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, SubjectHistory history, File file) throws IOException {
+	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, Set<String> outputVariables, SubjectHistory history, File file) throws IOException {
 		ChronoUnit scale = chronoUnitOf(resolution.scale());
 		SubjectHistoryView.of(history)
 				.from(history.first().truncatedTo(scale).minus(1, scale))
 				.to(history.last().plus(1, scale).truncatedTo(scale))
 				.period(period(resolution))
 				.add(TemporalColumns.get())
-				.add(inputVariables(history, inferenceModel, outputVariable))
+				.add(inputVariables(history, inferenceModel, outputVariables))
 				.export()
 				.onlyCompleteRows()
 				.to(new FileOutputStream(file));
@@ -88,10 +88,10 @@ public class InferenceDataPreparer {
 		return new String[]{inferenceModel.variable().name$()};
 	}
 
-	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, String outputVariable) {
+	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, Set<String> outputVariables) {
 		boolean prediction = inferenceModel.timeHorizon() > 0;
 		return history.tags().stream()
-				.filter(t -> prediction || !t.equals(outputVariable))
+				.filter(t -> prediction || !outputVariables.contains(t))
 				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
 	}
 

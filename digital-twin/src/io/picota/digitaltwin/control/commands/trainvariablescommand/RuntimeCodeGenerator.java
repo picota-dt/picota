@@ -11,7 +11,6 @@ import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.DigitalTwin;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.picota.Variable;
 
 import java.io.File;
 import java.io.IOException;
@@ -76,7 +75,10 @@ public class RuntimeCodeGenerator {
 
 	private List<String> prepareDigitalSubject(DigitalTwin digitalTwin, DigitalSubject subject) throws IOException {
 		List<File> files = findFiles(digitalTwin.archetype(), subject);
-		for (File subjectDataset : files) subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+		for (File subjectDataset : files) {
+			digitalTwin.progressMessage("Processing " + subjectDataset.getName() + "...");
+			subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+		}
 		return files.stream().map(f -> removeExtension(f.getName())).toList();
 	}
 
@@ -108,13 +110,19 @@ public class RuntimeCodeGenerator {
 			FrameBuilder frame = new FrameBuilder("evaluator");
 			frame.add("name", subject.subject().name$());
 			subject.inferenceModelList().forEach(i -> {
-				FrameBuilder builder = frameBuilderOf(subject, i.variable(), "inference");
-				if (i.timeHorizon() > 0) builder.add("timeHorizon", "+" + i.timeHorizon());
-				frame.add("variable", builder.toFrame());
+				if (i.variable().isComposite())
+					Utils.variableNamesOf(i.variable()).forEach(v -> addInferenceVariable(subject, v, i, frame));
+				else addInferenceVariable(subject, i.variable().name$(), i, frame);
 			});
-			Files.writeString(file.toPath(), new Engine(template).render(frame));
+			Files.writeString(file.toPath(), engine().render(frame));
 		}
 		extract("evaluator", evaluatorScriptDir);
+	}
+
+	private void addInferenceVariable(DigitalSubject subject, String variable, InferenceModel i, FrameBuilder frame) {
+		FrameBuilder builder = frameBuilderOf(subject, variable, "inference");
+		if (i.timeHorizon() > 0) builder.add("timeHorizon", "+" + i.timeHorizon());
+		frame.add("variable", builder.toFrame());
 	}
 
 	private void extract(String lib, File dir) throws IOException {
@@ -125,7 +133,7 @@ public class RuntimeCodeGenerator {
 		File main = new File(trainScriptDir, "main.py");
 		FrameBuilder frame = new FrameBuilder("supermain");
 		frame.add("subject", digitalTwin.graph().digitalTwin().digitalSubjectList().stream().map(ds -> ds.subject().name$()).toArray(String[]::new));
-		Files.writeString(main.toPath(), new Engine(template).render(frame));
+		Files.writeString(main.toPath(), engine().render(frame));
 	}
 
 	private void createDigitalSubjectScripts() throws IOException {
@@ -138,15 +146,24 @@ public class RuntimeCodeGenerator {
 		}
 	}
 
-	private String normalize(String s) {
-		return firstLowerCase().format(camelCase().format(s).toString()).toString();
+	private String normalize(String name) {
+		return firstLowerCase().format(camelCase().format(name).toString()).toString().replace(":", "_");
 	}
 
 	private void renderInferences(DigitalSubject subject, File dir) throws IOException {
 		for (InferenceModel i : subject.inferenceModelList()) {
 			createPackage(dir);
-			File file = new File(dir, i.variable().name$() + ".py");
-			Files.writeString(file.toPath(), new Engine(template).render(frameOf(i)));
+			if (i.variable().isComposite()) Utils.variableNamesOf(i.variable()).forEach(v -> writeVariable(dir, i, v));
+			else writeVariable(dir, i, i.variable().name$());
+		}
+	}
+
+	private void writeVariable(File dir, InferenceModel i, String variable) {
+		try {
+			File file = new File(dir, variable.replace(":", "_") + ".py");
+			Files.writeString(file.toPath(), engine().render(frameOf(i, variable)));
+		} catch (IOException e) {
+			Logger.error(e);
 		}
 	}
 
@@ -156,22 +173,21 @@ public class RuntimeCodeGenerator {
 	}
 
 	private void renderSubjectMain(DigitalSubject dt, File file) throws IOException {
-		Files.writeString(file.toPath(), new Engine(template).render(frameOf(dt)));
+		Files.writeString(file.toPath(), engine().render(frameOf(dt)));
 	}
 
 	private Frame frameOf(DigitalSubject ds) {
 		FrameBuilder builder = new FrameBuilder("subject").add("name", ds.subject().name$());
-		//		Reality reality = dt.entity().core$().ownerAs(Reality.class);
-//		Stream.concat(reality.viewPointList().stream(), dt.entity().viewPointList().stream())
-//				.flatMap(vp -> vp.variableList().stream())
-//				.filter(v -> infers.stream().noneMatch(i -> i.variable().equals(v)))
-//				.forEach(v -> builder.add("variable", frameOf(v, "entity")));
-		ds.inferenceModelList().forEach(i -> builder.add("variable", frameOf(i)));
+		ds.inferenceModelList().forEach(i -> {
+			if (i.variable().isComposite())
+				Utils.variableNamesOf(i.variable()).forEach(v -> builder.add("variable", frameOf(i, v)));
+			else builder.add("variable", frameOf(i, i.variable().name$()));
+		});
 		return builder.toFrame();
 	}
 
-	private Frame frameOf(InferenceModel i) {
-		FrameBuilder builder = frameBuilderOf(i.core$().ownerAs(DigitalSubject.class), i.variable(), "inference");
+	private Frame frameOf(InferenceModel i, String variable) {
+		FrameBuilder builder = frameBuilderOf(i.core$().ownerAs(DigitalSubject.class), variable, "inference");
 		DigitalSubject ds = i.core$().ownerAs(DigitalSubject.class);
 		builder.add("subject", ds.subject().name$());
 		builder.add("lookback", i.lookback() != null ? lookbackSize(i) : 0);
@@ -179,9 +195,13 @@ public class RuntimeCodeGenerator {
 		return builder.toFrame();
 	}
 
-	private FrameBuilder frameBuilderOf(DigitalSubject ds, Variable v, String tag) {
+	private FrameBuilder frameBuilderOf(DigitalSubject ds, String variable, String tag) {
 		return new FrameBuilder(tag, "variable")
 				.add("subjects", subjectTargets.get(ds).toArray(new String[0]))
-				.add("name", v.name$());
+				.add("name", variable);
+	}
+
+	private Engine engine() {
+		return new Engine(template).add("normalize", n -> normalize(n.toString()));
 	}
 }

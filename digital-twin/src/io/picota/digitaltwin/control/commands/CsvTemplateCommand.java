@@ -17,6 +17,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.nio.file.Files.writeString;
+
 public class CsvTemplateCommand implements Command<File> {
 
 	private final DigitalTwinBox box;
@@ -36,8 +38,12 @@ public class CsvTemplateCommand implements Command<File> {
 		Map<String, String> subjects = reality.subjectList().stream().collect(Collectors.toMap(Layer::name$, s -> String.join(",", merge(common, Utils.variableNamesOf(s)))));
 		try {
 			Path temp = Files.createTempDirectory(digitalTwin.name() + " template");
-			for (Map.Entry<String, String> entry : subjects.entrySet())
-				Files.writeString(new File(temp.toFile(), entry.getKey() + ".csv").toPath(), entry.getValue());
+			for (Map.Entry<String, String> entry : subjects.entrySet()) {
+				Reality.Subject subject = reality.subject(s -> s.name$().equals(entry.getKey()));
+				if (subject.isPrototype()) for (int i = 1; i <= 3; i++)
+					write(temp, entry.getKey() + "00" + i + ".csv", entry);
+				else write(temp, entry.getKey() + ".csv", entry);
+			}
 			Path zip = Files.createTempFile(digitalTwin.name(), ".zip");
 			Compression.zipDir(temp, zip);
 			return new Result<>(true, "", zip.toFile());
@@ -46,8 +52,13 @@ public class CsvTemplateCommand implements Command<File> {
 		}
 	}
 
+	private static void write(Path temp, String entry, Map.Entry<String, String> entry1) throws IOException {
+		writeString(new File(temp.toFile(), entry).toPath(), entry1.getValue());
+	}
+
 	private List<String> merge(List<String> common, Stream<String> subjectNames) {
 		ArrayList<String> names = new ArrayList<>(common);
+		names.addFirst("instant");
 		names.addAll(subjectNames.toList());
 		return names;
 	}

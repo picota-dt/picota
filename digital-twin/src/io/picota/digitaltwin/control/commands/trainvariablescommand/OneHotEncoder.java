@@ -1,7 +1,6 @@
 package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
 import io.quassar.picota.Variable;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -17,14 +16,14 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 public class OneHotEncoder {
 	private final File file;
-	private final String[] header;
+	private final List<String> header;
 	private final Map<String, Variable> variables;
 	private final Map<String, List<String>> categories;
 	private final Path tempFile;
 	private final Map<Integer, List<String>> categoriesByIndex;
 	private final List<Integer> nonCatIndices;
 
-	public OneHotEncoder(File file, String[] header, Map<String, Variable> variables) throws IOException {
+	public OneHotEncoder(File file, List<String> header, Map<String, Variable> variables) throws IOException {
 		this.file = file;
 		this.tempFile = Files.createTempFile(file.getParentFile().toPath(), "one_hot", ".tsv");
 		this.header = header;
@@ -32,21 +31,22 @@ public class OneHotEncoder {
 		this.categories = categoricalVariables();
 		this.categoriesByIndex = new LinkedHashMap<>();
 		this.nonCatIndices = new ArrayList<>();
-		fillIndices(header, categoriesByIndex, nonCatIndices);
+		fillIndices();
 	}
 
-	public void encode() throws IOException {
+	public List<String> encode() throws IOException {
+		List<String> newHeader = nonCatIndices.stream().mapToInt(idx -> idx).mapToObj(idx -> header.get(idx)).collect(Collectors.toList());
 		try (BufferedReader br = new BufferedReader(new FileReader(file)); BufferedWriter bw = new BufferedWriter(new FileWriter(tempFile.toFile()))) {
-			List<String> newHeader = nonCatIndices.stream().mapToInt(idx -> idx).mapToObj(idx -> header[idx]).collect(Collectors.toList());
+			br.readLine();
 			expandCategories(newHeader, bw);
 			String line;
 			while ((line = br.readLine()) != null)
 				bw.write(String.join("\t", compoundNewFields(line, newHeader)) + "\n");
 		}
 		Files.move(tempFile, file.toPath(), REPLACE_EXISTING);
+		return newHeader;
 	}
 
-	@NotNull
 	private List<String> compoundNewFields(String line, List<String> newHeader) {
 		String[] fields = line.split("\t", -1);
 		List<String> outFields = new ArrayList<>(newHeader.size());
@@ -64,14 +64,14 @@ public class OneHotEncoder {
 
 	private void expandCategories(List<String> newHeader, BufferedWriter bw) throws IOException {
 		for (Map.Entry<Integer, List<String>> e : categoriesByIndex.entrySet())
-			e.getValue().stream().map(cat -> header[e.getKey()] + "_" + cat).forEach(newHeader::add);
+			e.getValue().stream().map(cat -> header.get(e.getKey()) + "_" + cat).forEach(newHeader::add);
 		bw.write(String.join("\t", newHeader));
 		bw.newLine();
 	}
 
-	private void fillIndices(String[] header, Map<Integer, List<String>> categoriesByIndex, List<Integer> nonCatIndices) {
-		IntStream.range(0, header.length).forEach(i -> {
-			String colName = header[i];
+	private void fillIndices() {
+		IntStream.range(0, header.size()).forEach(i -> {
+			String colName = header.get(i);
 			if (categories.containsKey(colName)) categoriesByIndex.put(i, categories.get(colName));
 			else nonCatIndices.add(i);
 		});

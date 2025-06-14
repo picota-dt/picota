@@ -40,6 +40,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		try {
+			digitalTwin.progressMessage("Preparing data for build subjects...");
 			new RuntimeCodeGenerator(digitalTwin).generateTrainer();
 			DigitalTwin.TrainingReport report = train(digitalTwin);
 			digitalTwin.report(report);
@@ -84,7 +85,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
 		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> l.contains("UserWarning")).collect(Collectors.joining("\n"));
-		cleanData(digitalTwin.archetype());
+//		cleanData(digitalTwin.archetype());
 		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? State.SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
 	}
 

@@ -5,8 +5,11 @@ import systems.intino.datamarts.subjectstore.calculator.model.filters.SinFilter;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.util.List;
+import java.util.Set;
 
 public class TemporalColumns {
+	private static final Set<String> temporalColumns = Set.of("month_sin", "month_cos", "day_sin", "day_cos", "hour_sin", "hour_cos", "quarter_sin", "quarter_cos");
+
 	public static List<ColumnDefinition> get() {
 		return List.of(
 				new ColumnDefinition("month_sin", "ts.month-of-year").add(new SinFilter()),
@@ -18,5 +21,9 @@ public class TemporalColumns {
 				new ColumnDefinition("quarter_sin", "ts.quarter-of-year").add(new SinFilter()),
 				new ColumnDefinition("quarter_cos", "ts.quarter-of-year").add(new CosFilter())
 		);
+	}
+
+	public static boolean is(String v) {
+		return temporalColumns.contains(v);
 	}
 }
