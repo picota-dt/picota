@@ -3,9 +3,10 @@ dsl Konos
 Service Digitaltwin as REST(host = "picota.io", port = "{api_port}", basePath = "/api")
 	Info(title = "Picota API", version = "1.0.0")
 	Authentication as Bearer
-	Resource("/digital-twin/:id/inference") inference
+	Resource("/digital-twin/:id/subject/:subject/inference") inference
 		Post
 			Parameter(in = path, isRequired = true) id as Text
+			Parameter(in = path, isRequired = true) subject as Text
 			Parameter(in = body, isRequired = true) values as Map
 				Key as Text
 				Value as Text

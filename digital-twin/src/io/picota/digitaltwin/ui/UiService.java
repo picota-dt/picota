@@ -11,6 +11,7 @@ import io.picota.digitaltwin.control.commands.*;
 import io.picota.digitaltwin.control.commands.Command.Result;
 import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.DigitalTwin;
+import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.Variable;
 
 import java.io.*;
@@ -21,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class UiService {
 	private final DigitalTwinsStore store;
@@ -88,23 +88,19 @@ public class UiService {
 						.replace("$feature", contributor(digitalTwin));
 				else
 					page = page.replace("$validationLoss", "-").replace("$feature", "-");
-				List<String> variables = getVariables(digitalTwin);
-				page = page.replace("$variables", String.join("\n", variables));
+				DigitalSubject ds = digitalTwin.graph().digitalTwin().digitalSubjectList().getFirst();
+				page = page.replace("subject", ds.subject().name$()).replace("$variables", String.join("\n", variablesOf(ds)));
 			}
 			ctx.write(page);
 		}
 	}
 
-	private static List<String> getVariables(DigitalTwin digitalTwin) {
+	private static List<String> variablesOf(DigitalSubject ds) {
 		List<String> variables = new ArrayList<>();
-		digitalTwin.graph().digitalTwin().digitalSubjectList()
-				.stream().flatMap(UiService::variables).forEach(variables::add);
+		Utils.variableTypes(ds.subject()).entrySet().stream()
+				.map(e -> "\"" + e.getKey() + "\"" + ": " + defaultValue(e.getValue()))
+				.forEach(variables::add);
 		return variables;
-	}
-
-	private static Stream<String> variables(io.quassar.picota.DigitalTwin.DigitalSubject s) {
-		return Utils.variableTypes(s.subject()).entrySet().stream()
-				.map(e -> "\"" + s.subject().name$() + (s.subject().isPrototype() ? "001" : "") + ":" + e.getKey() + "\"" + ": " + defaultValue(e.getValue()));
 	}
 
 	private static String defaultValue(Variable variable) {

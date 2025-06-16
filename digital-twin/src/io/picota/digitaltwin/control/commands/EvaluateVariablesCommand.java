@@ -22,13 +22,15 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 	private static final Object lock = new Object();
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
+	private final String subject;
 	private final Map<String, Object> record;
 	private final File pythonVenv;
 	private InferenceDataPreparer dataPreparer;
 
-	public EvaluateVariablesCommand(DigitalTwinBox box, String digitalTwinId, Map<String, Object> record) {
+	public EvaluateVariablesCommand(DigitalTwinBox box, String digitalTwinId, String subject, Map<String, Object> record) {
 		this.box = box;
 		this.digitalTwinId = digitalTwinId;
+		this.subject = subject;
 		this.record = record;
 		this.pythonVenv = new File(box.configuration().pythonVenv());
 	}
@@ -40,10 +42,8 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 		if (digitalTwin.graph() == null) throw new IllegalArgumentException("Digital Twin has no description model");
 		this.dataPreparer = new InferenceDataPreparer(digitalTwin.archetype());
 		new RuntimeCodeGenerator(digitalTwin).generateEvaluator();
-		List<Inference> inferences = new ArrayList<>();
-		for (DigitalSubject subject : digitalTwin.graph().digitalTwin().digitalSubjectList())
-			inferences.addAll(infer(subject, digitalTwin.archetype()));
-		return new Result<>(true, "", inferences);
+		DigitalSubject subject = digitalTwin.graph().digitalTwin().digitalSubject(s -> s.subject().name$().equals(this.subject));
+		return new Result<>(true, "", new ArrayList<>(infer(subject, digitalTwin.archetype())));
 	}
 
 	public List<Inference> infer(DigitalSubject subject, Archetype archetype) {
