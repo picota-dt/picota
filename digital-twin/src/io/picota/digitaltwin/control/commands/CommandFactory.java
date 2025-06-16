@@ -62,7 +62,7 @@ public class CommandFactory {
 	}
 
 	private static EvaluateVariablesCommand evaluateVariables(DigitalTwinBox b, Object... args) {
-		return new EvaluateVariablesCommand(b, (String) args[0], (Map<String, Object>) args[1]);
+		return new EvaluateVariablesCommand(b, (String) args[0], (String) args[1], (Map<String, Object>) args[2]);
 	}
 
 	public interface CommandBuilder {
