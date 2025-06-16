@@ -46,7 +46,10 @@
 					<label for="curlCommand"></label><textarea
 							id="curlCommand"
 							class="w-full bg-black border border-gray-600 rounded-lg p-4 placeholder-gray-400 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-							rows="6">curl -X POST -H "Content-Type: application/json" -d '{"instant":"2000-01-01T12:00:00.000Z", "key":"value"}' https://picota.io/api/digital-twin/$id/inference</textarea>
+							rows="6">curl -X POST -H "Content-Type: application/json" -d '{
+										"instant" : "2000-01-01T12:00:00.000Z",
+										$variables
+									}' https://picota.io/api/digital-twin/$id/inference</textarea>
 					<button id="runCurl"
 							class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2 rounded-md transition">
 						Test Model
@@ -59,13 +62,19 @@
 				<h2 class="text-2xl font-semibold text-blue-400 mb-4">3. API Information</h2>
 				<div class="bg-black p-6 rounded-lg border border-gray-600">
 					<p class="mb-2"><strong>Evaluate endpoint:</strong></p>
-					<code class="block bg-black p-2 rounded text-sm mb-4">POST
-						https://picota.io/api/digital-twin/$id/inference</code>
-					<p class="mb-2"><strong>Train endpoint:</strong></p>
-					<code class="block bg-black p-2 rounded text-sm mb-4">POST https://picota.io/api/digital-twin/$id/build</code>
-					<p class="text-gray-400 text-sm">
+					<code class="block bg-black p-2 rounded text-sm mb-4">POST https://picota.io/api/digital-twin/<span
+							class="text-blue-400">$id</span>/inference</code>
+					<p class="mb-2"><strong>Build endpoint:</strong></p>
+					<code class="block bg-black p-2 rounded text-sm mb-4">POST https://picota.io/api/digital-twin/<span
+							class="text-blue-400">$id</span>/build</code>
+					<p class="text-gray-400 text-sm mb-4">
 						If your model is protected, include your token in the <code class="bg-black px-1 rounded">Authorization</code>
 						header.
+					</p>
+					<p class="text-sm">
+						For full API documentation, visit
+						<a href="/docs/index.html" class="text-blue-400 underline hover:text-blue-300">the api
+							documentation</a>.
 					</p>
 				</div>
 			</section>

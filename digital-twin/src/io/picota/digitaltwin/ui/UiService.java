@@ -9,14 +9,19 @@ import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.control.DigitalTwinsStore;
 import io.picota.digitaltwin.control.commands.*;
 import io.picota.digitaltwin.control.commands.Command.Result;
+import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.DigitalTwin;
+import io.quassar.picota.Variable;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class UiService {
 	private final DigitalTwinsStore store;
@@ -83,9 +88,30 @@ public class UiService {
 						.replace("$feature", contributor(digitalTwin));
 				else
 					page = page.replace("$validationLoss", "-").replace("$feature", "-");
+				List<String> variables = getVariables(digitalTwin);
+				page = page.replace("$variables", String.join("\n", variables));
 			}
 			ctx.write(page);
 		}
+	}
+
+	private static List<String> getVariables(DigitalTwin digitalTwin) {
+		List<String> variables = new ArrayList<>();
+		digitalTwin.graph().digitalTwin().digitalSubjectList()
+				.stream().flatMap(UiService::variables).forEach(variables::add);
+		return variables;
+	}
+
+	private static Stream<String> variables(io.quassar.picota.DigitalTwin.DigitalSubject s) {
+		return Utils.variableTypes(s.subject()).entrySet().stream()
+				.map(e -> "\"" + s.subject().name$() + (s.subject().isPrototype() ? "001" : "") + ":" + e.getKey() + "\"" + ": " + defaultValue(e.getValue()));
+	}
+
+	private static String defaultValue(Variable variable) {
+		if (variable.isNumeric()) return "0";
+		if (variable.isEnumerated()) return "\"" + variable.asEnumerated().values().getFirst() + "\"";
+		if (variable.isBoolean()) return "false";
+		return "0";
 	}
 
 	private String contributor(DigitalTwin digitalTwin) {
