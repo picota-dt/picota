@@ -98,14 +98,21 @@ public class Utils {
 				.filter(c -> c.componentsList().isEmpty())
 				.flatMap(c -> pathsOf(c).stream())
 				.distinct()
-				.map(c -> var.name$() + ":" + c);
+				.map(c -> context(var) + var.name$() + ":" + c);
 		return Stream.of(var.name$());
+	}
+
+	private static String context(Variable var) {
+		Reality reality = var.core$().ownerAs(Reality.class);
+		return reality == null ? "" : reality.name$() + ".";
 	}
 
 	private static List<String> pathsOf(Components c) {
 		Components components = c.core$().ownerAs(Components.class);
 		if (components == null) return c.values();
-		else return c.values().stream().flatMap(cv -> combine(pathsOf(components), cv)).collect(Collectors.toList());
+		else return c.values().stream()
+				.flatMap(cv -> combine(pathsOf(components), cv))
+				.collect(Collectors.toList());
 	}
 
 	private static Stream<String> combine(List<String> container, String vl) {

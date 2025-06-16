@@ -89,7 +89,8 @@ public class UiService {
 				else
 					page = page.replace("$validationLoss", "-").replace("$feature", "-");
 				DigitalSubject ds = digitalTwin.graph().digitalTwin().digitalSubjectList().getFirst();
-				page = page.replace("subject", ds.subject().name$()).replace("$variables", String.join("\n", variablesOf(ds)));
+				page = page.replace("$subject", ds.subject().name$() + (ds.subject().isPrototype() ? "001" : ""))
+						.replace("$variables", String.join(",\n\t\t\t\t\t\t\t", variablesOf(ds)));
 			}
 			ctx.write(page);
 		}
@@ -100,7 +101,7 @@ public class UiService {
 		Utils.variableTypes(ds.subject()).entrySet().stream()
 				.map(e -> "\"" + e.getKey() + "\"" + ": " + defaultValue(e.getValue()))
 				.forEach(variables::add);
-		return variables;
+		return variables.stream().sorted().collect(Collectors.toList());
 	}
 
 	private static String defaultValue(Variable variable) {
