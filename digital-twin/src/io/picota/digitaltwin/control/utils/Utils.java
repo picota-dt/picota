@@ -86,7 +86,9 @@ public class Utils {
 	}
 
 	public static List<String> variableNamesOf(Reality reality) {
-		return reality.variableList().stream().flatMap(Utils::variableNamesOf).collect(Collectors.toList());
+		return reality.variableList().stream()
+				.flatMap(Utils::variableNamesOf)
+				.collect(Collectors.toList());
 	}
 
 	public static Stream<String> variableNamesOf(Reality.Subject s) {
@@ -99,12 +101,15 @@ public class Utils {
 				.flatMap(c -> pathsOf(c).stream())
 				.distinct()
 				.map(c -> context(var) + var.name$() + ":" + c);
-		return Stream.of(var.name$());
+		return Stream.of(context(var) + var.name$());
 	}
 
 	private static String context(Variable var) {
-		Reality reality = var.core$().ownerAs(Reality.class);
-		return reality == null ? "" : reality.name$() + ".";
+		if (var.core$().owner().is(Reality.class)) {
+			String reality = var.core$().owner().name();
+			return reality == null ? "" : reality + ".";
+		}
+		return "";
 	}
 
 	private static List<String> pathsOf(Components c) {
