@@ -81,10 +81,10 @@ public class InferenceDataPreparer {
 	}
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
-		if (inferenceModel.variable().isComposite()) {
-			List<String> layers = inferenceModel.variable().asComposite().componentsList().stream().flatMap(l -> l.values().stream()).toList();
-			return layers.stream().map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l).toArray(String[]::new);
-		}
+		if (inferenceModel.variable().isComposite())
+			return inferenceModel.variable().asComposite().componentsList().stream().flatMap(l -> l.values().stream())
+					.map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l)
+					.toArray(String[]::new);
 		return new String[]{inferenceModel.variable().name$()};
 	}
 
