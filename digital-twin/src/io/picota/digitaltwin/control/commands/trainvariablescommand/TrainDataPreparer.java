@@ -8,6 +8,7 @@ import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.MetadataFields;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel.Lookback;
 import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution;
 import io.quassar.picota.Variable;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
@@ -28,6 +29,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -71,7 +73,7 @@ public class TrainDataPreparer {
 				header = applyOneHotTransformations(tsv, header, variableTypes);
 				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, stds, means, history, outputVariables, header);
 				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
-				transformToJsonl(tsv, outName, header, metadata, inferenceModel.lookback());
+				transformToJsonl(tsv, outName, header, variableTypes, metadata, inferenceModel.lookback());
 				tsv.delete();
 			}
 		} catch (IOException e) {
@@ -146,20 +148,18 @@ public class TrainDataPreparer {
 				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
 	}
 
-	private File transformToJsonl(File source, String outputVariable, List<String> header, Map<String, Object> metadata,
-								  InferenceModel.Lookback lookback) throws IOException {
+	private File transformToJsonl(File source, String outputVariable, List<String> header, Map<String, Variable> variableTypes, Map<String, Object> metadata, Lookback lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
 		Set<String> features = header.stream().filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
 			writer.write(gson.toJson(metadata) + "\n");
-			if (lookback != null) writeWithLookBack(source, outputVariable, lookback, header, features, writer);
-			else writeWithoutLookBack(source, outputVariable, header, features, writer);
+			if (lookback != null) writeWithLookBack(source, outputVariable, lookback, header, variableTypes, writer);
+			else writeWithoutLookBack(source, outputVariable, header, variableTypes, writer);
 		}
 		return jsonl;
 	}
 
-	private void writeWithoutLookBack(File source, String outputVariable, List<String>
-			header, Set<String> features, BufferedWriter writer) throws IOException {
+	private void writeWithoutLookBack(File source, String outputVariable, List<String> header, Map<String, Variable> features, BufferedWriter writer) throws IOException {
 		Files.lines(source.toPath())
 				.skip(1)
 				.map(l -> rowOf(header, l.split("\t")))
@@ -168,7 +168,7 @@ public class TrainDataPreparer {
 				.forEach(c -> write(c, writer));
 	}
 
-	private void writeWithLookBack(File source, String outputVariable, InferenceModel.Lookback lookback, List<String> header, Set<String> features, BufferedWriter writer) throws IOException {
+	private void writeWithLookBack(File source, String outputVariable, Lookback lookback, List<String> header, Map<String, Variable> features, BufferedWriter writer) throws IOException {
 		int lookbackSize = lookback.isWindow() ? lookback.asWindow().size() : 1;
 		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookbackSize);
 		Files.lines(source.toPath())
@@ -189,24 +189,35 @@ public class TrainDataPreparer {
 		}
 	}
 
-	private InputData inputDataOf(Map<String, Double> row, String outputVariable, Queue<Map<String, Double>> queue, Set<String> features) {
-		return new InputData(row.get(outputVariable), features(row, features), time(row), queue == null ? EMPTY : lookBackFeatures(queue, features), queue == null ? EMPTY : lookBackTime(queue));
+	private InputData inputDataOf(Map<String, Double> row, String outputVariable, Queue<Map<String, Double>> queue, Map<String, Variable> features) {
+		return new InputData(row.get(outputVariable),
+				time(row),
+				features(row, features, Variable::isNumeric),
+				features(row, features, v -> !v.isNumeric()),
+				queue == null ? EMPTY : lookBackTime(queue),
+				queue == null ? EMPTY : lookBackFeatures(queue, features, Variable::isNumeric),
+				queue == null ? EMPTY : lookBackFeatures(queue, features, v -> !v.isNumeric()));
 	}
 
 	private double[][] lookBackTime(Queue<Map<String, Double>> queue) {
 		return queue.stream().map(this::time).toArray(double[][]::new);
 	}
 
-	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Set<String> features) {
-		return queue.stream().map(row -> features(row, features)).toArray(double[][]::new);//TODO check distance
+	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Map<String, Variable> features, Predicate<Variable> filter) {
+		return queue.stream().map(row -> features(row, features, filter)).toArray(double[][]::new);//TODO check distance
 	}
 
 	private double[] time(Map<String, Double> row) {
 		return TemporalColumns.get().stream().map(c -> c.name).mapToDouble(row::get).toArray();
 	}
 
-	private static double[] features(Map<String, Double> row, Set<String> features) {
-		return row.entrySet().stream().filter(e -> features.contains(e.getKey())).mapToDouble(Entry::getValue).toArray();
+	private static double[] features(Map<String, Double> row, Map<String, Variable> features, Predicate<Variable> filter) {
+		return row.entrySet().stream().filter(e -> accept(features, e, filter)).mapToDouble(Entry::getValue).toArray();
+	}
+
+	private static boolean accept(Map<String, Variable> features, Entry<String, Double> e, Predicate<Variable> filter) {
+		Variable variable = features.get(e.getKey());
+		return variable != null && filter.test(variable);
 	}
 
 	private Map<String, Double> rowOf(List<String> header, String[] values) {
@@ -214,8 +225,9 @@ public class TrainDataPreparer {
 				.collect(toMap(header::get, i -> Double.parseDouble(values[i]), (a, b) -> b));
 	}
 
-	private record InputData(double out, double[] t_features, double[] t, double[][] lookback_features,
-							 double[][] lookback_t) {
+	private record InputData(double out, double[] t, double[] numerical_t_features, double[] categorical_t_features,
+							 double[][] lookback_t, double[][] numerical_lookback_features,
+							 double[][] categorical_lookback_features) {
 	}
 
 	private void checkColumns(SubjectHistory history, String subject, Set<String> outputVariables) {
