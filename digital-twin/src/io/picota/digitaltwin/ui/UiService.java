@@ -173,17 +173,16 @@ public class UiService {
 		if (modelId == null) modelId = "";
 		page = page.replace("$modelId", modelId);
 		int step = calculateStep(modelId);
-		page = page.replace("step", step + "");
+		page = page.replace("$step", step + "");
 		manager.write(page);
 	}
 
 	private int calculateStep(String id) {
 		DigitalTwin digitalTwin = store.get(id);
-		if (digitalTwin.state() == DigitalTwin.State.PreparingData || digitalTwin.state() == DigitalTwin.State.Training)
-			return 3;
-		return 0;
+		return digitalTwin != null && (digitalTwin.state() == DigitalTwin.State.PreparingData || digitalTwin.state() == DigitalTwin.State.Training) ?
+				3 : 0;
 	}
-	
+
 	private static void html(AlexandriaHttpManager<?> manager, String page) {
 		manager.response().header("Content-Type", "text/html");
 		manager.write(page);
