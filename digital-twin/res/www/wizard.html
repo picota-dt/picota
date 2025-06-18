@@ -228,9 +228,9 @@
     const params = new URLSearchParams(window.location.search);
     let dtId = params.get('model') || '$modelId';
     let step1State = ''
-    const stepParam = parseInt(params.get('step'), 10);
-    if (!isNaN(stepParam) && stepParam >= 1 && stepParam <= steps.length) showStep(stepParam - 1); else showStep(0);
+    const stepParam = $step;
 
+    if (!isNaN(stepParam) && stepParam >= 1 && stepParam <= steps.length) showStep(stepParam - 1); else showStep(0);
     next1.disabled = true;
 
     function initTemplateDownload(dtId) {

@@ -166,15 +166,24 @@ public class UiService {
 		ctx.write(new Resource("report.pdf", result.resource()));
 	}
 
-	private static void customHtml(AlexandriaHttpManager<?> manager, String page) {
+	private void customHtml(AlexandriaHttpManager<?> manager, String page) {
 		manager.response().header("Content-Type", "text/html");
 		String modelId = manager.fromQueryOrDefault("id", "");
 		if (modelId == null || modelId.isEmpty()) modelId = manager.fromPathOrDefault("id", "");
 		if (modelId == null) modelId = "";
 		page = page.replace("$modelId", modelId);
+		int step = calculateStep(modelId);
+		page = page.replace("step", step + "");
 		manager.write(page);
 	}
 
+	private int calculateStep(String id) {
+		DigitalTwin digitalTwin = store.get(id);
+		if (digitalTwin.state() == DigitalTwin.State.PreparingData || digitalTwin.state() == DigitalTwin.State.Training)
+			return 3;
+		return 0;
+	}
+	
 	private static void html(AlexandriaHttpManager<?> manager, String page) {
 		manager.response().header("Content-Type", "text/html");
 		manager.write(page);

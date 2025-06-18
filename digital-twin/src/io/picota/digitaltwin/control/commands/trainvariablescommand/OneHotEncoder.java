@@ -35,7 +35,7 @@ public class OneHotEncoder {
 	}
 
 	public List<String> encode() throws IOException {
-		List<String> newHeader = nonCatIndices.stream().mapToInt(idx -> idx).mapToObj(idx -> header.get(idx)).collect(Collectors.toList());
+		List<String> newHeader = nonCatIndices.stream().mapToInt(idx -> idx).mapToObj(header::get).collect(Collectors.toList());
 		try (BufferedReader br = new BufferedReader(new FileReader(file)); BufferedWriter bw = new BufferedWriter(new FileWriter(tempFile.toFile()))) {
 			br.readLine();
 			expandCategories(newHeader, bw);

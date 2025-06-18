@@ -20,6 +20,7 @@ import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter
 import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNormalizationFilter;
 import systems.intino.datamarts.subjectstore.model.signals.NumericalSignal.Summary;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
+import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition.Type;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -27,11 +28,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static io.picota.digitaltwin.control.utils.Utils.*;
 import static io.picota.digitaltwin.model.MetadataFields.MEANS;
@@ -62,13 +64,13 @@ public class TrainDataPreparer {
 			SubjectHistory history = vault.open(subjectName);
 			fillHistory(history, variableTypes, subjectDataset);
 			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
-			Map<String, Double> stds = stds(history, outputVariables);
-			Map<String, Double> means = means(history, outputVariables);
+			Map<String, Double> stds = stds(history, outputVariables, variableTypes);
+			Map<String, Double> means = means(history, outputVariables, variableTypes);
 			checkColumns(history, subjectName, outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
-				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, history);
+				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, variableTypes, history);
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, variableTypes);
 				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, stds, means, history, outputVariables, header);
@@ -94,8 +96,8 @@ public class TrainDataPreparer {
 		Summary summary = history.query().number(outputVariable).all().summary();
 		String[] inputVariables = header.stream().filter(f -> !outputVariables.contains(f)).toArray(String[]::new);
 		HashMap<String, Object> metadata = new HashMap<>();
-		metadata.put(STDS, Arrays.stream(inputVariables).filter(v -> !TemporalColumns.is(v)).mapToDouble(key -> stds.getOrDefault(key, 0.5)).toArray());//TODO qué hacer con las onehot
-		metadata.put(MEANS, Arrays.stream(inputVariables).filter(v -> !TemporalColumns.is(v)).mapToDouble(key -> means.getOrDefault(key, 0.5)).toArray());
+		metadata.put(STDS, Arrays.stream(inputVariables).filter(stds::containsKey).mapToDouble(stds::get).toArray());
+		metadata.put(MEANS, Arrays.stream(inputVariables).filter(means::containsKey).mapToDouble(means::get).toArray());
 		metadata.put(MetadataFields.INPUT_VARIABLES, inputVariables);
 		metadata.put(MetadataFields.LOOKBACK_SIZE, Utils.lookbackSize(inferenceModel));
 		metadata.put(MetadataFields.OUT_MIN, summary.min().value());
@@ -103,20 +105,19 @@ public class TrainDataPreparer {
 		return metadata;
 	}
 
-	private static Map<String, Double> stds(SubjectHistory history, Set<String> outVariables) {//TODO qué hacer con las onehot
+	private static Map<String, Double> stds(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes) {
 		return history.tags().stream()
-				.filter(o -> !outVariables.contains(o))
-				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().sd()));
-
+				.filter(o -> !outVariables.contains(o) && variableTypes.get(o).isNumeric())
+				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().sd(), (k1, k2) -> k1, LinkedHashMap::new));
 	}
 
-	private static Map<String, Double> means(SubjectHistory history, Set<String> outVariables) {
+	private static Map<String, Double> means(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes) {
 		return history.tags().stream()
-				.filter(o -> !outVariables.contains(o))
-				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().mean()));
+				.filter(o -> !outVariables.contains(o) && variableTypes.get(o).isNumeric())
+				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().mean(), (k1, k2) -> k1, LinkedHashMap::new));
 	}
 
-	private File createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, Set<String> outputVariables, SubjectHistory history) throws IOException {
+	private File createInitialTsv(Resolution resolution, InferenceModel inferenceModel, String outputVariable, Set<String> outputVariables, Map<String, Variable> features, SubjectHistory history) throws IOException {
 		File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 		ChronoUnit scale = chronoUnitOf(resolution.scale());
 		var timeHorizon = inferenceModel.timeHorizon();
@@ -125,7 +126,7 @@ public class TrainDataPreparer {
 				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, chronoUnitOf(resolution.scale())))
 				.period(period(resolution))
 				.add(TemporalColumns.get())
-				.add(inputVariables(history, inferenceModel, outputVariables))
+				.add(inputVariables(history, inferenceModel, features, outputVariables))
 				.add(outputVariable(inferenceModel, outputVariable))
 				.export()
 				.onlyCompleteRows()
@@ -141,22 +142,39 @@ public class TrainDataPreparer {
 		return new String[]{inferenceModel.variable().name$()};
 	}
 
-	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, Set<String> outputVariables) {
+	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, Map<String, Variable> variableTypes, Set<String> outputVariables) {
 		int prediction = inferenceModel.timeHorizon();
 		return history.tags().stream()
 				.filter(t -> prediction > 0 || !outputVariables.contains(t))
-				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
+				.map(tag -> new ColumnDefinition(tag, tag + ".first", typeOf(tag, variableTypes))).toList();
 	}
 
-	private File transformToJsonl(File source, String outputVariable, List<String> header, Map<String, Variable> variableTypes, Map<String, Object> metadata, Lookback lookback) throws IOException {
+	private static Type typeOf(String t1, Map<String, Variable> variableTypes) {
+		return variableTypes.get(t1).isNumeric() ? Type.Numerical : Type.Categorical;
+	}
+
+	private File transformToJsonl(File source, String outputVariable, List<String> header, Map<String, Variable> features, Map<String, Object> metadata, Lookback lookback) throws IOException {
 		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
-		Set<String> features = header.stream().filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
+		Map<String, Variable> expanded = expandWithCategoricalValues(features);
 		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
 			writer.write(gson.toJson(metadata) + "\n");
-			if (lookback != null) writeWithLookBack(source, outputVariable, lookback, header, variableTypes, writer);
-			else writeWithoutLookBack(source, outputVariable, header, variableTypes, writer);
+			if (lookback != null) writeWithLookBack(source, outputVariable, lookback, header, expanded, writer);
+			else writeWithoutLookBack(source, outputVariable, header, expanded, writer);
 		}
 		return jsonl;
+	}
+
+	private Map<String, Variable> expandWithCategoricalValues(Map<String, Variable> features) {
+		return features.entrySet().stream()
+				.flatMap(e -> {
+					String k = e.getKey();
+					Variable v = e.getValue();
+					if (v.isBoolean()) return Stream.of("true", "false").map(vl -> new SimpleEntry<>(k + "_" + vl, v));
+					else if (v.isEnumerated())
+						return v.asEnumerated().values().stream().map(vl -> new SimpleEntry<>(k + "_" + vl, v));
+					else return Stream.of(e);
+				}).collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (k1, k2) -> k1, LinkedHashMap::new));
+
 	}
 
 	private void writeWithoutLookBack(File source, String outputVariable, List<String> header, Map<String, Variable> features, BufferedWriter writer) throws IOException {
@@ -192,27 +210,30 @@ public class TrainDataPreparer {
 	private InputData inputDataOf(Map<String, Double> row, String outputVariable, Queue<Map<String, Double>> queue, Map<String, Variable> features) {
 		return new InputData(row.get(outputVariable),
 				time(row),
-				features(row, features, Variable::isNumeric),
-				features(row, features, v -> !v.isNumeric()),
+				features(row, features, outputVariable, Variable::isNumeric),
+				features(row, features, outputVariable, v -> !v.isNumeric()),
 				queue == null ? EMPTY : lookBackTime(queue),
-				queue == null ? EMPTY : lookBackFeatures(queue, features, Variable::isNumeric),
-				queue == null ? EMPTY : lookBackFeatures(queue, features, v -> !v.isNumeric()));
+				queue == null ? EMPTY : lookBackFeatures(queue, features, outputVariable, Variable::isNumeric),
+				queue == null ? EMPTY : lookBackFeatures(queue, features, outputVariable, v -> !v.isNumeric()));
 	}
 
 	private double[][] lookBackTime(Queue<Map<String, Double>> queue) {
 		return queue.stream().map(this::time).toArray(double[][]::new);
 	}
 
-	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Map<String, Variable> features, Predicate<Variable> filter) {
-		return queue.stream().map(row -> features(row, features, filter)).toArray(double[][]::new);//TODO check distance
+	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Map<String, Variable> features, String outputVariable, Predicate<Variable> filter) {
+		return queue.stream().map(row -> features(row, features, outputVariable, filter)).toArray(double[][]::new);//TODO check distance
 	}
 
 	private double[] time(Map<String, Double> row) {
 		return TemporalColumns.get().stream().map(c -> c.name).mapToDouble(row::get).toArray();
 	}
 
-	private static double[] features(Map<String, Double> row, Map<String, Variable> features, Predicate<Variable> filter) {
-		return row.entrySet().stream().filter(e -> accept(features, e, filter)).mapToDouble(Entry::getValue).toArray();
+	private static double[] features(Map<String, Double> row, Map<String, Variable> features, String outputVariable, Predicate<Variable> filter) {
+		return row.entrySet().stream()
+				.filter(e -> !e.getKey().equals(outputVariable) && accept(features, e, filter))
+				.mapToDouble(Entry::getValue)
+				.toArray();
 	}
 
 	private static boolean accept(Map<String, Variable> features, Entry<String, Double> e, Predicate<Variable> filter) {
