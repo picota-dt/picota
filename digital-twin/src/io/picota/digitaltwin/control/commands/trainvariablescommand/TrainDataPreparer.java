@@ -222,7 +222,7 @@ public class TrainDataPreparer {
 	}
 
 	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Map<String, Variable> features, String outputVariable, Predicate<Variable> filter) {
-		return queue.stream().map(row -> features(row, features, outputVariable, filter)).toArray(double[][]::new);//TODO check distance
+		return queue.stream().map(row -> features(row, features, outputVariable, filter)).toArray(double[][]::new); //TODO check distance
 	}
 
 	private double[] time(Map<String, Double> row) {
