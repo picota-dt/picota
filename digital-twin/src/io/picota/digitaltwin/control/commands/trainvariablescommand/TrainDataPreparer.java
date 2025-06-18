@@ -26,8 +26,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalAmount;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.*;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.*;
 import java.util.Map.Entry;
@@ -38,7 +39,7 @@ import java.util.stream.Stream;
 import static io.picota.digitaltwin.control.utils.Utils.*;
 import static io.picota.digitaltwin.model.MetadataFields.MEANS;
 import static io.picota.digitaltwin.model.MetadataFields.STDS;
-import static java.time.temporal.ChronoUnit.HOURS;
+import static java.time.temporal.ChronoUnit.MONTHS;
 import static java.util.stream.Collectors.toMap;
 
 public class TrainDataPreparer {
@@ -121,10 +122,11 @@ public class TrainDataPreparer {
 		File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 		ChronoUnit scale = chronoUnitOf(resolution.scale());
 		var timeHorizon = inferenceModel.timeHorizon();
+		TemporalAmount period = period(resolution);
 		SubjectHistoryView.of(history)
-				.from(history.first().truncatedTo(scale))
-				.to(history.last().plus(1, scale).truncatedTo(HOURS).minus(timeHorizon, chronoUnitOf(resolution.scale())))
-				.period(period(resolution))
+				.from(truncateTo(history.first(), scale))
+				.to(toPoint(history, scale, timeHorizon))
+				.period(period)
 				.add(TemporalColumns.get())
 				.add(inputVariables(history, inferenceModel, features, outputVariables))
 				.add(outputVariable(inferenceModel, outputVariable))
@@ -133,6 +135,35 @@ public class TrainDataPreparer {
 				.to(new FileOutputStream(tsv));
 		return tsv;
 	}
+
+	private static Instant toPoint(SubjectHistory history, ChronoUnit scale, int timeHorizon) {
+		return history.last().atOffset(ZoneOffset.UTC)
+				.plus(1, scale)
+				.truncatedTo(ChronoUnit.HOURS)
+				.minus(timeHorizon, scale).toInstant();
+	}
+
+	private static Instant truncateTo(Instant ts, ChronoUnit scale) {
+		return scale.ordinal() >= MONTHS.ordinal() ? truncate(ts, scale) : ts.truncatedTo(scale);
+	}
+
+	public static Instant truncate(Instant instant, ChronoUnit unit) {
+		if (unit.isTimeBased() && unit.getDuration().toNanos() <= ChronoUnit.SECONDS.getDuration().toNanos())
+			return instant.truncatedTo(unit);
+		OffsetDateTime zdt = instant.atOffset(ZoneOffset.UTC);
+		zdt = switch (unit) {
+			case WEEKS -> zdt.truncatedTo(ChronoUnit.DAYS).with(ChronoField.DAY_OF_WEEK, 1);
+			case MONTHS -> zdt
+					.with(TemporalAdjusters.firstDayOfMonth())
+					.truncatedTo(ChronoUnit.DAYS);
+			case YEARS -> zdt
+					.with(TemporalAdjusters.firstDayOfYear())
+					.truncatedTo(ChronoUnit.DAYS);
+			default -> throw new UnsupportedTemporalTypeException("No se puede truncar a " + unit);
+		};
+		return zdt.toInstant();
+	}
+
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
 		if (inferenceModel.variable().isComposite())
@@ -306,7 +337,9 @@ public class TrainDataPreparer {
 
 	private TemporalAmount period(Resolution resolution) {
 		var scale = resolution.scale();
-		return scale.ordinal() > Scale.Day.ordinal() ? Duration.of(resolution.amount(), chronoUnitOf(scale)) : periodOf(resolution.amount(), chronoUnitOf(scale));
+		return scale.ordinal() > Scale.Day.ordinal() ?
+				Duration.of(resolution.amount(), chronoUnitOf(scale)) :
+				periodOf(resolution.amount(), chronoUnitOf(scale));
 	}
 
 	private static SubjectHistoryVault subjectVault(File workspace) {
