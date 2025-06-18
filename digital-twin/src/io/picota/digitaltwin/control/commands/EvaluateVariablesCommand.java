@@ -39,7 +39,8 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 	public Result<List<Inference>> execute() {
 		io.picota.digitaltwin.model.DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
-		if (digitalTwin.graph() == null) throw new IllegalArgumentException("Digital Twin has no description model");
+		if (digitalTwin.graph() == null)
+			throw new IllegalArgumentException("Digital Twin has no description model");
 		this.dataPreparer = new InferenceDataPreparer(digitalTwin.archetype());
 		new RuntimeCodeGenerator(digitalTwin).generateEvaluator();
 		DigitalSubject subject = digitalTwin.graph().digitalTwin().digitalSubject(s -> s.subject().name$().equals(this.subject));

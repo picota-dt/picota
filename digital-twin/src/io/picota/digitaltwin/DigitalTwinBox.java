@@ -10,6 +10,7 @@ import java.io.File;
 public class DigitalTwinBox extends AbstractBox {
 	private final File workspaceDir;
 	private DigitalTwinsStore store;
+	private UiService uiService;
 
 	public DigitalTwinBox(DigitalTwinConfiguration conf, File workingDir) {
 		super(conf);
@@ -35,10 +36,12 @@ public class DigitalTwinBox extends AbstractBox {
 		store.load(this);
 		AlexandriaHttpServerBuilder.setup(Integer.parseInt(configuration.apiPort()), "www/");
 		AlexandriaHttpServerBuilder.setUI(true);
-		new UiService(store, new CommandFactory(this)).start();
+		uiService = new UiService(store, new CommandFactory(this));
+
 	}
 
 	public void afterStart() {
+		uiService.start();
 	}
 
 	public void beforeStop() {

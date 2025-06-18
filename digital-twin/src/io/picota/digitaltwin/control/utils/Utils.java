@@ -6,16 +6,14 @@ import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
 import io.quassar.picota.Reality;
 import io.quassar.picota.Variable;
 import io.quassar.picota.Variable.Composite.Components;
+import systems.intino.datamarts.subjectstore.SubjectHistory;
 
 import java.io.File;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.Period;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalAmount;
+import java.time.*;
+import java.time.temporal.*;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,6 +33,30 @@ public class Utils {
 	public static String digitalTwinId(URI uri) {
 		Path path = Path.of(uri.getPath());
 		return path.getName(path.getNameCount() - 1).toString().replace(".zip", "");
+	}
+
+	public static Instant toPoint(SubjectHistory history, ChronoUnit scale, int timeHorizon) {
+		return history.last().atOffset(ZoneOffset.UTC)
+				.plus(1, scale)
+				.truncatedTo(ChronoUnit.HOURS)
+				.minus(timeHorizon, scale).toInstant();
+	}
+
+	public static Instant truncate(Instant instant, ChronoUnit unit) {
+		if (unit.isTimeBased() && unit.getDuration().toNanos() <= ChronoUnit.SECONDS.getDuration().toNanos())
+			return instant.truncatedTo(unit);
+		OffsetDateTime zdt = instant.atOffset(ZoneOffset.UTC);
+		zdt = switch (unit) {
+			case WEEKS -> zdt.truncatedTo(ChronoUnit.DAYS).with(ChronoField.DAY_OF_WEEK, 1);
+			case MONTHS -> zdt
+					.with(TemporalAdjusters.firstDayOfMonth())
+					.truncatedTo(ChronoUnit.DAYS);
+			case YEARS -> zdt
+					.with(TemporalAdjusters.firstDayOfYear())
+					.truncatedTo(ChronoUnit.DAYS);
+			default -> throw new UnsupportedTemporalTypeException("No se puede truncar a " + unit);
+		};
+		return zdt.toInstant();
 	}
 
 

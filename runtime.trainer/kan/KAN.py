@@ -35,9 +35,9 @@ class KAN(nn.Module):
         categorical_lookback_features = batch['categorical_lookback_features']
         normalized_numerical_t_features = self.normalization_layer(t_features)
         if lookback_features.size(1) != 0:
-            normalized_context_conditions = self.normalization_layer(lookback_features)
-            numerical_lookback_features_flat = normalized_context_conditions.view(normalized_context_conditions.size(0),
-                                                                                  -1)
+            normalized_lookback_features = self.normalization_layer(lookback_features)
+            numerical_lookback_features_flat = normalized_lookback_features.view(normalized_lookback_features.size(0),
+                                                                                 -1)
         else:
             numerical_lookback_features_flat = torch.zeros((t_features.size(0), 0), device=t_features.device)
         if t.dim() == 1:

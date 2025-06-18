@@ -3,81 +3,87 @@ package io.picota.digitaltwin.control.commands.evaluatevariablescommand;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
-import io.intino.alexandria.Scale;
-import io.intino.alexandria.logger.Logger;
+import io.picota.digitaltwin.control.commands.DataPreparer;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.OneHotEncoder;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TemporalColumns;
 import io.picota.digitaltwin.model.Archetype;
+import io.quassar.picota.DigitalTwin;
 import io.quassar.picota.DigitalTwin.DigitalSubject;
 import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution;
-import org.apache.commons.collections4.queue.CircularFifoQueue;
+import io.quassar.picota.Variable;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistory.Transaction;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
-import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
-import static io.picota.digitaltwin.control.utils.Utils.chronoUnitOf;
-import static io.picota.digitaltwin.control.utils.Utils.periodOf;
+import static io.picota.digitaltwin.control.utils.Utils.variableTypes;
 
-public class InferenceDataPreparer {
-	public static final String TSV = ".tsv";
-	public static final String JSONL = ".jsonl";
-	public static final String LAYER_SEPARATOR = ":";
+public class InferenceDataPreparer extends DataPreparer {
 	private final Archetype archetype;
-	private final File dataDir;
 	private final Gson gson = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
 	public InferenceDataPreparer(Archetype archetype) {
+		super(archetype.dataDirectory());
 		this.archetype = archetype;
-		this.dataDir = archetype.dataDirectory();
 	}
 
 	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, Map<String, Object> record) throws IOException {
 		try (SubjectHistoryVault vault = subjectVault()) {
 			SubjectHistory history = vault.open(ds.subject().name$());
+			Map<String, Variable> features = variableTypes(ds.subject());
 			fillHistory(history, record, inferenceModel.lookback());
-			String[] outputVariables = outputVariables(inferenceModel);
+			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 			checkColumns(history, ds.subject().name$(), outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
-				File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
-				createInitialTsv(ds.resolution(), inferenceModel, Set.of(outputVariables), history, tsv);
-				String[] header = Files.lines(tsv.toPath()).findFirst().get().split("\t");
+				File tsv = createTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, features, history);
+				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
+				header = applyOneHotTransformations(tsv, header, features);
 				JsonObject metadata = getMetadata(ds.subject().name$(), outName);
-				transformToJsonl(tsv, outName, header, metadata, inferenceModel.lookback());
+				transformToJsonl(tsv, outName, header, features, metadata, inferenceModel.lookback());
 				tsv.delete();
 			}
 		}
+	}
+
+	private File createTsv(DigitalTwin.DigitalSubject.Resolution resolution, InferenceModel inferenceModel,
+						   String outputVariable, Set<String> outputVariables, Map<String, Variable> features,
+						   SubjectHistory history) throws IOException {
+		File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
+		TemporalAmount period = period(resolution);
+		SubjectHistoryView.of(history)
+				.from(history.first())
+				.to(history.last().plus(1, ChronoUnit.HOURS))
+				.period(period)
+				.add(TemporalColumns.get())
+				.add(inputVariables(history, inferenceModel, features, outputVariables))
+				.export()
+				.onlyCompleteRows()
+				.to(new FileOutputStream(tsv));
+		return tsv;
 	}
 
 	public JsonObject getMetadata(String subject, String variable) throws IOException {
 		return gson.fromJson(Files.readString(archetype.metadataFile(subject, variable).toPath()), JsonObject.class);
 	}
 
-	private void createInitialTsv(Resolution resolution, InferenceModel inferenceModel, Set<String> outputVariables, SubjectHistory history, File file) throws IOException {
-		ChronoUnit scale = chronoUnitOf(resolution.scale());
-		SubjectHistoryView.of(history)
-				.from(history.first().truncatedTo(scale).minus(1, scale))
-				.to(history.last().plus(1, scale).truncatedTo(scale))
-				.period(period(resolution))
-				.add(TemporalColumns.get())
-				.add(inputVariables(history, inferenceModel, outputVariables))
-				.export()
-				.onlyCompleteRows()
-				.to(new FileOutputStream(file));
+	private List<String> applyOneHotTransformations(File tsv, List<String> header, Map<String, Variable> variableTypes) throws IOException {
+		if (variableTypes.values().stream().anyMatch(v -> !v.isNumeric()))
+			return new OneHotEncoder(tsv, header, variableTypes).encode();
+		return header;
 	}
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
@@ -88,86 +94,7 @@ public class InferenceDataPreparer {
 		return new String[]{inferenceModel.variable().name$()};
 	}
 
-	private static List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, Set<String> outputVariables) {
-		boolean prediction = inferenceModel.timeHorizon() > 0;
-		return history.tags().stream()
-				.filter(t -> prediction || !outputVariables.contains(t))
-				.map(t1 -> new ColumnDefinition(t1, t1 + ".first")).toList();
-	}
-
-	private File transformToJsonl(File source, String outputVariable, String[] header, JsonObject metadata, InferenceModel.Lookback lookback) throws IOException {
-		File jsonl = new File(source.getParentFile(), source.getName().replace(TSV, JSONL));
-		Set<String> features = Arrays.stream(header).filter(f -> !f.equals(outputVariable) && !f.contains("_sin") && !f.contains("_cos")).collect(Collectors.toSet());
-		try (BufferedWriter writer = new BufferedWriter(new FileWriter(jsonl))) {
-			writer.write(gson.toJson(metadata) + "\n");
-			if (lookback != null && lookback.isDistance())
-				writeWithLookBack(source, lookback, header, features, writer);
-			else writeWithoutLookBack(source, header, features, writer);
-		}
-		return jsonl;
-	}
-
-	private void writeWithoutLookBack(File source, String[] header, Set<String> features, BufferedWriter writer) throws IOException {
-		Files.lines(source.toPath())
-				.skip(1)
-				.map(l -> rowOf(header, l.split("\t")))
-				.map(r -> inputDataOf(r, null, features))
-				.map(i -> gson.toJson(i) + "\n")
-				.forEach(c -> write(c, writer));
-	}
-
-	private void writeWithLookBack(File source, InferenceModel.Lookback lookback, String[]
-			header, Set<String> features, BufferedWriter writer) throws IOException {
-		int size = lookback.isDistance() ? 1 : lookback.asWindow().size();
-		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(size);
-		Files.lines(source.toPath())
-				.skip(1)
-				.map(l -> rowOf(header, l.split("\t")))
-				.peek(queue::add)
-				.skip(size)
-				.map(r -> inputDataOf(r, queue, features))
-				.map(i -> gson.toJson(i) + "\n")
-				.forEach(c -> write(c, writer));
-	}
-
-	private static void write(String c, BufferedWriter writer) {
-		try {
-			writer.write(c);
-		} catch (IOException e) {
-			Logger.error(e);
-		}
-	}
-
-	private InputData inputDataOf(Map<String, Double> row, Queue<Map<String, Double>> queue, Set<String> features) {
-		return new InputData(Double.NaN, features(row, features), time(row), queue == null ? new double[0][0] : lookBackFeatures(queue, features), queue == null ? new double[0][0] : lookBackTime(queue));
-	}
-
-	private double[][] lookBackTime(Queue<Map<String, Double>> queue) {
-		return queue.stream().map(this::time).toArray(double[][]::new);
-	}
-
-	private double[][] lookBackFeatures(Queue<Map<String, Double>> queue, Set<String> features) {
-		return queue.stream().map(row -> features(row, features)).toArray(double[][]::new);
-	}
-
-	private double[] time(Map<String, Double> row) {
-		return TemporalColumns.get().stream().map(c -> c.name).mapToDouble(row::get).toArray();
-	}
-
-	private static double[] features(Map<String, Double> row, Set<String> features) {
-		return row.entrySet().stream().filter(e -> features.contains(e.getKey())).mapToDouble(Entry::getValue).toArray();
-	}
-
-	private Map<String, Double> rowOf(String[] header, String[] values) {
-		return IntStream.range(0, header.length).boxed()
-				.collect(Collectors.toMap(i -> header[i], i -> Double.parseDouble(values[i]), (a, b) -> b));
-	}
-
-	private record InputData(double out, double[] t_features, double[] t, double[][] lookback_features,
-							 double[][] lookback_t) {
-	}
-
-	private void checkColumns(SubjectHistory history, String subject, String[] outputVariables) {
+	private void checkColumns(SubjectHistory history, String subject, Set<String> outputVariables) {
 		if (history.tags().isEmpty()) return;
 		for (String variable : outputVariables)
 			if (!history.tags().contains(variable))
@@ -177,7 +104,7 @@ public class InferenceDataPreparer {
 	private static void fillHistory(SubjectHistory history, Map<String, Object> dataset, InferenceModel.Lookback lookback) {
 		SubjectHistory.Batch batch = history.batch();
 		addTValues(dataset, batch);
-		addLookback(dataset, lookback, batch);
+		if (lookback != null) addLookback(dataset, lookback, batch);
 		batch.terminate();
 	}
 
@@ -206,13 +133,8 @@ public class InferenceDataPreparer {
 		});
 	}
 
-	private TemporalAmount period(Resolution resolution) {
-		var scale = resolution.scale();
-		return scale.ordinal() > Scale.Day.ordinal() ? Duration.of(resolution.amount(), chronoUnitOf(scale)) : periodOf(resolution.amount(), chronoUnitOf(scale));
-	}
-
 	private static SubjectHistoryVault subjectVault() {
-		return new SubjectHistoryVault("jdbc:sqlite:memory");
+		return new SubjectHistoryVault("jdbc:sqlite::memory:");
 	}
 
 	private static boolean isLookback(String key) {
