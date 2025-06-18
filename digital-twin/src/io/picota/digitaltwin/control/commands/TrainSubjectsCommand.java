@@ -20,9 +20,10 @@ import java.util.concurrent.Future.State;
 import java.util.stream.Collectors;
 
 import static io.picota.digitaltwin.control.utils.Utils.toDouble;
-import static io.picota.digitaltwin.model.DigitalTwin.State.Training;
+import static io.picota.digitaltwin.model.DigitalTwin.State.*;
 import static io.picota.digitaltwin.model.MetadataFields.OUT_MAX;
 import static io.picota.digitaltwin.model.MetadataFields.OUT_MIN;
+import static java.util.concurrent.Future.State.SUCCESS;
 
 public class TrainSubjectsCommand implements Command<Void> {
 	private final DigitalTwinBox box;
@@ -49,7 +50,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		} catch (Throwable e) {
 			Logger.error(e);
 			removeAllData(digitalTwin);
-			digitalTwin.state(DigitalTwin.State.TrainFinished);
+			digitalTwin.state(TrainFinished);
 			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
 			return new Result<>(false, "Error during building process.\n" + e.getMessage());
 		}
@@ -63,8 +64,8 @@ public class TrainSubjectsCommand implements Command<Void> {
 		DigitalTwin.TrainingReport result = runTrain(digitalTwin, dtDirectory);
 		Logger.info("Training subjects of " + digitalTwin.id() + ": Done");
 		digitalTwin.progressMessage("Finished training. State: " + result.state());
-		digitalTwin.state(DigitalTwin.State.TrainFinished);
-		if (result.state().equals(State.SUCCESS)) digitalTwin.state(DigitalTwin.State.Prepared);
+		digitalTwin.state(TrainFinished);
+		if (result.state().equals(SUCCESS)) digitalTwin.state(Prepared);
 		new TrainReportBuilder().generate(result, digitalTwin.archetype().reportFile());
 		return result;
 	}
@@ -85,8 +86,8 @@ public class TrainSubjectsCommand implements Command<Void> {
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
 		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> l.contains("UserWarning")).collect(Collectors.joining("\n"));
-//		cleanData(digitalTwin.archetype());
-		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? State.SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
+//		cleanData(digitalTwin.archetype());TODO
+		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
 	}
 
 	private List<Variable> trainedVariables(DigitalTwin digitalTwin, int code, String report) {

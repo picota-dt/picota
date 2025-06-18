@@ -64,8 +64,8 @@ public class TrainDataPreparer {
 			SubjectHistory history = vault.open(subjectName);
 			fillHistory(history, variableTypes, subjectDataset);
 			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
-			Map<String, Double> stds = stds(history, outputVariables, variableTypes);
-			Map<String, Double> means = means(history, outputVariables, variableTypes);
+			Map<String, Double> stds = stds(history, outputVariables, variableTypes, inferenceModel.timeHorizon() > 0);
+			Map<String, Double> means = means(history, outputVariables, variableTypes, inferenceModel.timeHorizon() > 0);
 			checkColumns(history, subjectName, outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
@@ -73,7 +73,8 @@ public class TrainDataPreparer {
 				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, variableTypes, history);
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, variableTypes);
-				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, stds, means, history, outputVariables, header);
+				String[] inputVariables = header.stream().filter(f -> !f.equals(outName)).toArray(String[]::new);
+				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, stds, means, inputVariables, history);
 				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
 				transformToJsonl(tsv, outName, header, variableTypes, metadata, inferenceModel.lookback());
 				tsv.delete();
@@ -91,10 +92,9 @@ public class TrainDataPreparer {
 	}
 
 	private static HashMap<String, Object> metadata(InferenceModel inferenceModel, String outputVariable,
-													Map<String, Double> stds, Map<String, Double> means,
-													SubjectHistory history, Set<String> outputVariables, List<String> header) {
+													Map<String, Double> stds, Map<String, Double> means, String[] inputVariables,
+													SubjectHistory history) {
 		Summary summary = history.query().number(outputVariable).all().summary();
-		String[] inputVariables = header.stream().filter(f -> !outputVariables.contains(f)).toArray(String[]::new);
 		HashMap<String, Object> metadata = new HashMap<>();
 		metadata.put(STDS, Arrays.stream(inputVariables).filter(stds::containsKey).mapToDouble(stds::get).toArray());
 		metadata.put(MEANS, Arrays.stream(inputVariables).filter(means::containsKey).mapToDouble(means::get).toArray());
@@ -105,15 +105,15 @@ public class TrainDataPreparer {
 		return metadata;
 	}
 
-	private static Map<String, Double> stds(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes) {
+	private static Map<String, Double> stds(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes, boolean prediction) {
 		return history.tags().stream()
-				.filter(o -> !outVariables.contains(o) && variableTypes.get(o).isNumeric())
+				.filter(o -> (prediction || !outVariables.contains(o)) && variableTypes.get(o).isNumeric())
 				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().sd(), (k1, k2) -> k1, LinkedHashMap::new));
 	}
 
-	private static Map<String, Double> means(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes) {
+	private static Map<String, Double> means(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes, boolean prediction) {
 		return history.tags().stream()
-				.filter(o -> !outVariables.contains(o) && variableTypes.get(o).isNumeric())
+				.filter(o -> (prediction || !outVariables.contains(o)) && variableTypes.get(o).isNumeric())
 				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().mean(), (k1, k2) -> k1, LinkedHashMap::new));
 	}
 
