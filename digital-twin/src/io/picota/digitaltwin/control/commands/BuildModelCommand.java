@@ -33,6 +33,9 @@ public class BuildModelCommand implements Command<Void> {
 				Result<Void> result = factory.build(DownloadDataCommand.class, digitalTwinId, resource).execute();
 				if (!result.success()) return result;
 				else return factory.build(TrainSubjectsCommand.class, digitalTwinId).execute();
+			} catch (IllegalArgumentException e) {
+				digitalTwin.state(State.TrainFinished);
+				return new Result<>(false, e.getMessage());
 			} catch (Throwable e) {
 				Logger.error(e);
 				digitalTwin.state(State.TrainFinished);

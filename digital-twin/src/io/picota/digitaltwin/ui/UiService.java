@@ -131,6 +131,9 @@ public class UiService {
 			Result<Void> result = factory.build(BuildModelCommand.class, id, dataset).execute();
 			if (result.success()) success(ctx, result);
 			else error(ctx, 400, result);
+		} catch (IllegalArgumentException e) {
+			ctx.response().status(400);
+			ctx.write(new Gson().toJson(Map.of("status", "FAILED")));
 		} catch (Exception e) {
 			Logger.error(e);
 			ctx.response().status(500);
