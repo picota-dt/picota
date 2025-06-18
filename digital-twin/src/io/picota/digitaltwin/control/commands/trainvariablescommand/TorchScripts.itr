@@ -31,7 +31,7 @@ rule trigger(quoted)
 	"$this"
 
 rule trigger(importVariable)
-	import $<container>name+camelcase+firstLowerCase.$name+normalize
+	import $<container>name+firstLowerCase.$name+normalize
 
 rule trigger(callVariable)
 	subjects = {$subjects+quoted...[,]}

@@ -86,7 +86,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
 		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> l.contains("UserWarning")).collect(Collectors.joining("\n"));
-		cleanData(digitalTwin.archetype());
+//		cleanData(digitalTwin.archetype());
 		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
 	}
 

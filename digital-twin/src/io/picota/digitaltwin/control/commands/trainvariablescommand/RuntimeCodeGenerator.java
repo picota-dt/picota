@@ -160,7 +160,7 @@ public class RuntimeCodeGenerator {
 
 	private void writeVariable(File dir, InferenceModel i, String variable) {
 		try {
-			File file = new File(dir, variable.replace(":", "_") + ".py");
+			File file = new File(dir, normalize(variable) + ".py");
 			Files.writeString(file.toPath(), engine().render(frameOf(i, variable)));
 		} catch (IOException e) {
 			Logger.error(e);
