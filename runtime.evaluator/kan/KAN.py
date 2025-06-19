@@ -39,22 +39,32 @@ class KAN(nn.Module):
             numerical_lookback_features_flat = normalized_lookback_features.view(normalized_lookback_features.size(0),
                                                                                  -1)
         else:
-            numerical_lookback_features_flat = torch.zeros((t_features.size(0), 0), device=t_features.device)
+            numerical_lookback_features_flat = lookback_features
         if t.dim() == 1:
-            t = t.unsqueeze(1)
+            t_1d = t
+        else:
+            t_1d = t.view(-1)
         if lookback_t.dim() == 1:
-            lookback_t = lookback_t.unsqueeze(1)
-        lookback_t_flat = lookback_t.view(lookback_t.size(0), -1)
-        categorical_lookback_features_flat = categorical_lookback_features.view(categorical_lookback_features.size(0),
-                                                                                -1)
+            lookback_t_reshaped = lookback_t
+        else:
+            lookback_t_reshaped = lookback_t.view(-1)
+        if len(lookback_t) != 0 and lookback_t.size(1) != 0:
+            lookback_t_flat = lookback_t_reshaped
+        else:
+            lookback_t_flat = torch.zeros((0,), device=t.device)
+        if len(categorical_lookback_features) != 0 and categorical_lookback_features.size(1) != 0:
+            categorical_lookback_features_flat = categorical_lookback_features.view(
+                categorical_lookback_features.size(0))
+        else:
+            categorical_lookback_features_flat = torch.zeros((categorical_t_features.size(0),), device=t.device)
         x = torch.cat([
-            t,
+            t_1d.view(-1),
             normalized_numerical_t_features,
             categorical_t_features,
             lookback_t_flat,
             numerical_lookback_features_flat,
             categorical_lookback_features_flat,
-        ], dim=1)
+        ])
         return x
 
     def output(self, x):
