@@ -118,7 +118,7 @@ public class TrainReportBuilder {
 					t.addCell(new Cell().setBorder(border)
 							.add(new Paragraph(e.getKey()).setFont(labelFont).setFontSize(11)));
 					t.addCell(new Cell().setBorder(border)
-							.add(new Paragraph(String.format("%.2f", e.getValue()) + "%").setFont(labelFont).setFontSize(11))
+							.add(new Paragraph(String.format("%.2f", e.getValue() * 100) + "%").setFont(labelFont).setFontSize(11))
 							.setTextAlignment(LEFT));
 				});
 		content.add(t);
