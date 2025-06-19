@@ -81,7 +81,7 @@ public class UiService {
 		if (id == null) error(ctx, 404, new Result<>(false, ""));
 		else {
 			DigitalTwin digitalTwin = store.get(id);
-			if (digitalTwin == null) error(ctx, 404, new Result<>(false, ""));
+			if (digitalTwin == null || digitalTwin.graph() == null) error(ctx, 404, new Result<>(false, ""));
 			else {
 				page = page.replace("$id", digitalTwin.id()).replace("$name", digitalTwin.name()).replace("$version", digitalTwin.version());
 				if (digitalTwin.report() != null) page = page.replace("$validationLoss", validationLoss(digitalTwin))

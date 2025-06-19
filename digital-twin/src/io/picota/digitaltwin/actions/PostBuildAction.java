@@ -21,7 +21,6 @@ public class PostBuildAction implements io.intino.alexandria.rest.RequestErrorHa
 		} catch (Exception e) {
 			throw new BadRequest(e.getMessage());
 		}
-
 	}
 
 	public void onMalformedRequest(Throwable e) throws AlexandriaException {

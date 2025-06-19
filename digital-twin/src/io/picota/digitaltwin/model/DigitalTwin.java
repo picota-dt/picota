@@ -13,6 +13,7 @@ public class DigitalTwin {
 	private final String id;
 	private String name;
 	private String version;
+	private String token;
 	private final File subjectsDirectory;
 	private final String url;
 	private final Instant createdAt;
@@ -104,6 +105,15 @@ public class DigitalTwin {
 
 	public String version() {
 		return version;
+	}
+
+	public DigitalTwin setToken(String token) {
+		this.token = token;
+		return this;
+	}
+
+	public String token() {
+		return this.token;
 	}
 
 	public enum State {WaitingData, DownloadedData, PreparingData, Training, TrainFinished, Prepared}

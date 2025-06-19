@@ -6,8 +6,11 @@ import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.RuntimeCodeGenerator;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.DataSheetReport;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.TrainedSubject;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.DigitalTwin;
+import io.picota.digitaltwin.model.DigitalTwin.TrainingReport;
 import io.picota.digitaltwin.model.DigitalTwin.TrainingReport.Variable;
 import org.apache.commons.io.FileUtils;
 
@@ -15,6 +18,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.Future.State;
 import java.util.stream.Collectors;
@@ -29,11 +34,14 @@ public class TrainSubjectsCommand implements Command<Void> {
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
 	private final File pythonVenv;
+	private final DecimalFormat df;
 
 	public TrainSubjectsCommand(DigitalTwinBox box, String digitalTwinId) {
 		this.box = box;
 		this.digitalTwinId = digitalTwinId;
 		this.pythonVenv = new File(box.configuration().pythonVenv());
+		df = new DecimalFormat("#.00");
+		df.setRoundingMode(RoundingMode.HALF_UP);  // redondeo “clásico”
 	}
 
 	@Override
@@ -43,7 +51,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		try {
 			digitalTwin.progressMessage("Preparing data for build subjects...");
 			new RuntimeCodeGenerator(digitalTwin).generateTrainer();
-			DigitalTwin.TrainingReport report = train(digitalTwin);
+			TrainingReport report = train(digitalTwin);
 			digitalTwin.report(report);
 			box.store().save();
 			return Command.success();
@@ -56,21 +64,42 @@ public class TrainSubjectsCommand implements Command<Void> {
 		}
 	}
 
-	private DigitalTwin.TrainingReport train(DigitalTwin digitalTwin) throws IOException, InterruptedException {
+	private TrainingReport train(DigitalTwin digitalTwin) throws IOException, InterruptedException {
 		File dtDirectory = digitalTwin.archetype().dir();
 		digitalTwin.progressMessage("Training subjects...");
 		Logger.info("Training subjects of " + digitalTwin.id() + "...");
 		digitalTwin.state(Training);
-		DigitalTwin.TrainingReport result = runTrain(digitalTwin, dtDirectory);
+		TrainingReport result = runTrain(digitalTwin, dtDirectory);
 		Logger.info("Training subjects of " + digitalTwin.id() + ": Done");
 		digitalTwin.progressMessage("Finished training. State: " + result.state());
 		digitalTwin.state(TrainFinished);
 		if (result.state().equals(SUCCESS)) digitalTwin.state(Prepared);
-		new TrainReportBuilder().generate(result, digitalTwin.archetype().reportFile());
+		new TrainReportBuilder().generate(map(digitalTwin, result), digitalTwin.archetype().reportFile());
 		return result;
 	}
 
-	private DigitalTwin.TrainingReport runTrain(DigitalTwin digitalTwin, File dtDirectory) throws IOException, InterruptedException {
+	private DataSheetReport map(DigitalTwin digitalTwin, TrainingReport result) {
+		return new DataSheetReport(digitalTwinId, digitalTwin.graph().digitalTwin().name$(), digitalTwin.createdAt(), digitalTwin.url(), subjects(result, digitalTwin));
+	}
+
+	private List<TrainedSubject> subjects(TrainingReport result, DigitalTwin digitalTwin) {
+		Map<String, List<Variable>> variablesBySubject = result.trainings().stream().collect(Collectors.groupingBy(Variable::dt));
+		return variablesBySubject.keySet().stream()
+				.map(subject -> new TrainedSubject(subject, variablesBySubject.get(subject).stream().map(this::map).toList()))
+				.collect(Collectors.toList());
+	}
+
+	private TrainReportBuilder.Inference map(Variable variable) {
+		int horizon = !variable.name().contains("+") ?
+				0 : Integer.parseInt(variable.name().substring(variable.name().lastIndexOf("+") + 1));
+		return new TrainReportBuilder.Inference(variableName(variable), horizon, "", df.format(variable.loss() * 100), variable.contributors());
+	}
+
+	private static String variableName(Variable variable) {
+		return variable.name().contains("+") ? variable.name().substring(0, variable.name().lastIndexOf("+")) : variable.name();
+	}
+
+	private TrainingReport runTrain(DigitalTwin digitalTwin, File dtDirectory) throws IOException, InterruptedException {
 		File scripts = digitalTwin.archetype().trainerScriptsDirectory();
 		File modelsDir = digitalTwin.archetype().trainedVariablesDirectory();
 		File dataDir = digitalTwin.archetype().dataDirectory();
@@ -87,7 +116,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		String report = new String(process.getInputStream().readAllBytes());
 		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> l.contains("UserWarning")).collect(Collectors.joining("\n"));
 		cleanData(digitalTwin.archetype());
-		return new DigitalTwin.TrainingReport(dtDirectory.getName(), code == 0 ? SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
+		return new TrainingReport(dtDirectory.getName(), code == 0 ? SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
 	}
 
 	private List<Variable> trainedVariables(DigitalTwin digitalTwin, int code, String report) {
