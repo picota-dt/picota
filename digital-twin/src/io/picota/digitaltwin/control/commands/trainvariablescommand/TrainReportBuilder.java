@@ -97,7 +97,7 @@ public class TrainReportBuilder {
 		content.add(paragraph);
 		content.add(new Paragraph()
 				.add(new Text("Inference Error: ±").setFont(labelFont).setFontSize(12))
-				.add(new Text(inf.error() + " " + inf.unit()).setFont(valueFont).setFontSize(12))
+				.add(new Text(inf.error() + " %").setFont(valueFont).setFontSize(12))
 				.setMarginBottom(4));
 		content.add(new Paragraph("Top Contributing Inputs")
 				.setFont(labelFont).setFontSize(12).setMarginBottom(4));

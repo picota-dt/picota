@@ -20,6 +20,8 @@ public class TemporalColumns {
 				new ColumnDefinition("hour_cos", "ts.hour-of-day").add(new CosFilter()),
 				new ColumnDefinition("quarter_sin", "ts.quarter-of-year").add(new SinFilter()),
 				new ColumnDefinition("quarter_cos", "ts.quarter-of-year").add(new CosFilter())
+//				new ColumnDefinition("ts-day", "ts.day-of-month"),
+//				new ColumnDefinition("ts-hour", "ts.hour-of-day")
 		);
 	}
 

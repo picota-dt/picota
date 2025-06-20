@@ -10,20 +10,6 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="/digital-twin/test-res/example/Infecar-SolarPlant_generatedActivePower 2.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="/digital-twin/test-res/example/Infecar-SolarPlant_generatedActivePower.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="/digital-twin/test-res/example/lite/SolarPlant.csv">
           <value>
             <Attribute>

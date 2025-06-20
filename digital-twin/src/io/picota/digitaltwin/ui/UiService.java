@@ -6,6 +6,7 @@ import io.intino.alexandria.http.AlexandriaHttpServer;
 import io.intino.alexandria.http.AlexandriaHttpServerBuilder;
 import io.intino.alexandria.http.server.AlexandriaHttpManager;
 import io.intino.alexandria.logger.Logger;
+import io.javalin.http.NotFoundResponse;
 import io.picota.digitaltwin.control.DigitalTwinsStore;
 import io.picota.digitaltwin.control.commands.*;
 import io.picota.digitaltwin.control.commands.Command.Result;
@@ -166,7 +167,10 @@ public class UiService {
 		String dtId = ctx.fromPath("id");
 		Result<File> result = factory.build(ProvideReportCommand.class, dtId).execute();
 		if (!result.success()) ctx.response().error(404, "Report not found");
-		ctx.write(new Resource("report.pdf", result.resource()));
+		File resource = result.resource();
+		if (resource != null && resource.exists())
+			ctx.write(new Resource("report.pdf", resource));
+		else throw new NotFoundResponse("Report not found");
 	}
 
 	private void customHtml(AlexandriaHttpManager<?> manager, String page) {
