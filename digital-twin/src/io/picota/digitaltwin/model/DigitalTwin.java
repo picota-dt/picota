@@ -10,10 +10,12 @@ import java.util.Map;
 import java.util.concurrent.Future;
 
 public class DigitalTwin {
+	public static Integer MAX_QUOTA = 100;
 	private final String id;
-	private String name;
-	private String version;
+	private final String name;
+	private final String version;
 	private String token;
+	private int consumedQuota = 0;
 	private final File subjectsDirectory;
 	private final String url;
 	private final Instant createdAt;
@@ -72,6 +74,20 @@ public class DigitalTwin {
 	public DigitalTwin graph(PicotaGraph graph) {
 		this.graph = graph;
 		return this;
+	}
+
+
+
+	public int consumedQuota() {
+		return consumedQuota;
+	}
+
+	public void consumeQuota() {
+		this.consumedQuota++;
+	}
+
+	public void resetQuota() {
+		this.consumedQuota = 0;
 	}
 
 	public PicotaGraph graph() {

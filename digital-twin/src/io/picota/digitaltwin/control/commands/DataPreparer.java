@@ -11,7 +11,7 @@ import org.apache.commons.collections4.queue.CircularFifoQueue;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter;
-import systems.intino.datamarts.subjectstore.calculator.model.filters.MinMaxNormalizationFilter;
+import systems.intino.datamarts.subjectstore.model.signals.NumericalSignal;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
 
 import java.io.*;
@@ -58,7 +58,7 @@ public abstract class DataPreparer {
 				.period(period)
 				.add(TemporalColumns.get())
 				.add(inputVariables(history, inferenceModel, features, outputVariables))
-				.add(outputVariable(inferenceModel, outputVariable))
+				.add(outputVariable(inferenceModel, outputVariable, history))
 				.export()
 				.onlyCompleteRows()
 				.to(new FileOutputStream(tsv));
@@ -72,11 +72,12 @@ public abstract class DataPreparer {
 				.map(tag -> new ColumnDefinition(tag, tag + ".first", typeOf(tag, variableTypes))).toList();
 	}
 
-	protected ColumnDefinition outputVariable(InferenceModel inference, String name) {
+	protected ColumnDefinition outputVariable(InferenceModel inference, String name, SubjectHistory history) {
 		String colName = name + (inference.timeHorizon() > 0 ? "+" + inference.timeHorizon() : "");
+		NumericalSignal.Summary summary = history.query().number(name).all().summary();
 		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
 		if (inference.timeHorizon() > 0) column.add(new LeadFilter(inference.timeHorizon()));
-		column.add(new MinMaxNormalizationFilter());
+		column.add(new MinMaxNormalization(summary.min().value(), summary.max().value()));
 		return column;
 	}
 

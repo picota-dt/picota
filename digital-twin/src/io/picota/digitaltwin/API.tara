@@ -20,3 +20,5 @@ Schema Inference
 	Attribute subject as Text
 	Attribute variable as Text
 	Attribute value as Real
+
+Sentinel QuotaReset as ClockListener(pattern = "0 0 0 1/1 * ? *")

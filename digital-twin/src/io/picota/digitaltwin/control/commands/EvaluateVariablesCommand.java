@@ -62,7 +62,6 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 	}
 
 	private List<Inference> inferSubjectVariables(DigitalSubject sd, Archetype archetype) throws IOException, InterruptedException {
-		Logger.info("Inferring digital twin: " + sd.subject().name$());
 		String pythonExecutable = pythonVenv.getAbsolutePath() + "/bin/python";
 		File scriptPath = new File(archetype.evaluatorScriptsDirectory(), sd.subject().name$() + ".py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
@@ -71,7 +70,6 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 				.redirectErrorStream(true)
 				.start();
 		String result = new String(process.getInputStream().readAllBytes());
-		Logger.info("Finished evaluation of subject. Code: " + process.waitFor());
 		if (process.exitValue() != 0) throw new IOException(result.trim());
 		return result.lines()
 				.map(line -> line.trim().split("\t"))

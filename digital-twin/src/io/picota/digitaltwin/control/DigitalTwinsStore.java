@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class DigitalTwinsStore {
 	private final File store;
@@ -73,5 +74,9 @@ public class DigitalTwinsStore {
 		} catch (IOException e) {
 			return "";
 		}
+	}
+
+	public Stream<DigitalTwin> all() {
+		return this.digitalTwins.values().stream();
 	}
 }

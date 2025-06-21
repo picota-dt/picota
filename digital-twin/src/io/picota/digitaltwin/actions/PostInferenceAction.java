@@ -5,6 +5,7 @@ import io.intino.alexandria.exceptions.BadRequest;
 import io.intino.alexandria.exceptions.Forbidden;
 import io.intino.alexandria.exceptions.InternalServerError;
 import io.intino.alexandria.logger.Logger;
+import io.javalin.http.TooManyRequestsResponse;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.control.commands.CommandFactory;
 import io.picota.digitaltwin.control.commands.EvaluateVariablesCommand;
@@ -13,6 +14,8 @@ import io.picota.digitaltwin.model.Inference;
 
 import java.util.List;
 import java.util.Map;
+
+import static io.picota.digitaltwin.model.DigitalTwin.MAX_QUOTA;
 
 public class PostInferenceAction implements io.intino.alexandria.rest.RequestErrorHandler {
 	public DigitalTwinBox box;
@@ -24,7 +27,9 @@ public class PostInferenceAction implements io.intino.alexandria.rest.RequestErr
 	public List<io.picota.digitaltwin.schemas.Inference> execute() throws BadRequest, InternalServerError {
 		try {
 			DigitalTwin digitalTwin = box.store().get(id);
+			if (digitalTwin.consumedQuota() == MAX_QUOTA) throw new TooManyRequestsResponse("Too many requests");
 			if (digitalTwin.token() != null) checkToken(digitalTwin);
+			digitalTwin.consumeQuota();
 			EvaluateVariablesCommand command = new CommandFactory(box).build(EvaluateVariablesCommand.class, id, subject, values);
 			return command.execute().resource().stream().map(this::map).toList();
 		} catch (Throwable e) {
