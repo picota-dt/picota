@@ -1,7 +1,7 @@
 dsl Legio
 
 Artifact("io.picota", "1.2.0") digital-twin
-	Dsl("Konos", "13.4.3") > Builder(generati.onPackage ="")
+	Dsl("Konos", "13.4.3") > Builder(generationPackage ="")
 	Imports
 		Compile("org.apache.commons", "commons-collections4", "4.5.0")
 		Compile("io.quassar.picota", "parser-java", "1.0.0")
