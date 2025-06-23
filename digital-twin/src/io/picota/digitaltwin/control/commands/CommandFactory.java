@@ -46,7 +46,7 @@ public class CommandFactory {
 	}
 
 	private static BuildModelCommand buildModel(DigitalTwinBox b, Object... args) {
-		return new BuildModelCommand(b, (String) args[0], (Resource) args[1]);
+		return new BuildModelCommand(b, (String) args[0], (String) args[1], (Resource) args[2]);
 	}
 
 	private static TrainSubjectsCommand trainVariables(DigitalTwinBox b, Object... args) {

@@ -5,7 +5,7 @@ import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.control.utils.Compression;
 import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.DigitalTwin;
-import io.quassar.picota.Reality;
+import io.quassar.monentia.picota.Reality;
 
 import java.io.File;
 import java.io.IOException;

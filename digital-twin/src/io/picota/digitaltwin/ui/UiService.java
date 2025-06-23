@@ -12,8 +12,8 @@ import io.picota.digitaltwin.control.commands.*;
 import io.picota.digitaltwin.control.commands.Command.Result;
 import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.DigitalTwin;
-import io.quassar.picota.DigitalTwin.DigitalSubject;
-import io.quassar.picota.Variable;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject;
+import io.quassar.monentia.picota.Variable;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -129,7 +129,8 @@ public class UiService {
 		try {
 			Resource dataset = ctx.fromFormAsResource("dataset");
 			String id = ctx.fromPath("id");
-			Result<Void> result = factory.build(BuildModelCommand.class, id, dataset).execute();
+			String notifyEmail = ctx.fromFormAsString("notifyEmail");
+			Result<Void> result = factory.build(BuildModelCommand.class, id, notifyEmail, dataset).execute();
 			if (result.success()) success(ctx, result);
 			else error(ctx, 400, result);
 		} catch (IllegalArgumentException e) {

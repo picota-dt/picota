@@ -13,12 +13,14 @@ import java.util.concurrent.Future;
 public class BuildModelCommand implements Command<Void> {
 	private final DigitalTwinBox box;
 	private final String digitalTwinId;
+	private final String notifyEmail;
 	private final Resource resource;
 	private final CommandFactory factory;
 
-	public BuildModelCommand(DigitalTwinBox box, String digitalTwinId, Resource resource) {
+	public BuildModelCommand(DigitalTwinBox box, String digitalTwinId, String notifyEmail, Resource resource) {
 		this.box = box;
 		this.digitalTwinId = digitalTwinId;
+		this.notifyEmail = notifyEmail;
 		this.resource = resource;
 		this.factory = new CommandFactory(box);
 	}
@@ -27,6 +29,7 @@ public class BuildModelCommand implements Command<Void> {
 	public Result<Void> execute() {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
+		if (notifyEmail != null && !notifyEmail.isEmpty()) digitalTwin.notifyEmail(notifyEmail);
 		digitalTwin.state(State.DownloadedData);
 		Future<Result<Void>> future = Utils.createExecutor("train").submit(() -> {
 			try {

@@ -1,11 +1,11 @@
 package io.picota.digitaltwin.control.utils;
 
 import com.google.gson.*;
-import io.quassar.picota.DigitalTwin;
-import io.quassar.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
-import io.quassar.picota.Reality;
-import io.quassar.picota.Variable;
-import io.quassar.picota.Variable.Composite.Components;
+import io.quassar.monentia.picota.DigitalTwin;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject.Resolution.Scale;
+import io.quassar.monentia.picota.Reality;
+import io.quassar.monentia.picota.Variable;
+import io.quassar.monentia.picota.Variable.Composite.Components;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 
 import java.io.File;

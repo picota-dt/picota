@@ -49,18 +49,21 @@ public class TrainSubjectsCommand implements Command<Void> {
 	public Result<Void> execute() {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
+		EmailNotifier notifier = new EmailNotifier(digitalTwin, box.configuration().emailConfFile());
 		try {
 			digitalTwin.progressMessage("Preparing data for build subjects...");
 			new RuntimeCodeGenerator(digitalTwin).generateTrainer();
 			TrainingReport report = train(digitalTwin);
 			digitalTwin.report(report);
 			box.store().save();
+			notifier.notifyExecution(report);
 			return Command.success();
 		} catch (Throwable e) {
 			Logger.error(e);
 			removeAllData(digitalTwin);
 			digitalTwin.state(TrainFinished);
 			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
+			notifier.notifyFailedExecution();
 			return new Result<>(false, "Error during building process.\n" + e.getMessage());
 		}
 	}

@@ -1,7 +1,7 @@
 package io.picota.digitaltwin.model;
 
 import io.picota.digitaltwin.control.commands.Command;
-import io.quassar.picota.PicotaGraph;
+import io.quassar.monentia.picota.PicotaGraph;
 
 import java.io.File;
 import java.time.Instant;
@@ -21,6 +21,7 @@ public class DigitalTwin {
 	private final Instant createdAt;
 	private TrainingReport report;
 	private State state;
+	private String notifyEmail;
 	private transient Archetype archetype;
 	private transient PicotaGraph graph;
 	private transient String progressMessage;
@@ -77,7 +78,6 @@ public class DigitalTwin {
 	}
 
 
-
 	public int consumedQuota() {
 		return consumedQuota;
 	}
@@ -130,6 +130,14 @@ public class DigitalTwin {
 
 	public String token() {
 		return this.token;
+	}
+
+	public void notifyEmail(String notifyEmail) {
+		this.notifyEmail = notifyEmail;
+	}
+
+	public String notifyEmail() {
+		return notifyEmail;
 	}
 
 	public enum State {WaitingData, DownloadedData, PreparingData, Training, TrainFinished, Prepared}

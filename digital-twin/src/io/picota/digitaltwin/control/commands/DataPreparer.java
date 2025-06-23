@@ -4,12 +4,13 @@ import com.google.gson.Gson;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TemporalColumns;
-import io.quassar.picota.DigitalTwin;
-import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.picota.Variable;
+import io.quassar.monentia.picota.DigitalTwin;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.monentia.picota.Variable;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
+import systems.intino.datamarts.subjectstore.TimeSpan;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter;
 import systems.intino.datamarts.subjectstore.model.signals.NumericalSignal;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
@@ -74,7 +75,7 @@ public abstract class DataPreparer {
 
 	protected ColumnDefinition outputVariable(InferenceModel inference, String name, SubjectHistory history) {
 		String colName = name + (inference.timeHorizon() > 0 ? "+" + inference.timeHorizon() : "");
-		NumericalSignal.Summary summary = history.query().number(name).all().summary();
+		NumericalSignal.Summary summary = (NumericalSignal.Summary) history.summaries(TimeSpan.ThisHour).get(name);
 		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
 		if (inference.timeHorizon() > 0) column.add(new LeadFilter(inference.timeHorizon()));
 		column.add(new MinMaxNormalization(summary.min().value(), summary.max().value()));

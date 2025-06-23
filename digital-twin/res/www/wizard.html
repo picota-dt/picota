@@ -136,7 +136,7 @@
 					Download CSV Template
 				</a>
 
-				<p class="subtle">Only Zip files containing CSV or TSV are accepted.</p>
+				<p class="subtle">Only zip files containing CSV or TSV are accepted.</p>
 				<input
 						type="file"
 						id="dataFile"
@@ -145,7 +145,15 @@
 				/>
 				<p class="subtle">Note: Your data will be permanently deleted after training is complete. No records are
 					stored or shared.</p>
-				<div class="flex justify-between mt-4">
+
+				<p>Enter your email to be notified when generation completes</p>
+				<input
+						type="email"
+						id="notifyEmail"
+						class="w-full bg-transparent border border-gray-600 rounded-lg p-4 focus:ring-2 focus:ring-blue-500"
+				/>
+
+				<div class="flex justify-between mt-6">
 					<button id="buildDigitalTwin" disabled
 							class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
 						Proceed to build your digital twin
@@ -205,6 +213,7 @@
     const statusMessage = document.getElementById('statusMessage');
     const progressBar = document.getElementById('progressBar');
     const gotoDigitalTwin = document.getElementById('gotoDigitalTwin');
+    const notifyEmail = document.getElementById('notifyEmail');
 
     const modelUrlInput = document.getElementById('modelUrl');
     const next1 = document.getElementById('next1');
@@ -228,7 +237,7 @@
     const params = new URLSearchParams(window.location.search);
     let dtId = params.get('model') || '$modelId';
     let step1State = ''
-    const stepParam = $step;
+    const stepParam = 2;
 
     if (!isNaN(stepParam) && stepParam >= 1 && stepParam <= steps.length) showStep(stepParam - 1); else showStep(0);
     next1.disabled = true;
@@ -309,6 +318,7 @@
         const file = dataFileInput.files[0];
         const form = new FormData();
         form.append('modelUrl', url);
+        form.append('email', notifyEmail.value);
         if (file) form.append('dataset', file);
         statusMessage.textContent = 'Initializing…';
         progressBar.style.width = '0%';

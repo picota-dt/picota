@@ -1,8 +1,8 @@
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainDataPreparer;
 import io.picota.digitaltwin.model.Archetype;
-import io.quassar.picota.DigitalTwin;
-import io.quassar.picota.ModelParser;
-import io.quassar.picota.PicotaGraph;
+import io.quassar.monentia.picota.DigitalTwin;
+import io.quassar.monentia.picota.ModelParser;
+import io.quassar.monentia.picota.PicotaGraph;
 import org.apache.commons.io.FileUtils;
 import org.junit.Test;
 

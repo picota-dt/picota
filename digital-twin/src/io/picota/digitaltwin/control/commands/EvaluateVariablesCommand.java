@@ -7,7 +7,7 @@ import io.picota.digitaltwin.control.commands.evaluatevariablescommand.Inference
 import io.picota.digitaltwin.control.commands.trainvariablescommand.RuntimeCodeGenerator;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.Inference;
-import io.quassar.picota.DigitalTwin.DigitalSubject;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject;
 
 import java.io.File;
 import java.io.IOException;

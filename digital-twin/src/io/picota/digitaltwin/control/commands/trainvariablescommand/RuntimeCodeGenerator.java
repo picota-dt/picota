@@ -9,8 +9,8 @@ import io.picota.digitaltwin.control.utils.Compression;
 import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.DigitalTwin;
-import io.quassar.picota.DigitalTwin.DigitalSubject;
-import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject.InferenceModel;
 
 import java.io.File;
 import java.io.IOException;

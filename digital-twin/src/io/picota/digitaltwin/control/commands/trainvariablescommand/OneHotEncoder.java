@@ -1,6 +1,6 @@
 package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
-import io.quassar.picota.Variable;
+import io.quassar.monentia.picota.Variable;
 
 import java.io.*;
 import java.nio.file.Files;

@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +92,7 @@ public class TrainReportBuilder {
 				.add(new Text((inf.horizon > 0 ? "Prediction" : "Estimation") + ": ").setFont(labelFont).setFontSize(16))
 				.add(new Text(inf.variable()).setFont(valueFont).setFontSize(16));
 		if (!inf.unit.isEmpty())
-			paragraph.add(new Text(" (" + inf.unit() + ")").setFont(valueFont).setFontSize(16));
+			paragraph.add(new Text(" (")).addAll(format(inf.unit())).add(new Text(")").setFont(valueFont).setFontSize(16));
 		if (inf.horizon > 0)
 			paragraph.add(new Text(" - Time Horizon " + inf.horizon()).setFont(valueFont).setFontSize(16));
 		content.add(paragraph);
@@ -110,7 +111,7 @@ public class TrainReportBuilder {
 				.setBackgroundColor(headerBg).setTextAlignment(LEFT));
 		t.addHeaderCell(new Cell().setBorder(border)
 				.add(new Paragraph("Weight (%)").setFont(valueFont).setFontSize(11))
-				.setBackgroundColor(headerBg).setTextAlignment(LEFT));
+				.setBackgroundColor(headerBg).setTextAlignment(RIGHT));
 		inf.contributors().entrySet().stream()
 				.sorted(Comparator.comparingDouble(Map.Entry<String, Double>::getValue).reversed())
 				.limit(4)
@@ -119,10 +120,19 @@ public class TrainReportBuilder {
 							.add(new Paragraph(e.getKey()).setFont(labelFont).setFontSize(11)));
 					t.addCell(new Cell().setBorder(border)
 							.add(new Paragraph(String.format("%.2f", e.getValue() * 100) + "%").setFont(labelFont).setFontSize(11))
-							.setTextAlignment(LEFT));
+							.setTextAlignment(RIGHT));
 				});
 		content.add(t);
 		return content;
+	}
+
+	private List<Text> format(String unit) {
+		String[] split = unit.split("(?=\\^[+-]?\\d+)");
+		return Arrays.stream(split).map(text -> text.contains("^") ? superIndex(text) : new Text(text)).toList();
+	}
+
+	private Text superIndex(String text) {
+		return new Text(text.replace("^", "")).setTextRise(6);
 	}
 
 	private Div header(DataSheetReport report) throws IOException {

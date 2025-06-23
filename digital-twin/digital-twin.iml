@@ -11,23 +11,7 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Intino: org.apache.commons:commons-collections4:4.5.0" level="project" />
-    <orderEntry type="library" name="Intino: io.quassar.picota:parser-java:1.0.0" level="project" />
-    <orderEntry type="library" name="Intino: io.quassar:picota:1.1.0" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.magritte:builder:8.0.0" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.tara:builder:1.3.0" level="project" />
-    <orderEntry type="library" name="Intino: io.intino:builder-interface:2.2.2" level="project" />
-    <orderEntry type="library" name="Intino: io.intino:configuration:2.1.0" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.magritte:io:5.0.0" level="project" />
-    <orderEntry type="library" name="Intino: com.esotericsoftware:kryo:5.4.0" level="project" />
-    <orderEntry type="library" name="Intino: com.esotericsoftware:reflectasm:1.11.9" level="project" />
-    <orderEntry type="library" name="Intino: org.objenesis:objenesis:3.3" level="project" />
-    <orderEntry type="library" name="Intino: com.esotericsoftware:minlog:1.3.1" level="project" />
-    <orderEntry type="library" name="Intino: com.google.code.gson:gson:2.11.0" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.tara:language:2.0.0" level="project" />
-    <orderEntry type="library" name="Intino: org.antlr:antlr4-runtime:4.13.1" level="project" />
-    <orderEntry type="library" name="Intino: io.intino.magritte:framework:5.2.1" level="project" />
     <orderEntry type="library" name="Intino: io.intino.itrules:engine:2.0.2" level="project" />
-    <orderEntry type="library" name="Intino: systems.intino.datamarts:subject-store:2.1.3" level="project" />
     <orderEntry type="library" name="Intino: com.tdunning:t-digest:3.3" level="project" />
     <orderEntry type="library" name="Intino: org.yaml:snakeyaml:2.4" level="project" />
     <orderEntry type="library" name="Intino: com.github.ben-manes.caffeine:caffeine:3.1.8" level="project" />
@@ -119,5 +103,23 @@
     <orderEntry type="library" scope="TEST" name="Intino: junit:junit:4.13.2" level="project" />
     <orderEntry type="library" scope="TEST" name="Intino: org.hamcrest:hamcrest-core:1.3" level="project" />
     <orderEntry type="library" scope="TEST" name="Intino: io.picota:picota-digitaltwin-accessor:1.0.0" level="project" />
+    <orderEntry type="library" name="Intino: io.quassar.monentia.picota:parser-java:1.0.0" level="project" />
+    <orderEntry type="library" name="Intino: io.quassar.monentia:picota:1.0.0" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.tara:language:2.0.0" level="project" />
+    <orderEntry type="library" name="Intino: org.antlr:antlr4-runtime:4.13.1" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.magritte:builder:8.0.0" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.tara:builder:1.3.0" level="project" />
+    <orderEntry type="library" name="Intino: io.intino:builder-interface:2.2.2" level="project" />
+    <orderEntry type="library" name="Intino: io.intino:configuration:2.1.0" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.magritte:io:5.0.0" level="project" />
+    <orderEntry type="library" name="Intino: com.esotericsoftware:kryo:5.4.0" level="project" />
+    <orderEntry type="library" name="Intino: com.esotericsoftware:reflectasm:1.11.9" level="project" />
+    <orderEntry type="library" name="Intino: org.objenesis:objenesis:3.3" level="project" />
+    <orderEntry type="library" name="Intino: com.esotericsoftware:minlog:1.3.1" level="project" />
+    <orderEntry type="library" name="Intino: com.google.code.gson:gson:2.11.0" level="project" />
+    <orderEntry type="library" name="Intino: io.intino.magritte:framework:5.2.1" level="project" />
+    <orderEntry type="library" name="Intino: systems.intino.datamarts:subject-store:2.1.4" level="project" />
+    <orderEntry type="library" name="Intino: com.sun.mail:jakarta.mail:2.0.1" level="project" />
+    <orderEntry type="library" name="Intino: com.sun.activation:jakarta.activation:2.0.1" level="project" />
   </component>
 </module>

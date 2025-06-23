@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.model.DigitalTwin;
-import io.quassar.picota.ModelParser;
+import io.quassar.monentia.picota.ModelParser;
 
 import java.net.URI;
 

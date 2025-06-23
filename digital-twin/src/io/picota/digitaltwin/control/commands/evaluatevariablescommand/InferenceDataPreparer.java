@@ -7,10 +7,10 @@ import io.picota.digitaltwin.control.commands.DataPreparer;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.OneHotEncoder;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TemporalColumns;
 import io.picota.digitaltwin.model.Archetype;
-import io.quassar.picota.DigitalTwin;
-import io.quassar.picota.DigitalTwin.DigitalSubject;
-import io.quassar.picota.DigitalTwin.DigitalSubject.InferenceModel;
-import io.quassar.picota.Variable;
+import io.quassar.monentia.picota.DigitalTwin;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject;
+import io.quassar.monentia.picota.DigitalTwin.DigitalSubject.InferenceModel;
+import io.quassar.monentia.picota.Variable;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistory.Transaction;
 import systems.intino.datamarts.subjectstore.SubjectHistoryVault;
@@ -43,7 +43,7 @@ public class InferenceDataPreparer extends DataPreparer {
 		try (SubjectHistoryVault vault = subjectVault()) {
 			SubjectHistory history = vault.open(ds.subject().name$());
 			Map<String, Variable> features = variableTypes(ds.subject());
-			fillHistory(history, record, inferenceModel.lookback());
+			fillHistory(history, record, inferenceModel.lookback());//check order
 			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 			checkColumns(history, ds.subject().name$(), outputVariables);
 			for (String outputVariable : outputVariables) {
