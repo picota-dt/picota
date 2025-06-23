@@ -42,6 +42,6 @@ RunConfiguration pro //m0n_214
 	Argument("home", "/home/developer/picota/picota")
 	Argument("api_port", "7070")
 	Argument("python_venv", "/home/developer/picota/.venv")
-	Argument("email_conf", "/home/developer/picota/email.properties")
+	Argument("email_conf_file", "/home/developer/picota/email.properties")
 
 Server(type = Pro) megatron
