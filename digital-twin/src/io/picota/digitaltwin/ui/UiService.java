@@ -36,6 +36,8 @@ public class UiService {
 	public void start() {
 		AlexandriaHttpServer<?> server = AlexandriaHttpServerBuilder.instance();
 		server.route("/").get(manager -> html(manager, page("/www/index.html")));
+		server.route("/documents").get(manager -> html(manager, page("/www/documents.html")));
+		server.route("/support").get(manager -> html(manager, page("/www/support.html")));
 		server.route("/wizard").get(manager -> customHtml(manager, page("/www/wizard.html")));
 		server.route("/wizard/{id}").get(manager -> customHtml(manager, page("/www/wizard.html")));
 		server.route("/wizard/{id}/template").get(this::csvTemplate);
