@@ -10,7 +10,6 @@ import io.quassar.monentia.picota.Variable;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
 import systems.intino.datamarts.subjectstore.SubjectHistory;
 import systems.intino.datamarts.subjectstore.SubjectHistoryView;
-import systems.intino.datamarts.subjectstore.TimeSpan;
 import systems.intino.datamarts.subjectstore.calculator.model.filters.LeadFilter;
 import systems.intino.datamarts.subjectstore.model.signals.NumericalSignal;
 import systems.intino.datamarts.subjectstore.view.history.format.ColumnDefinition;
@@ -67,15 +66,16 @@ public abstract class DataPreparer {
 	}
 
 	protected List<ColumnDefinition> inputVariables(SubjectHistory history, InferenceModel inferenceModel, Map<String, Variable> variableTypes, Set<String> outputVariables) {
-		int prediction = inferenceModel.timeHorizon();
-		return history.tags().stream()
-				.filter(t -> prediction > 0 || !outputVariables.contains(t))
+		boolean prediction = inferenceModel.timeHorizon() > 0;
+		return variableTypes.keySet().stream()
+				.filter(k -> history.tags().contains(k))
+				.filter(t -> prediction || !outputVariables.contains(t))
 				.map(tag -> new ColumnDefinition(tag, tag + ".first", typeOf(tag, variableTypes))).toList();
 	}
 
 	protected ColumnDefinition outputVariable(InferenceModel inference, String name, SubjectHistory history) {
 		String colName = name + (inference.timeHorizon() > 0 ? "+" + inference.timeHorizon() : "");
-		NumericalSignal.Summary summary = (NumericalSignal.Summary) history.summaries(TimeSpan.ThisHour).get(name);
+		NumericalSignal.Summary summary = history.query().number(name).all().summary();
 		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
 		if (inference.timeHorizon() > 0) column.add(new LeadFilter(inference.timeHorizon()));
 		column.add(new MinMaxNormalization(summary.min().value(), summary.max().value()));
@@ -89,7 +89,7 @@ public abstract class DataPreparer {
 				periodOf(resolution.amount(), chronoUnitOf(scale));
 	}
 
-	private static ColumnDefinition.Type typeOf(String variable, Map<String, Variable> variableTypes) {
+	protected static ColumnDefinition.Type typeOf(String variable, Map<String, Variable> variableTypes) {
 		if (!variableTypes.containsKey(variable)) throw new IllegalArgumentException("Unknown variable: " + variable);
 		return variableTypes.get(variable).isNumeric() ?
 				ColumnDefinition.Type.Numerical :
@@ -125,9 +125,11 @@ public abstract class DataPreparer {
 		Queue<Map<String, Double>> queue = new CircularFifoQueue<>(lookbackSize);
 		Files.lines(source.toPath())
 				.skip(1)
+				.limit(lookbackSize)
+				.forEach(l -> queue.add(rowOf(header, l.split("\t"))));
+		Files.lines(source.toPath())
+				.skip(lookbackSize + 1)
 				.map(l -> rowOf(header, l.split("\t")))
-				.peek(queue::add)
-				.skip(lookbackSize)
 				.map(r -> inputDataOf(r, outputVariable, queue, features))
 				.map(i -> gson.toJson(i) + "\n")
 				.forEach(c -> write(c, writer));
@@ -186,8 +188,6 @@ public abstract class DataPreparer {
 
 	private Map<String, Double> rowOf(List<String> header, String[] values) {
 		return IntStream.range(0, header.size()).boxed()
-				.collect(toMap(header::get, i -> Double.parseDouble(values[i]), (a, b) -> b));
+				.collect(toMap(header::get, i -> Double.parseDouble(values[i]), (a, b) -> b, LinkedHashMap::new));
 	}
-
-
 }

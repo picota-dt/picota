@@ -102,7 +102,13 @@ public class UiService {
 		Utils.variableTypes(ds.subject()).entrySet().stream()
 				.map(e -> "\"" + e.getKey() + "\"" + ": " + defaultValue(e.getValue()))
 				.forEach(variables::add);
-		return variables.stream().sorted().collect(Collectors.toList());
+		if (ds.inferenceModelList().stream().anyMatch(i -> i.lookback() != null)) {
+			variables.add("\"instant-1\": \"2000-01-01T11:00:00.000Z\"");
+			Utils.variableTypes(ds.subject()).entrySet().stream()
+					.map(e -> "\"" + e.getKey() + "-1\"" + ": " + defaultValue(e.getValue()))
+					.forEach(variables::add);
+		}
+		return variables;
 	}
 
 	private static String defaultValue(Variable variable) {

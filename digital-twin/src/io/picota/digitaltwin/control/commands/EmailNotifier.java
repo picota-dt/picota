@@ -28,7 +28,7 @@ public class EmailNotifier {
 			this.username = mailProps.getProperty("mail.username");
 			this.password = mailProps.getProperty("mail.password");
 			this.from = mailProps.getProperty("mail.from");
-		} catch (IOException ignored) {
+		} catch (Throwable ignored) {
 		}
 	}
 

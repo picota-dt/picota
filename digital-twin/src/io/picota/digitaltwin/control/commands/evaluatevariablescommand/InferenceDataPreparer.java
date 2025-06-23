@@ -43,7 +43,7 @@ public class InferenceDataPreparer extends DataPreparer {
 		try (SubjectHistoryVault vault = subjectVault()) {
 			SubjectHistory history = vault.open(ds.subject().name$());
 			Map<String, Variable> features = variableTypes(ds.subject());
-			fillHistory(history, record, inferenceModel.lookback());//check order
+			fillHistory(history, record, features, inferenceModel.lookback());//check order
 			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 			checkColumns(history, ds.subject().name$(), outputVariables);
 			for (String outputVariable : outputVariables) {
@@ -65,7 +65,7 @@ public class InferenceDataPreparer extends DataPreparer {
 		File tsv = new File(dataDir, history.name() + "_" + outputVariable + TSV);
 		TemporalAmount period = period(resolution);
 		SubjectHistoryView.of(history)
-				.from(history.first())
+				.from(history.first().minus(1, ChronoUnit.HOURS))
 				.to(history.last().plus(1, ChronoUnit.HOURS))
 				.period(period)
 				.add(TemporalColumns.get())
@@ -101,18 +101,18 @@ public class InferenceDataPreparer extends DataPreparer {
 				throw new IllegalStateException("Column " + variable + " not found in the dataset of " + subject);
 	}
 
-	private static void fillHistory(SubjectHistory history, Map<String, Object> dataset, InferenceModel.Lookback lookback) {
+	private static void fillHistory(SubjectHistory history, Map<String, Object> record, Map<String, Variable> features, InferenceModel.Lookback lookback) {
 		SubjectHistory.Batch batch = history.batch();
-		addTValues(dataset, batch);
-		if (lookback != null) addLookback(dataset, lookback, batch);
+		if (lookback != null) addLookback(record, lookback, features, batch);
+		addTValues(record, features, batch);
 		batch.terminate();
 	}
 
-	private static void addTValues(Map<String, Object> dataset, SubjectHistory.Batch batch) {
-		Transaction t = batch.on(Instant.parse(dataset.get("instant").toString()), "");
-		for (String key : dataset.keySet())
-			if (!key.startsWith("instant") && !isLookback(key))
-				t.put(key.trim(), valueOf(dataset.get(key)));
+	private static void addTValues(Map<String, Object> record, Map<String, Variable> features, SubjectHistory.Batch batch) {
+		Transaction t = batch.on(Instant.parse(record.get("instant").toString()), "");
+		features.keySet().stream().filter(record::containsKey)
+				.filter(k -> !k.startsWith("instant") && !isLookback(k))
+				.forEach(k -> t.put(k, valueOf(record.get(k))));
 		t.terminate();
 	}
 
@@ -120,17 +120,16 @@ public class InferenceDataPreparer extends DataPreparer {
 		return value instanceof Number n ? n : Double.parseDouble(value.toString().trim());
 	}
 
-	private static void addLookback(Map<String, Object> dataset, InferenceModel.Lookback lookback, SubjectHistory.Batch batch) {
-		IntStream.range(1, lookback.isDistance() ? 1 : lookback.asWindow().size()).forEach(l -> {
-			if (dataset.containsKey("instant-" + l)) {
-				Transaction tLookback = batch.on(Instant.parse(dataset.get("instant-" + l).toString()), "");
-				for (String key : dataset.keySet()) {
-					if (!key.startsWith("instant") && lookback(key) == l)
-						tLookback.put(key.trim(), valueOf(dataset.get(key)));
-				}
-				tLookback.terminate();
-			}
-		});
+	private static void addLookback(Map<String, Object> record, InferenceModel.Lookback lookback, Map<String, Variable> features, SubjectHistory.Batch batch) {
+		IntStream.rangeClosed(1, lookback.isDistance() ? 1 : lookback.asWindow().size())
+				.filter(l -> record.containsKey("instant-" + l))
+				.forEach(l -> {
+					Transaction t = batch.on(Instant.parse(record.get("instant-" + l).toString()), "");
+					features.keySet().stream()
+							.filter(k -> record.containsKey(k + "-" + l))
+							.forEach(k -> t.put(k, valueOf(record.get(k + "-" + l))));
+					t.terminate();
+				});
 	}
 
 	private static SubjectHistoryVault subjectVault() {
@@ -143,15 +142,6 @@ public class InferenceDataPreparer extends DataPreparer {
 			return Integer.parseInt(substring) < 0;
 		} catch (NumberFormatException e) {
 			return false;
-		}
-	}
-
-	private static int lookback(String key) {
-		try {
-			String substring = key.substring(key.length() - 2);
-			return Math.abs(Integer.parseInt(substring));
-		} catch (NumberFormatException e) {
-			return 0;
 		}
 	}
 }

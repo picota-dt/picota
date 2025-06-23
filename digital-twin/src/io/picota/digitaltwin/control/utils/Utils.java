@@ -15,10 +15,7 @@ import java.nio.file.Path;
 import java.time.*;
 import java.time.temporal.*;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -96,10 +93,11 @@ public class Utils {
 	public static Map<String, Variable> variableTypes(Reality.Subject subject) {
 		Map<String, Variable> variables = subject.core$().ownerAs(Reality.class).variableList().stream()
 				.flatMap(Utils::variableType)
-				.collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue));
-		variables.putAll(subject.variableList().stream()
+				.collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue, (t1, t2) -> t1, LinkedHashMap::new));
+		Map<String, Variable> subjectVariables = subject.variableList().stream()
 				.flatMap(Utils::variableType)
-				.collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue)));
+				.collect(toMap(SimpleEntry::getKey, SimpleEntry::getValue, (t1, t2) -> t1, LinkedHashMap::new));
+		variables.putAll(subjectVariables);
 		return variables;
 	}
 

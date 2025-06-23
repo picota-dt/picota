@@ -119,8 +119,8 @@ public class TrainSubjectsCommand implements Command<Void> {
 		int code = process.waitFor();
 		String report = new String(process.getInputStream().readAllBytes());
 		Files.writeString(new File(digitalTwin.archetype().dir(), "out.txt").toPath(), report);
-		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> l.contains("UserWarning")).collect(Collectors.joining("\n"));
-		Files.writeString(new File(digitalTwin.archetype().dir(), "errors.txt").toPath(), report);
+		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> !l.contains("UserWarning")).collect(Collectors.joining("\n"));
+		Files.writeString(new File(digitalTwin.archetype().dir(), "errors.txt").toPath(), errors);
 		cleanData(digitalTwin.archetype());
 		return new TrainingReport(dtDirectory.getName(), code == 0 ? SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
 	}

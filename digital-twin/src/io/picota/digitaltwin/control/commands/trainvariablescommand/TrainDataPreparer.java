@@ -54,7 +54,7 @@ public class TrainDataPreparer extends DataPreparer {
 				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, stds, means, inputVariables, history);
 				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
 				transformToJsonl(tsv, outName, header, features, metadata, inferenceModel.lookback());
-				tsv.delete();
+//				tsv.delete();
 			}
 		} catch (IOException e) {
 			throw e;
@@ -82,13 +82,15 @@ public class TrainDataPreparer extends DataPreparer {
 	}
 
 	private static Map<String, Double> stds(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes, boolean prediction) {
-		return history.tags().stream()
+		return variableTypes.keySet().stream()
+				.filter(k -> history.tags().contains(k))
 				.filter(o -> (prediction || !outVariables.contains(o)) && variableTypes.get(o).isNumeric())
 				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().sd(), (k1, k2) -> k1, LinkedHashMap::new));
 	}
 
 	private static Map<String, Double> means(SubjectHistory history, Set<String> outVariables, Map<String, Variable> variableTypes, boolean prediction) {
-		return history.tags().stream()
+		return variableTypes.keySet().stream()
+				.filter(k -> history.tags().contains(k))
 				.filter(o -> (prediction || !outVariables.contains(o)) && variableTypes.get(o).isNumeric())
 				.collect(toMap(t -> t, t -> history.query().number(t).all().summary().mean(), (k1, k2) -> k1, LinkedHashMap::new));
 	}

@@ -62,8 +62,8 @@ class KAN(nn.Module):
             normalized_numerical_t_features,
             categorical_t_features,
             lookback_t_flat,
-            numerical_lookback_features_flat,
-            categorical_lookback_features_flat,
+            numerical_lookback_features_flat.view(-1),
+            categorical_lookback_features_flat.view(-1),
         ])
         return x
 
