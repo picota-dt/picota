@@ -26,7 +26,7 @@ public class DigitalTwinsStore {
 
 	public DigitalTwinsStore(File store) {
 		this.store = store;
-		this.gson = new GsonBuilder()
+		this.gson = new GsonBuilder().serializeSpecialFloatingPointValues()
 				.registerTypeAdapter(Instant.class, new Utils.InstantAdapter())
 				.registerTypeAdapter(File.class, new Utils.FileAdapter())
 				.create();

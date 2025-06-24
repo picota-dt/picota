@@ -31,6 +31,12 @@ public class BuildModelCommand implements Command<Void> {
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		if (notifyEmail != null && !notifyEmail.isEmpty()) digitalTwin.notifyEmail(notifyEmail);
 		digitalTwin.state(State.DownloadedData);
+		ReadModelCommand command = factory.build(ReadModelCommand.class, digitalTwin.url());
+		Result<DigitalTwin> readResult = command.execute();
+		if (!readResult.success()) {
+			digitalTwin.state(State.TrainFinished);
+			return new Result<>(false, "Digital Twin not found. " + readResult.remarks());
+		}
 		Future<Result<Void>> future = Utils.createExecutor("train").submit(() -> {
 			try {
 				Result<Void> result = factory.build(DownloadDataCommand.class, digitalTwinId, resource).execute();

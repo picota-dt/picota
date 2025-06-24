@@ -1,6 +1,7 @@
 package io.picota.digitaltwin.control.commands;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import io.intino.alexandria.Scale;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TemporalColumns;
@@ -31,7 +32,7 @@ public abstract class DataPreparer {
 	public static final String TSV = ".tsv";
 	public static final String JSONL = ".jsonl";
 	public static final String LAYER_SEPARATOR = ":";
-	protected final Gson gson = new Gson();
+	protected final Gson gson = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 	protected static final double[][] EMPTY = new double[0][0];
 	protected final File dataDir;
 

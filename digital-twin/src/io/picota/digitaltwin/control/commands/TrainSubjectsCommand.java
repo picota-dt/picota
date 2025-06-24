@@ -13,13 +13,11 @@ import io.picota.digitaltwin.model.DigitalTwin;
 import io.picota.digitaltwin.model.DigitalTwin.TrainingReport;
 import io.picota.digitaltwin.model.DigitalTwin.TrainingReport.Variable;
 import org.apache.commons.io.FileUtils;
+import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.math.RoundingMode;
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.Future.State;
@@ -116,13 +114,33 @@ public class TrainSubjectsCommand implements Command<Void> {
 				modelsDir.getAbsolutePath())
 				.directory(scripts)
 				.start();
-		int code = process.waitFor();
-		String report = new String(process.getInputStream().readAllBytes());
-		Files.writeString(new File(digitalTwin.archetype().dir(), "out.txt").toPath(), report);
-		String errors = new String(process.getErrorStream().readAllBytes()).lines().filter(l -> !l.contains("UserWarning")).collect(Collectors.joining("\n"));
-		Files.writeString(new File(digitalTwin.archetype().dir(), "errors.txt").toPath(), errors);
+		StringBuilder report = new StringBuilder();
+		BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+		readOutput(digitalTwin, reader, report);
+		int exitValue = process.waitFor();
+		String reportResult = report.toString();
 		cleanData(digitalTwin.archetype());
-		return new TrainingReport(dtDirectory.getName(), code == 0 ? SUCCESS : State.FAILED, report, errors, trainedVariables(digitalTwin, code, report), modelsDir);
+		return new TrainingReport(dtDirectory.getName(), exitValue == 0 ? SUCCESS : State.FAILED, reportResult, errorMessages(process), trainedVariables(digitalTwin, exitValue, reportResult), modelsDir);
+	}
+
+	@NotNull
+	private static String errorMessages(Process process) throws IOException {
+		return new String(process.getErrorStream().readAllBytes()).lines().filter(l -> !l.contains("UserWarning")).collect(Collectors.joining("\n"));
+	}
+
+	private void readOutput(DigitalTwin digitalTwin, BufferedReader reader, StringBuilder report) {
+		new Thread(() -> {
+			String line;
+			try {
+				while ((line = reader.readLine()) != null) {
+					report.append(line).append("\n");
+					digitalTwin.progressMessage("processed " + variable(digitalTwin, line.split("\t")).name());
+					System.out.println(line);
+				}
+			} catch (IOException e) {
+				Logger.error(e);
+			}
+		}).start();
 	}
 
 	private List<Variable> trainedVariables(DigitalTwin digitalTwin, int code, String report) {

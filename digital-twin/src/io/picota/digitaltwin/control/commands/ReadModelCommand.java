@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.model.DigitalTwin;
 import io.quassar.monentia.picota.ModelParser;
+import io.quassar.monentia.picota.PicotaGraph;
 
 import java.net.URI;
 
@@ -28,9 +29,10 @@ public class ReadModelCommand implements Command<DigitalTwin> {
 			String id = digitalTwinId(uri);
 			DigitalTwin digitalTwin = box.store().get(id);
 			ModelParser.Model model = ModelParser.loadFromURL(uri.toURL());
-			if (model == null) return new Result<>(false, "Impossible to read model from " + url);
 			if (digitalTwin == null) digitalTwin = create(id, model);
-			box.store().add(digitalTwin.graph(model.graph()));
+			PicotaGraph graph = model.graph();
+			if (graph != null) box.store().add(digitalTwin.graph(graph));
+			else throw new IllegalArgumentException("Impossible to read model from " + url + ". " + model.parseLog());
 			return new Result<>(true, "", digitalTwin);
 		} catch (Throwable e) {
 			return new Result<>(false, "Impossible to read model from " + url + " due to " + e.getMessage());
