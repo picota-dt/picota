@@ -237,7 +237,7 @@
     const params = new URLSearchParams(window.location.search);
     let dtId = params.get('model') || '$modelId';
     let step1State = ''
-    const stepParam = 2;
+    const stepParam = params.get('step') || 1;
 
     if (!isNaN(stepParam) && stepParam >= 1 && stepParam <= steps.length) showStep(stepParam - 1); else showStep(0);
     next1.disabled = true;

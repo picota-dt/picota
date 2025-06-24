@@ -196,7 +196,7 @@ public class UiService {
 	private int calculateStep(String id) {
 		DigitalTwin digitalTwin = store.get(id);
 		return digitalTwin != null && (digitalTwin.state() == DigitalTwin.State.PreparingData || digitalTwin.state() == DigitalTwin.State.Training) ?
-				3 : 0;
+				3 : 1;
 	}
 
 	private static void html(AlexandriaHttpManager<?> manager, String page) {
