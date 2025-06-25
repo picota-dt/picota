@@ -67,7 +67,6 @@ public class TrainSubjectsCommand implements Command<Void> {
 			notifier.notifyFailedExecution();
 		} finally {
 			removeAllData(digitalTwin);
-
 		}
 		return new Result<>(false, digitalTwin.progressMessage());
 	}

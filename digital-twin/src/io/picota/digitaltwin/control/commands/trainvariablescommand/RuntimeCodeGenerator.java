@@ -75,7 +75,7 @@ public class RuntimeCodeGenerator {
 	private List<String> prepareDigitalSubject(DigitalTwin digitalTwin, DigitalSubject subject) throws IOException {
 		List<File> files = findFiles(digitalTwin.archetype(), subject);
 		List<IOException> exceptions = new ArrayList<>();
-		files.stream().parallel().forEach(subjectDataset -> {
+		files.forEach(subjectDataset -> {
 			try {
 				digitalTwin.progressMessage("Processing " + subjectDataset.getName() + "...");
 				subjectSources(digitalTwin.archetype(), subject, subjectDataset);
