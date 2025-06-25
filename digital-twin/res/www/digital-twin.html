@@ -222,7 +222,7 @@
         window.location.href = `/digital-twin/${dtId}`;
     });
     document.getElementById('tryAgainBtn').addEventListener('click', () => {
-        location.reload();
+        window.location.href = `/wizard/${dtId}?step=2`;
     });
 
     function runCurl() {
@@ -313,6 +313,20 @@
         mainUI.classList.remove('hidden');
     }
 
+    function showError() {
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+        success.classList.add('hidden');
+        mainUI.classList.add('hidden');
+    }
+
+    function showSuccess() {
+        loading.classList.add('hidden');
+        error.classList.add('hidden');
+        success.classList.remove('hidden');
+        mainUI.classList.add('hidden');
+    }
+
     function pollStatus() {
         fetch(`/digital-twin/${dtId}/info`)
             .then(r => r.json())
@@ -320,9 +334,11 @@
                 document.getElementById('progressMessage').textContent = j.progressMessage;
                 document.getElementById('progressBar').style.width = j.progress + '%';
                 if (j.state === 'Prepared') {
-                    showMain();
+                    showSuccess()
                 } else if (j.state === 'TrainFinished') {
-                    document.getElementById('progressMessage').textContent = j.message || 'Training failed';
+                    errorBoxContent.textContent = j.progressMessage;
+                    showError()
+                    document.getElementById('progressMessage').textContent = j.progressMessage || 'Training failed';
                 } else {
                     setTimeout(pollStatus, 1000);
                 }
@@ -342,6 +358,8 @@
                     //document.getElementById('progressBar').style.width = j.progress + '%';
                     pollStatus();
                 } else if (j.state === 'TrainFinished') {
+                    errorBoxContent.textContent = j.progressMessage;
+                    showError()
                     document.getElementById('progressMessage').textContent = j.message || 'Training failed';
                 } else if (j.state === 'Prepared') {
                     document.getElementById('modelInfo').textContent = `${j.name} ${j.version}`;

@@ -56,14 +56,20 @@ public class TrainSubjectsCommand implements Command<Void> {
 			box.store().save();
 			notifier.notifyExecution(report);
 			return Command.success();
+		} catch (IllegalArgumentException e) {
+			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
+			digitalTwin.state(TrainFinished);
+			notifier.notifyFailedExecution();
 		} catch (Throwable e) {
 			Logger.error(e);
-			removeAllData(digitalTwin);
-			digitalTwin.state(TrainFinished);
 			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
+			digitalTwin.state(TrainFinished);
 			notifier.notifyFailedExecution();
-			return new Result<>(false, "Error during building process.\n" + e.getMessage());
+		} finally {
+			removeAllData(digitalTwin);
+
 		}
+		return new Result<>(false, digitalTwin.progressMessage());
 	}
 
 	private TrainingReport train(DigitalTwin digitalTwin) throws IOException, InterruptedException {
@@ -119,7 +125,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		readOutput(digitalTwin, reader, report);
 		int exitValue = process.waitFor();
 		String reportResult = report.toString();
-		cleanData(digitalTwin.archetype());
+//		cleanData(digitalTwin.archetype());
 		return new TrainingReport(dtDirectory.getName(), exitValue == 0 ? SUCCESS : State.FAILED, reportResult, errorMessages(process), trainedVariables(digitalTwin, exitValue, reportResult), modelsDir);
 	}
 

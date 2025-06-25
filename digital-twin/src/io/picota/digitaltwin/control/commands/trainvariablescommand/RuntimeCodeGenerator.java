@@ -41,6 +41,8 @@ public class RuntimeCodeGenerator {
 		try {
 			loadSubjectTargetsForTrain();
 			createTrainerScripts();
+		} catch (IllegalArgumentException e) {
+			throw e;
 		} catch (Throwable e) {
 			Logger.error("Error during script generation: " + e.getMessage(), e);
 			throw e;
@@ -87,7 +89,8 @@ public class RuntimeCodeGenerator {
 
 	private List<File> findFiles(Archetype archetype, DigitalSubject ds) {
 		File rawDataDir = archetype.rawDataDirectory();
-		if (ds.subject().isPrototype()) return Utils.getFilesWithPrefix(rawDataDir, ds.subject().name$());
+		if (ds.subject().isPrototype())
+			return Utils.getFilesWithPrefix(rawDataDir, ds.subject().asPrototype().prefix());
 		else {
 			File file = new File(rawDataDir, ds.subject().name$() + ".csv");
 			return Collections.singletonList(file.exists() ? file : new File(rawDataDir, ds.subject().name$() + ".tsv"));

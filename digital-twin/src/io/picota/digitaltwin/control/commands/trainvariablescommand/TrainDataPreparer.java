@@ -54,7 +54,7 @@ public class TrainDataPreparer extends DataPreparer {
 				HashMap<String, Object> metadata = metadata(inferenceModel, outputVariable, stds, means, inputVariables, history);
 				Files.writeString(archetype.metadataFile(history.name(), outName).toPath(), gson.toJson(metadata));
 				transformToJsonl(tsv, outName, header, features, metadata, inferenceModel.lookback());
-//				tsv.delete();
+				tsv.delete();
 			}
 		} catch (IOException e) {
 			throw e;
