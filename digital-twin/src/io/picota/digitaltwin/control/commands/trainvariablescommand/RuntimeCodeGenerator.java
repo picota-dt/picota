@@ -15,10 +15,7 @@ import io.quassar.monentia.picota.DigitalTwin.DigitalSubject.InferenceModel;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static io.intino.alexandria.logger.Logger.error;
 import static io.intino.itrules.formatters.StringFormatters.camelCase;
@@ -75,10 +72,16 @@ public class RuntimeCodeGenerator {
 
 	private List<String> prepareDigitalSubject(DigitalTwin digitalTwin, DigitalSubject subject) throws IOException {
 		List<File> files = findFiles(digitalTwin.archetype(), subject);
-		for (File subjectDataset : files) {
-			digitalTwin.progressMessage("Processing " + subjectDataset.getName() + "...");
-			subjectSources(digitalTwin.archetype(), subject, subjectDataset);
-		}
+		List<IOException> exceptions = new ArrayList<>();
+		files.stream().parallel().forEach(subjectDataset -> {
+			try {
+				digitalTwin.progressMessage("Processing " + subjectDataset.getName() + "...");
+				subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+			} catch (IOException e) {
+				exceptions.add(e);
+			}
+		});
+		if (!exceptions.isEmpty()) throw exceptions.getFirst();
 		return files.stream().map(f -> removeExtension(f.getName())).toList();
 	}
 

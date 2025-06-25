@@ -16,7 +16,7 @@ rule trigger(import)
 	import $this+camelcase+firstLowercase.main
 
 rule trigger(call)
-	$this+camelcase+firstLowercase.main.train(sys.argv[1], sys.argv[2] + "/$this")
+	$this+camelcase+firstLowercase.main.train(sys.argv[1], sys.argv[2])
 
 rule type(subject)
 	import os
@@ -47,13 +47,13 @@ rule trigger(callVariable)
 			loader.get_input_variables(),
 			loader.get_means(),
 			loader.get_stds(),
-			modelsdir
+			modelsdir + "/" + s
 		)
 
 rule trigger(evaluate)
-	loader = DatasetLoader(sys.argv[2]+"/$<container>name~_~$name.jsonl")
+	loader = DatasetLoader(sys.argv[2] + "/" + sys.argv[3] + "_$name.jsonl")
 	data = loader.load()
-	print("$<container>name	$name~$timeHorizon	{}".format(KanEvaluator.eval(sys.argv[1] + "/$<container>name/$name~$timeHorizon.bin",
+	print(sys.argv[3] + "	$name~$timeHorizon	{}".format(KanEvaluator.eval(sys.argv[1] + "/" + sys.argv[3] + "/$name~$timeHorizon.bin",
 																		data,
 																	  	loader.get_input_variables(),
 																	  	loader.get_means(),

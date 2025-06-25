@@ -56,7 +56,7 @@ class KAN(nn.Module):
             categorical_lookback_features_flat = categorical_lookback_features.view(
                 categorical_lookback_features.size(0))
         else:
-            categorical_lookback_features_flat = torch.zeros((categorical_t_features.size(0),), device=t.device)
+            categorical_lookback_features_flat = torch.zeros((0,), device=t.device)
         x = torch.cat([
             t_1d.view(-1),
             normalized_numerical_t_features,

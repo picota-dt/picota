@@ -39,20 +39,20 @@ public class InferenceDataPreparer extends DataPreparer {
 		this.archetype = archetype;
 	}
 
-	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, Map<String, Object> record) throws IOException {
+	public void prepareData(DigitalSubject ds, String subjectName, InferenceModel inferenceModel, Map<String, Object> record) throws IOException {
 		try (SubjectHistoryVault vault = subjectVault()) {
-			SubjectHistory history = vault.open(ds.subject().name$());
+			SubjectHistory history = vault.open(subjectName);
 			Map<String, Variable> features = variableTypes(ds.subject());
 			fillHistory(history, record, features, inferenceModel.lookback());//check order
 			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
-			checkColumns(history, ds.subject().name$(), outputVariables);
+			checkColumns(history, subjectName, outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 				File tsv = createTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, features, history);
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, features);
-				JsonObject metadata = getMetadata(ds.subject().name$(), outName);
+				JsonObject metadata = getMetadata(subjectName, outName);
 				transformToJsonl(tsv, outName, header, features, metadata, inferenceModel.lookback());
 				tsv.delete();
 			}
@@ -77,7 +77,9 @@ public class InferenceDataPreparer extends DataPreparer {
 	}
 
 	public JsonObject getMetadata(String subject, String variable) throws IOException {
-		return gson.fromJson(Files.readString(archetype.metadataFile(subject, variable).toPath()), JsonObject.class);
+		File file = archetype.metadataFile(subject, variable);
+		if (!file.exists()) throw new IllegalArgumentException("Subject " + subject + " does not exist");
+		return gson.fromJson(Files.readString(file.toPath()), JsonObject.class);
 	}
 
 	private List<String> applyOneHotTransformations(File tsv, List<String> header, Map<String, Variable> variableTypes) throws IOException {
@@ -112,12 +114,13 @@ public class InferenceDataPreparer extends DataPreparer {
 		Transaction t = batch.on(Instant.parse(record.get("instant").toString()), "");
 		features.keySet().stream().filter(record::containsKey)
 				.filter(k -> !k.startsWith("instant") && !isLookback(k))
-				.forEach(k -> t.put(k, valueOf(record.get(k))));
+				.forEach(k -> fill(record, k, t));
 		t.terminate();
 	}
 
-	private static Number valueOf(Object value) {
-		return value instanceof Number n ? n : Double.parseDouble(value.toString().trim());
+	private static void fill(Map<String, Object> record, String k, Transaction t) {
+		if (record.get(k) instanceof Number) t.put(k, (Number) record.get(k));
+		else t.put(k, record.get(k).toString());
 	}
 
 	private static void addLookback(Map<String, Object> record, InferenceModel.Lookback lookback, Map<String, Variable> features, SubjectHistory.Batch batch) {
@@ -127,7 +130,7 @@ public class InferenceDataPreparer extends DataPreparer {
 					Transaction t = batch.on(Instant.parse(record.get("instant-" + l).toString()), "");
 					features.keySet().stream()
 							.filter(k -> record.containsKey(k + "-" + l))
-							.forEach(k -> t.put(k, valueOf(record.get(k + "-" + l))));
+							.forEach(k -> fill(record, k, t));
 					t.terminate();
 				});
 	}
