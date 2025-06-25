@@ -44,6 +44,7 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 		this.dataPreparer = new InferenceDataPreparer(digitalTwin.archetype());
 		new RuntimeCodeGenerator(digitalTwin).generateEvaluator();
 		DigitalSubject subject = digitalTwin.graph().digitalTwin().digitalSubject(s -> s.subject().name$().equals(this.subject));
+		if (subject == null) throw new IllegalArgumentException("Subject not found");
 		return new Result<>(true, "", new ArrayList<>(infer(subject, digitalTwin.archetype())));
 	}
 
@@ -69,6 +70,7 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 				.directory(archetype.evaluatorScriptsDirectory())
 				.redirectErrorStream(true)
 				.start();
+		process.waitFor();
 		String result = new String(process.getInputStream().readAllBytes());
 		if (process.exitValue() != 0) throw new IOException(result.trim());
 		return result.lines()

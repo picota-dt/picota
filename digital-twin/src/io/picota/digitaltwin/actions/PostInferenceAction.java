@@ -27,6 +27,7 @@ public class PostInferenceAction implements io.intino.alexandria.rest.RequestErr
 	public List<io.picota.digitaltwin.schemas.Inference> execute() throws BadRequest, InternalServerError {
 		try {
 			DigitalTwin digitalTwin = box.store().get(id);
+			if (digitalTwin == null) throw new BadRequest("Digital twin not found");
 			if (digitalTwin.consumedQuota() == MAX_QUOTA) throw new TooManyRequestsResponse("Too many requests");
 			if (digitalTwin.token() != null) checkToken(digitalTwin);
 			digitalTwin.consumeQuota();

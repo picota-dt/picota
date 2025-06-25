@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 public class UiService {
 	private final DigitalTwinsStore store;
 	private final CommandFactory factory;
+	private final String errorPage = page("/www/notfound.html");
 
 	public UiService(DigitalTwinsStore store, CommandFactory factory) {
 		this.store = store;
@@ -81,10 +82,10 @@ public class UiService {
 	private void digitalTwinHtml(AlexandriaHttpManager<?> ctx, String page) {
 		ctx.response().header("Content-Type", "text/html");
 		String id = ctx.fromPath("id");
-		if (id == null) error(ctx, 404, new Result<>(false, ""));
+		if (id == null) ctx.write(errorPage);
 		else {
 			DigitalTwin digitalTwin = store.get(id);
-			if (digitalTwin == null || digitalTwin.graph() == null) error(ctx, 404, new Result<>(false, ""));
+			if (digitalTwin == null || digitalTwin.graph() == null) ctx.write(errorPage);
 			else {
 				page = page.replace("$id", digitalTwin.id()).replace("$name", digitalTwin.name()).replace("$version", digitalTwin.version());
 				if (digitalTwin.report() != null) page = page.replace("$validationLoss", validationLoss(digitalTwin))

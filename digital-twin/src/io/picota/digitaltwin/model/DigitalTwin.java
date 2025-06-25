@@ -140,7 +140,7 @@ public class DigitalTwin {
 		return notifyEmail;
 	}
 
-	public enum State {WaitingData, DownloadedData, PreparingData, Training, TrainFinished, Prepared}
+	public enum State {WaitingData, PreparingTraining, DownloadedData, PreparingData, Training, TrainFinished, Prepared}
 
 	public record TrainingReport(String model, Future.State state, String report, String errors,
 								 List<Variable> trainings,

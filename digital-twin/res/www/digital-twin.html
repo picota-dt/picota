@@ -8,8 +8,75 @@
 	<link rel="icon" href="images/favicon.ico" type="image/x-icon"/>
 	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
-<style>body {font-family: 'Poppins', sans-serif;}
+<style>
+    body {
+        font-family: 'Poppins', sans-serif;
+    }
 
+    .error-box {
+        background: #2c2c2c;
+        border: 1px solid #b91c1c;
+        padding: 1em;
+        border-radius: 6px;
+        margin-top: 1em;
+        color: #fca5a5;
+        font-size: 0.95em;
+        text-align: left;
+    }
+
+    .step-container {
+        background: #1c1c1c;
+        padding: 2em;
+        border-radius: 12px;
+        max-width: 600px;
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .step-container h1 {
+        font-size: 1.8em;
+        margin-bottom: 0.5em;
+        color: white;
+    }
+
+    .step-container p {
+        margin: 0.8em 0;
+        line-height: 1.5;
+        color: white;
+    }
+
+    .step-container a {
+        color: #60a5fa;
+        text-decoration: underline;
+    }
+
+    .step-container input[type="url"],
+    .step-container input[type="file"] {
+        width: 100%;
+        padding: 0.7em;
+        font-size: 1em;
+        border-radius: 8px;
+        border: 1px solid #444;
+        background-color: #111;
+        color: white;
+        margin-top: 0.5em;
+        margin-bottom: 1.2em;
+    }
+
+    .step-container button {
+        background: #3b82f6;
+        color: white;
+        padding: 0.8em 1.5em;
+        border: none;
+        font-size: 1em;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .step-container .subtle {
+        color: #ccc;
+        font-size: 0.9em;
+    }
 </style>
 <body class="bg-black text-white flex flex-col min-h-screen">
 <header class="fixed top-0 left-0 w-full bg-black py-4 px-[10vw] flex items-center gap-2 z-50">
@@ -20,8 +87,47 @@
 </header>
 
 <main class="flex-grow pt-24 pb-12 px-8">
-	<div class="max-w-3xl mx-auto space-y-8 rounded-2xl p-8">
+	<div class="max-w-3xl pt-32 mx-auto space-y-8 rounded-2xl p-8">
+		<div id="trainingContainer" class="hidden bg-[#1c1c1c] rounded-2xl p-8 max-w-3xl mx-auto text-center">
+			<h2 class="text-2xl font-semibold mb-4">Training in progress…</h2>
+			<div class="relative bg-gray-800 rounded-lg overflow-hidden h-5 mb-6">
+				<div id="progressBar"
+					 class="bg-blue-500 h-full w-0 transition-all duration-400 ease-in-out"
+				></div>
+			</div>
+			<p id="progressMessage" class="text-gray-400 text-sm">Initializing…</p>
+		</div>
 
+		<div class="step hidden" id="stepSuccess">
+			<div class="step-container">
+				<h1>Training completed successfully</h1>
+				<h2 id="modelInfoSuccess" class="text-3xl font-semibold mb-6 text-center"></h2>
+				<p>Your inference model has been created and is now ready to use as a digital twin.</p>
+				<button id="gotoDigitalTwin"
+						class="w-50 bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition"
+						style="display: block; margin: 0 auto;">
+					Go to your digital twin
+				</button>
+				<p>&nbsp;</p>
+				<p class="subtle">Note: Your dataset has been permanently deleted</p>
+			</div>
+		</div>
+
+		<div class="step hidden" id="stepError">
+			<div class="step-container">
+				<h1>Training failed</h1>
+				<h2 id="modelInfoError" class="text-3xl font-semibold mb-6 text-center"></h2>
+				<p>Something went wrong during the training process. Your model could not be created.</p>
+				<div class="error-box" id="errorBoxContent"></div>
+				<p>You can try again checking data:</p>
+				<button id="tryAgainBtn" type="button"
+						class="w-full bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition">
+					Try again
+				</button>
+			</div>
+		</div>
+	</div>
+	<div id="mainContainer" class="max-w-3xl mx-auto space-y-8 rounded-2xl p-8">
 		<div class="bg-[#1c1c1c] rounded-2xl p-8">
 			<h1 class="text-3xl font-semibold mb-6 text-center">$name $version</h1>
 
@@ -44,9 +150,9 @@
 				<div class="bg-black p-6 rounded-lg border border-gray-600">
 					<p class="mb-2">Send a JSON payload to test your model in real time:</p>
 					<label for="curlCommand"></label><textarea
-							id="curlCommand"
-							class="w-full bg-black border border-gray-600 rounded-lg p-4 placeholder-gray-400 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-							rows="6">curl -X POST -H "Content-Type: application/json" -d '{
+						id="curlCommand"
+						class="w-full bg-black border border-gray-600 rounded-lg p-4 placeholder-gray-400 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+						rows="6">curl -X POST -H "Content-Type: application/json" -d '{
 							"instant" : "2000-01-01T12:00:00.000Z",
 							$variables
 							}' https://picota.io/api/1.0.0/digital-twin/$id/subject/$subject/inference</textarea>
@@ -54,7 +160,8 @@
 							class="bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-2 rounded-md transition">
 						Test Model
 					</button>
-					<div id="curlResult" class="bg-black mt-12 p-4 rounded-lg border border-gray-600 text-sm text-gray-200 hidden"></div>
+					<div id="curlResult"
+						 class="bg-black mt-12 p-4 rounded-lg border border-gray-600 text-sm text-gray-200 hidden"></div>
 				</div>
 			</section>
 
@@ -102,7 +209,23 @@
 </footer>
 
 <script>
-    document.getElementById('runCurl').addEventListener('click', () => {
+    const gotoDigitalTwin = document.getElementById('gotoDigitalTwin');
+    const pathSegments = window.location.pathname.split('/').filter(seg => seg !== '');
+    const dtId = pathSegments[pathSegments.length - 1];
+    const loading = document.getElementById('trainingContainer');
+    const error = document.getElementById('stepError');
+    const success = document.getElementById('stepSuccess');
+    const mainUI = document.getElementById('mainContainer');
+    const reportLink = document.getElementById('downloadReportLink');
+
+    gotoDigitalTwin.addEventListener('click', () => {
+        window.location.href = `/digital-twin/${dtId}`;
+    });
+    document.getElementById('tryAgainBtn').addEventListener('click', () => {
+        location.reload();
+    });
+
+    function runCurl() {
         const cmd = document.getElementById('curlCommand').value.trim();
         const resultDiv = document.getElementById('curlResult');
         resultDiv.classList.add('hidden');
@@ -124,8 +247,6 @@
             let method = 'GET';
             const methodMatch = cmd.match(/-X\s+([A-Z]+)/);
             if (methodMatch) method = methodMatch[1];
-
-            // Inicializa headers y parsea Authorization si existe
             const headers = {};
 
             const contentTypeMatch = cmd.match(/-H\s+"Content-Type:\s*([^"]+)"/i)
@@ -176,14 +297,69 @@
         <pre class="whitespace-pre-wrap">${err.message}</pre>
     `;
         }
-    });
+    }
+
+    function showTraining() {
+        loading.classList.remove('hidden');
+        mainUI.classList.add('hidden');
+        error.classList.add('hidden');
+        success.classList.add('hidden');
+    }
+
+    function showMain() {
+        loading.classList.add('hidden');
+        error.classList.add('hidden');
+        success.classList.add('hidden');
+        mainUI.classList.remove('hidden');
+    }
+
+    function pollStatus() {
+        fetch(`/digital-twin/${dtId}/info`)
+            .then(r => r.json())
+            .then(j => {
+                document.getElementById('progressMessage').textContent = j.progressMessage;
+                document.getElementById('progressBar').style.width = j.progress + '%';
+                if (j.state === 'Prepared') {
+                    showMain();
+                } else if (j.state === 'TrainFinished') {
+                    document.getElementById('progressMessage').textContent = j.message || 'Training failed';
+                } else {
+                    setTimeout(pollStatus, 1000);
+                }
+            })
+            .catch(() => setTimeout(pollStatus, 1000));
+    }
+
+
+    document.getElementById('runCurl').addEventListener('click', () => runCurl());
     document.addEventListener('DOMContentLoaded', () => {
-        const pathSegments = window.location.pathname.split('/').filter(seg => seg !== '');
-        const dtId = pathSegments[pathSegments.length - 1];
-        const reportLink = document.getElementById('downloadReportLink');
-        if (reportLink) {
-            reportLink.href = `/digital-twin/${dtId}/report`;
-        }
+        fetch(`/digital-twin/${dtId}/info`)
+            .then(r => r.json())
+            .then(j => {
+                if (j.state === 'DownloadedData' || j.state === 'Training') {
+                    showTraining();
+                    document.getElementById('progressMessage').textContent = j.progressMessage;
+                    //document.getElementById('progressBar').style.width = j.progress + '%';
+                    pollStatus();
+                } else if (j.state === 'TrainFinished') {
+                    document.getElementById('progressMessage').textContent = j.message || 'Training failed';
+                } else if (j.state === 'Prepared') {
+                    document.getElementById('modelInfo').textContent = `${j.name} ${j.version}`;
+                    document.getElementById('validationLoss').textContent = j.validationLoss;
+                    document.getElementById('feature').textContent = j.bestFeature;
+                    document.getElementById('downloadReportLink').href = `/digital-twin/${dtId}/report`;
+                    document.getElementById('apiId').textContent = dtId;
+                    document.getElementById('apiId2').textContent = dtId;
+                    showMain();
+                } else {
+                    window.location.href = `/wizard/${dtId}`;
+                }
+            })
+            .catch(err => {
+                console.error('Could not fetch info:', err);
+                showMain();
+            });
+        if (reportLink) reportLink.href = `/digital-twin/${dtId}/report`;
     });
 </script>
 </body>

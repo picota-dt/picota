@@ -162,17 +162,6 @@
 			</div>
 		</div>
 
-		<div class="step hidden text-center" id="step3">
-			<div class="bg-[#1c1c1c] p-8 rounded-2xl shadow-lg max-w-xl mx-auto">
-				<h2 class="text-2xl font-medium mb-4 text-white">Training in progress</h2>
-				<p class="text-gray-300 mb-6">Your inference model is being built based on the dataset you provided.</p>
-				<div class="relative bg-gray-800 rounded-lg overflow-hidden h-5 mb-6">
-					<div id="progressBar" class="bg-blue-500 h-full w-0 transition-all duration-400 ease-in-out"></div>
-				</div>
-				<p id="statusMessage" class="text-gray-400 text-sm">Initializing...</p>
-			</div>
-		</div>
-
 		<div class="step hidden" id="stepError">
 			<div class="step-container">
 				<h1>Training failed</h1>
@@ -186,22 +175,6 @@
 				</button>
 			</div>
 		</div>
-
-		<div class="step hidden" id="stepSuccess">
-			<div class="step-container">
-				<h1>Training completed successfully</h1>
-				<h2 id="modelInfoSuccess" class="text-3xl font-semibold mb-6 text-center"></h2>
-				<p>Your inference model has been created and is now ready to use as a digital twin.</p>
-				<button
-						id="gotoDigitalTwin"
-						class="w-50 bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition"
-						style="display: block; margin: 0 auto;">
-					Go to your digital twin
-				</button>
-				<p>&nbsp;</p>
-				<p class="subtle">Note: Your dataset has been permanently deleted</p>
-			</div>
-		</div>
 	</div>
 </main>
 
@@ -210,9 +183,6 @@
 </footer>
 
 <script>
-    const statusMessage = document.getElementById('statusMessage');
-    const progressBar = document.getElementById('progressBar');
-    const gotoDigitalTwin = document.getElementById('gotoDigitalTwin');
     const notifyEmail = document.getElementById('notifyEmail');
 
     const modelUrlInput = document.getElementById('modelUrl');
@@ -220,8 +190,6 @@
     const validIcon = document.getElementById('validIcon');
     const invalidIcon = document.getElementById('invalidIcon');
     const validationMessage = document.getElementById('validationMessage');
-
-    const modelInfoSuccess = document.getElementById('modelInfoSuccess');
     const modelInfoError = document.getElementById('modelInfoError');
 
     const dataFileInput = document.getElementById('dataFile');
@@ -302,15 +270,7 @@
         buildDigitalTwin.disabled = !dataFileInput.files.length;
     });
     buildDigitalTwin.addEventListener('click', () => {
-        showStep(2);
         startProcessing();
-    });
-    gotoDigitalTwin.addEventListener('click', () => {
-        window.location.href = `/digital-twin/${dtId}`;
-    });
-
-    document.getElementById('tryAgainBtn').addEventListener('click', () => {
-        location.reload();
     });
 
     function startProcessing() {
@@ -320,44 +280,21 @@
         form.append('modelUrl', url);
         form.append('email', notifyEmail.value);
         if (file) form.append('dataset', file);
-        statusMessage.textContent = 'Initializing…';
-        progressBar.style.width = '0%';
-
         fetch(`/digital-twin/${dtId}/state/build`, {method: 'POST', body: form})
             .then(r => {
                 if (!r.ok) {
                     r.json().then(err => showError(err.message));
                     return;
                 }
-                showStep(2);
-                pollStatus();
+                window.location.href = `/digital-twin/${dtId}`;
             })
             .catch(() => {
             });
     }
 
-    function pollStatus() {
-        fetch(`/digital-twin/${dtId}/info`)
-            .then(res => res.json())
-            .then(j => {
-                statusMessage.textContent = j.progressMessage;
-                progressBar.style.width = j.progress + '%';
-                if (j.state === 'Prepared') {
-                    modelInfoSuccess.textContent = `${j.name} ${j.version}`;
-                    showStep(4);
-                } else if (j.state === 'WaitingData' || j.state === 'DownloadedData' || j.state === 'Training') {
-                    setTimeout(pollStatus, 1000);
-                } else {
-                    modelInfoError.textContent = `${j.name} ${j.version}`;
-                    errorBoxContent.textContent = j.progressMessage;
-                    showStep(3);
-                }
-            })
-            .catch(() => setTimeout(pollStatus, 1000));
-    }
-
     function showError(msg) {
-        statusMessage.textContent = msg;
+        errorBoxContent.textContent = msg;
+        showStep(2)
     }
 
 </script>
