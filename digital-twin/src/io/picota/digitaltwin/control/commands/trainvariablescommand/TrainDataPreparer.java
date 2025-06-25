@@ -37,13 +37,14 @@ public class TrainDataPreparer extends DataPreparer {
 	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, File subjectDataset) throws IOException {
 		String subjectName = FilenameUtils.removeExtension(subjectDataset.getName());
 		Map<String, Variable> features = variableTypes(ds.subject());
+		checkDataset(features, subjectDataset);
 		try (SubjectHistoryVault vault = subjectVault(temp)) {
+			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 			SubjectHistory history = vault.open(subjectName);
 			fillHistory(history, features, subjectDataset);
-			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
+			checkColumns(history, subjectName, outputVariables);
 			Map<String, Double> stds = stds(history, outputVariables, features, inferenceModel.timeHorizon() > 0);
 			Map<String, Double> means = means(history, outputVariables, features, inferenceModel.timeHorizon() > 0);
-			checkColumns(history, subjectName, outputVariables);
 			for (String outputVariable : outputVariables) {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
@@ -58,6 +59,15 @@ public class TrainDataPreparer extends DataPreparer {
 			}
 		} catch (IOException e) {
 			throw e;
+		}
+	}
+
+	private void checkDataset(Map<String, Variable> features, File dataset) throws IOException {
+		String firstLine = Files.lines(dataset.toPath()).findFirst().get();
+		String separator = firstLine.contains("\t") ? "\t" : ",";
+		Set<String> header = Set.of(firstLine.split(separator));
+		for (String f : features.keySet()) {
+			if (!header.contains(f)) throw new IllegalArgumentException("Variable " + f + " does not exist in dataset");
 		}
 	}
 
