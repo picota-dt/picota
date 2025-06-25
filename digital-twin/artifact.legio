@@ -1,6 +1,6 @@
 dsl Legio
 
-Artifact("io.picota", "1.2.5") digital-twin
+Artifact("io.picota", "1.2.6") digital-twin
 	Dsl("Konos", "13.4.3") > Builder(generationPackage ="")
 	Imports
 		Compile("org.apache.commons", "commons-collections4", "4.5.0")
