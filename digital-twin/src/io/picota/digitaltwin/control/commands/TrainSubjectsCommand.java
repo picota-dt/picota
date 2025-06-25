@@ -57,18 +57,19 @@ public class TrainSubjectsCommand implements Command<Void> {
 			notifier.notifyExecution(report);
 			return Command.success();
 		} catch (IllegalArgumentException e) {
-			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
-			digitalTwin.state(TrainFinished);
-			notifier.notifyFailedExecution();
+			notifyError(digitalTwin, notifier, e.getMessage());
+			removeAllData(digitalTwin);
 		} catch (Throwable e) {
 			Logger.error(e);
-			digitalTwin.progressMessage("Error during building process.\n" + e.getMessage());
-			digitalTwin.state(TrainFinished);
-			notifier.notifyFailedExecution();
-		} finally {
-			removeAllData(digitalTwin);
+			notifyError(digitalTwin, notifier, e.getMessage());
 		}
 		return new Result<>(false, digitalTwin.progressMessage());
+	}
+
+	private static void notifyError(DigitalTwin digitalTwin, EmailNotifier notifier, String error) {
+		digitalTwin.progressMessage("Error during building process.\n" + error).state(TrainFinished);
+		notifier.notifyFailedExecution();
+		removeAllData(digitalTwin);
 	}
 
 	private TrainingReport train(DigitalTwin digitalTwin) throws IOException, InterruptedException {
@@ -124,7 +125,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		readOutput(digitalTwin, reader, report);
 		int exitValue = process.waitFor();
 		String reportResult = report.toString();
-//		cleanData(digitalTwin.archetype());
+		cleanData(digitalTwin.archetype());
 		return new TrainingReport(dtDirectory.getName(), exitValue == 0 ? SUCCESS : State.FAILED, reportResult, errorMessages(process), trainedVariables(digitalTwin, exitValue, reportResult), modelsDir);
 	}
 
