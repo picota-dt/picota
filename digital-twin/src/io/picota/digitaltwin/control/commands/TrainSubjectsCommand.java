@@ -58,7 +58,6 @@ public class TrainSubjectsCommand implements Command<Void> {
 			return Command.success();
 		} catch (IllegalArgumentException e) {
 			notifyError(digitalTwin, notifier, e.getMessage());
-			removeAllData(digitalTwin);
 		} catch (Throwable e) {
 			Logger.error(e);
 			notifyError(digitalTwin, notifier, e.getMessage());
