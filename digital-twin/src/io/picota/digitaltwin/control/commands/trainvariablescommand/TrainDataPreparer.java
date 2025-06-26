@@ -3,6 +3,7 @@ package io.picota.digitaltwin.control.commands.trainvariablescommand;
 import io.picota.digitaltwin.control.commands.DataPreparer;
 import io.picota.digitaltwin.control.utils.Utils;
 import io.picota.digitaltwin.model.Archetype;
+import io.picota.digitaltwin.model.DigitalTwin;
 import io.picota.digitaltwin.model.MetadataFields;
 import io.quassar.monentia.picota.DigitalTwin.DigitalSubject;
 import io.quassar.monentia.picota.DigitalTwin.DigitalSubject.InferenceModel;
@@ -27,12 +28,14 @@ import static java.util.stream.Collectors.toMap;
 public class TrainDataPreparer extends DataPreparer {
 	public static final int MIN_RECORDS = 1000;
 	private final File temp;
+	private final DigitalTwin digitalTwin;
 	private final Archetype archetype;
 
-	public TrainDataPreparer(Archetype archetype) {
+	public TrainDataPreparer(Archetype archetype, DigitalTwin digitalTwin) {
 		super(archetype.dataDirectory());
 		this.archetype = archetype;
 		this.temp = archetype.tempDirectory();
+		this.digitalTwin = digitalTwin;
 	}
 
 	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, File subjectDataset) throws IOException {
@@ -53,6 +56,7 @@ public class TrainDataPreparer extends DataPreparer {
 				long count = linesOf(tsv);
 				if (count < MIN_RECORDS)
 					throw new IllegalArgumentException("“Failed to create digital twin. Not enough completed data rows. Currently:" + count + ". Minimum required: " + MIN_RECORDS);
+				else digitalTwin.progressMessage("Processing " + outputVariable + " with " + count + " records");
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, features);
 				String[] inputVariables = header.stream().filter(f -> !f.equals(outName)).toArray(String[]::new);

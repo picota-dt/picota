@@ -86,7 +86,7 @@
 	</a>
 </header>
 
-<main class="flex-grow pt-24 pb-12 px-8">
+<main class="message-container flex-grow pt-24 pb-12 px-8">
 	<div class="max-w-3xl pt-32 mx-auto space-y-8 rounded-2xl p-8">
 		<div id="trainingContainer" class="hidden bg-[#1c1c1c] rounded-2xl p-8 max-w-3xl mx-auto text-center">
 			<h2 class="text-2xl font-semibold mb-4">Training in progress…</h2>
@@ -210,6 +210,7 @@
 
 <script>
     const gotoDigitalTwin = document.getElementById('gotoDigitalTwin');
+    const messageContainer = document.getElementById('message-container');
     const pathSegments = window.location.pathname.split('/').filter(seg => seg !== '');
     const dtId = pathSegments[pathSegments.length - 1];
     const loading = document.getElementById('trainingContainer');
@@ -300,6 +301,7 @@
     }
 
     function showTraining() {
+        messageContainer.classList.remove('hidden');
         loading.classList.remove('hidden');
         mainUI.classList.add('hidden');
         error.classList.add('hidden');
@@ -307,6 +309,7 @@
     }
 
     function showMain() {
+        messageContainer.classList.add('hidden');
         loading.classList.add('hidden');
         error.classList.add('hidden');
         success.classList.add('hidden');
@@ -314,16 +317,18 @@
     }
 
     function showError() {
-        loading.classList.add('hidden');
+        messageContainer.classList.remove('hidden');
         error.classList.remove('hidden');
+        loading.classList.add('hidden');
         success.classList.add('hidden');
         mainUI.classList.add('hidden');
     }
 
     function showSuccess() {
+        messageContainer.classList.remove('hidden');
+        success.classList.remove('hidden');
         loading.classList.add('hidden');
         error.classList.add('hidden');
-        success.classList.remove('hidden');
         mainUI.classList.add('hidden');
     }
 

@@ -101,7 +101,7 @@ public class RuntimeCodeGenerator {
 		for (DigitalSubject.InferenceModel inferenceModel : subject.inferenceModelList())
 			if (!subjectDataset.exists() || subjectDataset.length() == 0)
 				throw new IllegalArgumentException("Expected dataset " + subjectDataset.getName() + ", but it does not exist or is empty.");
-			else new TrainDataPreparer(archetype).prepareData(subject, inferenceModel, subjectDataset);
+			else new TrainDataPreparer(archetype, digitalTwin).prepareData(subject, inferenceModel, subjectDataset);
 	}
 
 	private void createTrainerScripts() throws IOException {

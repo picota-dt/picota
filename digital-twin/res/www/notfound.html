@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<title>Picota – Wizard</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<link rel="icon" href="/images/favicon.ico" type="image/x-icon"/>
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+	<style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .error-box {
+            background: #2c2c2c;
+            border: 1px solid #b91c1c;
+            padding: 1em;
+            border-radius: 6px;
+            margin-top: 1em;
+            color: #fca5a5;
+            font-size: 0.95em;
+            text-align: left;
+        }
+
+        .step-container {
+            background: #1c1c1c;
+            padding: 2em;
+            border-radius: 12px;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .step-container h1 {
+            font-size: 1.8em;
+            margin-bottom: 0.5em;
+            color: white;
+        }
+
+        .step-container p {
+            margin: 0.8em 0;
+            line-height: 1.5;
+            color: white;
+        }
+
+        .step-container a {
+            color: #60a5fa;
+            text-decoration: underline;
+        }
+
+        .step-container input[type="url"],
+        .step-container input[type="file"] {
+            width: 100%;
+            padding: 0.7em;
+            font-size: 1em;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #111;
+            color: white;
+            margin-top: 0.5em;
+            margin-bottom: 1.2em;
+        }
+
+        .step-container button {
+            background: #3b82f6;
+            color: white;
+            padding: 0.8em 1.5em;
+            border: none;
+            font-size: 1em;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .step-container .subtle {
+            color: #ccc;
+            font-size: 0.9em;
+        }
+	</style>
+</head>
+<body class="bg-black text-white flex flex-col min-h-screen">
+<header class="fixed top-0 left-0 w-full bg-black py-4 px-[10vw] flex items-center gap-2 z-50">
+	<a href="/" class="flex items-center">
+		<img src="/images/logo.png" alt="Picota logo" class="h-24">
+		<span class="text-4xl font-semibold">picota</span>
+	</a>
+</header>
+<main class="flex-grow flex items-center justify-center pt-32 px-[10vw] pb-12">
+	<div class="w-full max-w-2xl">
+		<div class="step-container bg-[#1c1c1c] rounded-2xl p-8 text-center">
+			<h1 class="text-3xl font-semibold mb-4">Digital Twin Not Found</h1>
+			<p class="mb-6">
+				We couldn’t find a digital twin with ID
+				<span id="dtId" class="font-mono text-blue-400"></span>.
+			</p>
+			<button id="startWizard"
+					class="bg-gray-800 hover:bg-gray-600 text-white font-medium px-6 py-3 rounded-lg transition"
+					onclick="location.href=`/wizard/${dtId}`">
+				Start building your digital twin
+			</button>
+		</div>
+	</div>
+</main>
+
+<footer class="text-center py-6 text-sm text-gray-500">
+	© 2025 Monentia Inc.
+</footer>
+<script>
+    // Extract last segment of path as dtId
+    const segs = window.location.pathname.split('/').filter(s => s);
+    const dtId = segs[segs.length - 1] || '';
+    document.getElementById('dtId').textContent = dtId;
+</script>
+</body>
+</html>
