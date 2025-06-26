@@ -25,6 +25,7 @@ import static io.picota.digitaltwin.model.MetadataFields.STDS;
 import static java.util.stream.Collectors.toMap;
 
 public class TrainDataPreparer extends DataPreparer {
+	public static final int MIN_RECORDS = 1000;
 	private final File temp;
 	private final Archetype archetype;
 
@@ -49,6 +50,9 @@ public class TrainDataPreparer extends DataPreparer {
 				var timeHorizon = inferenceModel.timeHorizon();
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, features, history);
+				long count = linesOf(tsv);
+				if (count < MIN_RECORDS)
+					throw new IllegalArgumentException("“Failed to create digital twin. Not enough completed data rows. Currently:" + count + ". Minimum required: " + MIN_RECORDS);
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, features);
 				String[] inputVariables = header.stream().filter(f -> !f.equals(outName)).toArray(String[]::new);
@@ -60,6 +64,10 @@ public class TrainDataPreparer extends DataPreparer {
 		} catch (IOException e) {
 			throw e;
 		}
+	}
+
+	private long linesOf(File tsv) throws IOException {
+		return Files.lines(tsv.toPath()).count();
 	}
 
 	private void checkDataset(Map<String, Variable> features, File dataset) throws IOException {
