@@ -43,6 +43,7 @@ public class InferenceDataPreparer extends DataPreparer {
 		try (SubjectHistoryVault vault = subjectVault()) {
 			SubjectHistory history = vault.open(subjectName);
 			Map<String, Variable> features = variableTypes(ds.subject());
+			checkDataset(features, record);
 			fillHistory(history, record, features, inferenceModel.lookback());//check order
 			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 			checkColumns(history, subjectName, outputVariables);
@@ -57,6 +58,15 @@ public class InferenceDataPreparer extends DataPreparer {
 				tsv.delete();
 			}
 		}
+	}
+
+	private void checkDataset(Map<String, Variable> features, Map<String, Object> record) {
+		Set<String> header = record.keySet();
+		for (String f : features.keySet())
+			if (!header.contains(f)) throw new IllegalArgumentException("Variable " + f + " does not exist in dataset");
+		for (String f : header)
+			if (!f.equals("instant") && !features.containsKey(f))
+				throw new IllegalArgumentException("Variable " + f + " does not exist in model");
 	}
 
 	private File createTsv(DigitalTwin.DigitalSubject.Resolution resolution, InferenceModel inferenceModel,
