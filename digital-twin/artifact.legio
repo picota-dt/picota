@@ -1,6 +1,6 @@
 dsl Legio
 
-Artifact("io.picota", "1.3.1") digital-twin
+Artifact("io.picota", "1.3.2") digital-twin
 	Dsl("Konos", "13.4.3") > Builder(generationPackage ="")
 	Imports
 		Compile("org.apache.commons", "commons-collections4", "4.5.0")
@@ -28,6 +28,7 @@ Artifact("io.picota", "1.3.1") digital-twin
 	Parameter("api_port")
 	Parameter("email_conf_file")
 	Parameter("python_venv")
+	Parameter("max_requests")
 	Distribution
 		Artifactory ("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/libs-release-local")
 	Deployment(server = megatron, runConfiguration = pro)
@@ -43,5 +44,6 @@ RunConfiguration pro //m0n_214
 	Argument("api_port", "7070")
 	Argument("python_venv", "/home/developer/picota/.venv")
 	Argument("email_conf_file", "/home/developer/picota/email.properties")
+	Argument(name = "max_requests", value = "1000000")
 
 Server(type = Pro) megatron

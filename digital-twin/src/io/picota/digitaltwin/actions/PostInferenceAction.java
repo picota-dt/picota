@@ -15,7 +15,6 @@ import io.picota.digitaltwin.model.Inference;
 import java.util.List;
 import java.util.Map;
 
-import static io.picota.digitaltwin.model.DigitalTwin.MAX_QUOTA;
 
 public class PostInferenceAction implements io.intino.alexandria.rest.RequestErrorHandler {
 	public DigitalTwinBox box;
@@ -28,7 +27,8 @@ public class PostInferenceAction implements io.intino.alexandria.rest.RequestErr
 		try {
 			DigitalTwin digitalTwin = box.store().get(id);
 			if (digitalTwin == null) throw new BadRequest("Digital twin not found");
-			if (digitalTwin.consumedQuota() == MAX_QUOTA) throw new TooManyRequestsResponse("Too many requests");
+			if (digitalTwin.consumedQuota() == Integer.parseInt(box.configuration().maxRequests()))
+				throw new TooManyRequestsResponse("Too many requests");
 			if (digitalTwin.token() != null) checkToken(digitalTwin);
 			digitalTwin.consumeQuota();
 			EvaluateVariablesCommand command = new CommandFactory(box).build(EvaluateVariablesCommand.class, id, subject, values);

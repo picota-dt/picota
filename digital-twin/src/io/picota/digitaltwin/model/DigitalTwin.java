@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.concurrent.Future;
 
 public class DigitalTwin {
-	public static Integer MAX_QUOTA = 100;
 	private final String id;
 	private final String name;
 	private final String version;
