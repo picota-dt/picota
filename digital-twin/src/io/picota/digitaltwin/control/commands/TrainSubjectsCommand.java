@@ -18,6 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.Future.State;
@@ -134,13 +135,15 @@ public class TrainSubjectsCommand implements Command<Void> {
 	}
 
 	private void readOutput(DigitalTwin digitalTwin, BufferedReader reader, StringBuilder report) {
+		File logFile = new File(digitalTwin.archetype().dir(), "train.log");
 		new Thread(() -> {
 			String line;
 			try {
 				while ((line = reader.readLine()) != null) {
 					report.append(line).append("\n");
-					digitalTwin.progressMessage("processed " + variable(digitalTwin, line.split("\t")).name());
-					System.out.println(line);
+					Variable variable = variable(digitalTwin, line.split("\t"));
+					digitalTwin.progressMessage("processed " + variable.name());
+					Files.writeString(logFile.toPath(), line + "\n");
 				}
 			} catch (IOException e) {
 				Logger.error(e);

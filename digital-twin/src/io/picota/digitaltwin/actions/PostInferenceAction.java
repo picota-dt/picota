@@ -5,7 +5,6 @@ import io.intino.alexandria.exceptions.BadRequest;
 import io.intino.alexandria.exceptions.Forbidden;
 import io.intino.alexandria.exceptions.InternalServerError;
 import io.intino.alexandria.logger.Logger;
-import io.javalin.http.TooManyRequestsResponse;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.control.commands.CommandFactory;
 import io.picota.digitaltwin.control.commands.EvaluateVariablesCommand;
@@ -28,7 +27,7 @@ public class PostInferenceAction implements io.intino.alexandria.rest.RequestErr
 			DigitalTwin digitalTwin = box.store().get(id);
 			if (digitalTwin == null) throw new BadRequest("Digital twin not found");
 			if (digitalTwin.consumedQuota() == Integer.parseInt(box.configuration().maxRequests()))
-				throw new TooManyRequestsResponse("Too many requests");
+				throw new AlexandriaException("429", "Too many requests");
 			if (digitalTwin.token() != null) checkToken(digitalTwin);
 			digitalTwin.consumeQuota();
 			EvaluateVariablesCommand command = new CommandFactory(box).build(EvaluateVariablesCommand.class, id, subject, values);
