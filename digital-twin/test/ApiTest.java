@@ -21,7 +21,7 @@ public class ApiTest {
 	private String token;
 
 	@Before
-	public void setUp() throws Exception {
+	public void setUp() {
 		try {
 			token = new String(this.getClass().getResourceAsStream("/API_TOKEN.txt").readAllBytes());
 		} catch (IOException e) {

@@ -28,7 +28,7 @@ public class ReadModelCommand implements Command<DigitalTwin> {
 			URI uri = new URI(url);
 			String id = digitalTwinId(uri);
 			DigitalTwin digitalTwin = box.store().get(id);
-			ModelParser.Model model = ModelParser.loadFromURL(uri.toURL());
+			ModelParser.Model model = ModelParser.parse(uri.toURL());
 			if (digitalTwin == null) digitalTwin = create(id, model);
 			PicotaGraph graph = model.graph();
 			if (graph != null) box.store().add(digitalTwin.graph(graph));

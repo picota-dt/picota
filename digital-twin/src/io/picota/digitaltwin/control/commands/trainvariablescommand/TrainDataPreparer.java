@@ -38,12 +38,12 @@ public class TrainDataPreparer extends DataPreparer {
 		this.digitalTwin = digitalTwin;
 	}
 
-	public void prepareData(DigitalSubject ds, InferenceModel inferenceModel, File subjectDataset) throws IOException {
+	public Set<String> prepareData(DigitalSubject ds, InferenceModel inferenceModel, File subjectDataset) throws IOException {
 		String subjectName = FilenameUtils.removeExtension(subjectDataset.getName());
 		Map<String, Variable> features = variableTypes(ds.subject());
 		checkDataset(features, subjectDataset);
+		Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 		try (SubjectHistoryVault vault = subjectVault(temp)) {
-			Set<String> outputVariables = Set.of(outputVariables(inferenceModel));
 			SubjectHistory history = vault.open(subjectName);
 			fillHistory(history, features, subjectDataset);
 			checkColumns(history, subjectName, outputVariables);
@@ -68,6 +68,7 @@ public class TrainDataPreparer extends DataPreparer {
 		} catch (IOException e) {
 			throw e;
 		}
+		return outputVariables;
 	}
 
 	private long linesOf(File tsv) throws IOException {

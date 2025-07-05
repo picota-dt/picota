@@ -24,6 +24,7 @@ public class DigitalTwin {
 	private transient Archetype archetype;
 	private transient PicotaGraph graph;
 	private transient String progressMessage;
+	private transient int progress;
 	private transient Future<Command.Result<Void>> trainProcess;
 
 	public DigitalTwin(File subjectsDirectory, String url, String id, String name, String version) {
@@ -76,7 +77,6 @@ public class DigitalTwin {
 		return this;
 	}
 
-
 	public int consumedQuota() {
 		return consumedQuota;
 	}
@@ -95,6 +95,10 @@ public class DigitalTwin {
 
 	public String progressMessage() {
 		return progressMessage;
+	}
+
+	public int progress() {
+		return progress;
 	}
 
 	public DigitalTwin progressMessage(String progressMessage) {
@@ -137,6 +141,10 @@ public class DigitalTwin {
 
 	public String notifyEmail() {
 		return notifyEmail;
+	}
+
+	public void progress(int progress) {
+		this.progress = progress;
 	}
 
 	public enum State {WaitingData, PreparingTraining, DownloadedData, PreparingData, Training, TrainFinished, Prepared}

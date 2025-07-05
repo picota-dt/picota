@@ -23,24 +23,30 @@ import static io.intino.itrules.formatters.StringFormatters.firstLowerCase;
 import static io.picota.digitaltwin.control.utils.Utils.lookbackSize;
 import static org.apache.commons.io.FilenameUtils.removeExtension;
 
-public class RuntimeCodeGenerator {
+public class TrainWorkspacePreparer {
 	private final Template template;
 	private final File evaluatorScriptDir;
 	private final File trainScriptDir;
 	private final DigitalTwin digitalTwin;
 	private Map<DigitalSubject, List<String>> subjectTargets;
+	private long models = 0;
 
-	public RuntimeCodeGenerator(DigitalTwin digitalTwin) {
+	public TrainWorkspacePreparer(DigitalTwin digitalTwin) {
 		this.digitalTwin = digitalTwin;
 		this.template = new TorchScriptsTemplate();
 		this.evaluatorScriptDir = digitalTwin.archetype().evaluatorScriptsDirectory();
 		this.trainScriptDir = digitalTwin.archetype().trainerScriptsDirectory();
 	}
 
-	public void generateTrainer() throws Throwable {
+	public long models() {
+		return models;
+	}
+
+	public Map<DigitalSubject, List<String>> generateTrainer() throws Throwable {
 		try {
 			loadSubjectTargetsForTrain();
 			createTrainerScripts();
+			return subjectTargets;
 		} catch (IllegalArgumentException e) {
 			throw e;
 		} catch (Throwable e) {
@@ -78,7 +84,8 @@ public class RuntimeCodeGenerator {
 		files.forEach(subjectDataset -> {
 			try {
 				digitalTwin.progressMessage("Processing " + subjectDataset.getName() + "...");
-				subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+				HashMap<InferenceModel, Integer> inferences = subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+				models += inferences.values().stream().mapToInt(i -> i).sum();
 			} catch (IOException e) {
 				exceptions.add(e);
 			}
@@ -97,11 +104,14 @@ public class RuntimeCodeGenerator {
 		}
 	}
 
-	private void subjectSources(Archetype archetype, DigitalSubject subject, File subjectDataset) throws IOException {
+	private HashMap<InferenceModel, Integer> subjectSources(Archetype archetype, DigitalSubject subject, File subjectDataset) throws IOException {
+		HashMap<InferenceModel, Integer> map = new HashMap<>();
+		TrainDataPreparer trainDataPreparer = new TrainDataPreparer(archetype, digitalTwin);
 		for (DigitalSubject.InferenceModel inferenceModel : subject.inferenceModelList())
 			if (!subjectDataset.exists() || subjectDataset.length() == 0)
 				throw new IllegalArgumentException("Expected dataset " + subjectDataset.getName() + ", but it does not exist or is empty.");
-			else new TrainDataPreparer(archetype, digitalTwin).prepareData(subject, inferenceModel, subjectDataset);
+			else map.put(inferenceModel, trainDataPreparer.prepareData(subject, inferenceModel, subjectDataset).size());
+		return map;
 	}
 
 	private void createTrainerScripts() throws IOException {

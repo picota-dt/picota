@@ -4,10 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.DigitalTwinBox;
-import io.picota.digitaltwin.control.commands.trainvariablescommand.RuntimeCodeGenerator;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.DataSheetReport;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.TrainedSubject;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainWorkspacePreparer;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.DigitalTwin;
 import io.picota.digitaltwin.model.DigitalTwin.TrainingReport;
@@ -51,8 +51,9 @@ public class TrainSubjectsCommand implements Command<Void> {
 		EmailNotifier notifier = new EmailNotifier(digitalTwin, box.configuration().emailConfFile());
 		try {
 			digitalTwin.progressMessage("Preparing data for build subjects...");
-			new RuntimeCodeGenerator(digitalTwin).generateTrainer();
-			TrainingReport report = train(digitalTwin);
+			TrainWorkspacePreparer preparer = new TrainWorkspacePreparer(digitalTwin);
+			preparer.generateTrainer();
+			TrainingReport report = train(digitalTwin, preparer.models());
 			digitalTwin.report(report);
 			box.store().save();
 			notifier.notifyExecution(report);
@@ -72,12 +73,12 @@ public class TrainSubjectsCommand implements Command<Void> {
 		removeAllData(digitalTwin);
 	}
 
-	private TrainingReport train(DigitalTwin digitalTwin) throws IOException, InterruptedException {
+	private TrainingReport train(DigitalTwin digitalTwin, long models) throws IOException, InterruptedException {
 		File dtDirectory = digitalTwin.archetype().dir();
 		digitalTwin.progressMessage("Training subjects...");
 		Logger.info("Training subjects of " + digitalTwin.id() + "...");
 		digitalTwin.state(Training);
-		TrainingReport result = runTrain(digitalTwin, dtDirectory);
+		TrainingReport result = runTrain(digitalTwin, dtDirectory, models);
 		Logger.info("Training subjects of " + digitalTwin.id() + ": Done");
 		digitalTwin.progressMessage("Finished training. State: " + result.state());
 		digitalTwin.state(TrainFinished);
@@ -87,10 +88,10 @@ public class TrainSubjectsCommand implements Command<Void> {
 	}
 
 	private DataSheetReport map(DigitalTwin digitalTwin, TrainingReport result) {
-		return new DataSheetReport(digitalTwinId, digitalTwin.graph().digitalTwin().name$(), digitalTwin.createdAt(), digitalTwin.url(), subjects(result, digitalTwin));
+		return new DataSheetReport(digitalTwinId, digitalTwin.graph().digitalTwin().name$(), digitalTwin.createdAt(), digitalTwin.url(), subjects(result));
 	}
 
-	private List<TrainedSubject> subjects(TrainingReport result, DigitalTwin digitalTwin) {
+	private List<TrainedSubject> subjects(TrainingReport result) {
 		Map<String, List<Variable>> variablesBySubject = result.trainings().stream().collect(Collectors.groupingBy(Variable::dt));
 		return variablesBySubject.keySet().stream()
 				.map(subject -> new TrainedSubject(subject, variablesBySubject.get(subject).stream().map(this::map).toList()))
@@ -107,7 +108,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		return variable.name().contains("+") ? variable.name().substring(0, variable.name().lastIndexOf("+")) : variable.name();
 	}
 
-	private TrainingReport runTrain(DigitalTwin digitalTwin, File dtDirectory) throws IOException, InterruptedException {
+	private TrainingReport runTrain(DigitalTwin digitalTwin, File dtDirectory, long models) throws IOException, InterruptedException {
 		File scripts = digitalTwin.archetype().trainerScriptsDirectory();
 		File modelsDir = digitalTwin.archetype().trainedVariablesDirectory();
 		File dataDir = digitalTwin.archetype().dataDirectory();
@@ -122,11 +123,10 @@ public class TrainSubjectsCommand implements Command<Void> {
 				.start();
 		StringBuilder report = new StringBuilder();
 		BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
-		readOutput(digitalTwin, reader, report);
+		readOutput(digitalTwin, reader, report, models);
 		int exitValue = process.waitFor();
-		String reportResult = report.toString();
 		cleanData(digitalTwin.archetype());
-		return new TrainingReport(dtDirectory.getName(), exitValue == 0 ? SUCCESS : State.FAILED, reportResult, errorMessages(process), trainedVariables(digitalTwin, exitValue, reportResult), modelsDir);
+		return new TrainingReport(dtDirectory.getName(), exitValue == 0 ? SUCCESS : State.FAILED, report.toString(), errorMessages(process), trainedVariables(digitalTwin, exitValue, report.toString()), modelsDir);
 	}
 
 	@NotNull
@@ -134,15 +134,18 @@ public class TrainSubjectsCommand implements Command<Void> {
 		return new String(process.getErrorStream().readAllBytes()).lines().filter(l -> !l.contains("UserWarning")).collect(Collectors.joining("\n"));
 	}
 
-	private void readOutput(DigitalTwin digitalTwin, BufferedReader reader, StringBuilder report) {
+	private void readOutput(DigitalTwin digitalTwin, BufferedReader reader, StringBuilder report, long models) {
 		File logFile = new File(digitalTwin.archetype().dir(), "train.log");
 		new Thread(() -> {
 			String line;
 			try {
+				int count = 0;
 				while ((line = reader.readLine()) != null) {
 					report.append(line).append("\n");
 					Variable variable = variable(digitalTwin, line.split("\t"));
 					digitalTwin.progressMessage("processed " + variable.name());
+					count++;
+					digitalTwin.progress((count / models) * 100);
 					Files.writeString(logFile.toPath(), line + "\n");
 				}
 			} catch (IOException e) {

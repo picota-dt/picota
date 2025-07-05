@@ -32,7 +32,8 @@ public class CsvTemplateCommand implements Command<File> {
 	@Override
 	public Result<File> execute() {
 		DigitalTwin digitalTwin = box.store().get(digitalTwinId);
-		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
+		if (digitalTwin == null || digitalTwin.graph() == null)
+			throw new IllegalArgumentException("Digital Twin not found");
 		Reality reality = digitalTwin.graph().reality();
 		List<String> common = Utils.variableNamesOf(reality);
 		Map<String, String> subjects = reality.subjectList().stream().collect(Collectors.toMap(Layer::name$, s -> String.join(",", merge(common, Utils.variableNamesOf(s)))));

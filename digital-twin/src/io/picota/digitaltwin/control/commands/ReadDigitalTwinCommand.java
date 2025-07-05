@@ -36,7 +36,7 @@ public class ReadDigitalTwinCommand implements Command<Map<String, ? extends Ser
 				"name", digitalTwin.name(),
 				"version", digitalTwin.version(),
 				"dataset", digitalTwin.archetype().hasRawData(),
-				"progress", 0,
+				"progress", digitalTwin.progress(),
 				"progressMessage", digitalTwin.progressMessage() == null ? "" : digitalTwin.progressMessage(),
 				"state", digitalTwin.state().name());
 	}

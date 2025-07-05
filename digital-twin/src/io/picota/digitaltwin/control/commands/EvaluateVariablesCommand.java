@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.control.commands.evaluatevariablescommand.InferenceDataPreparer;
-import io.picota.digitaltwin.control.commands.trainvariablescommand.RuntimeCodeGenerator;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainWorkspacePreparer;
 import io.picota.digitaltwin.model.Archetype;
 import io.picota.digitaltwin.model.Inference;
 import io.quassar.monentia.picota.DigitalTwin.DigitalSubject;
@@ -42,7 +42,7 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 		if (digitalTwin.graph() == null)
 			throw new IllegalArgumentException("Digital Twin has no description model");
 		this.dataPreparer = new InferenceDataPreparer(digitalTwin.archetype());
-		new RuntimeCodeGenerator(digitalTwin).generateEvaluator();
+		new TrainWorkspacePreparer(digitalTwin).generateEvaluator();
 		DigitalSubject subject = digitalTwin.graph().digitalTwin().digitalSubject(s -> s.subject().name$().equals(this.subject) || this.subject.startsWith(s.subject().asPrototype().prefix()));
 		if (subject == null) throw new IllegalArgumentException("Subject not found");
 		return new Result<>(true, "", new ArrayList<>(infer(subject, digitalTwin.archetype())));
