@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import io.intino.alexandria.logger.Logger;
 import io.picota.digitaltwin.DigitalTwinBox;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder;
-import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.DataSheetReport;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.TrainReport;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.TrainedSubject;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainWorkspacePreparer;
 import io.picota.digitaltwin.model.Archetype;
@@ -87,12 +87,12 @@ public class TrainSubjectsCommand implements Command<Void> {
 		return result;
 	}
 
-	private DataSheetReport map(DigitalTwin digitalTwin, TrainingReport result) {
-		return new DataSheetReport(digitalTwinId, digitalTwin.graph().digitalTwin().name$(), digitalTwin.createdAt(), digitalTwin.url(), subjects(result));
+	private TrainReport map(DigitalTwin digitalTwin, TrainingReport result) {
+		return new TrainReport(digitalTwinId, digitalTwin.graph().digitalTwin().name$(), digitalTwin.createdAt(), digitalTwin.url(), subjects(result));
 	}
 
-	private List<TrainedSubject> subjects(TrainingReport result) {
-		Map<String, List<Variable>> variablesBySubject = result.trainings().stream().collect(Collectors.groupingBy(Variable::dt));
+	private List<TrainedSubject> subjects(TrainingReport report) {
+		Map<String, List<Variable>> variablesBySubject = report.trainings().stream().collect(Collectors.groupingBy(Variable::dt));
 		return variablesBySubject.keySet().stream()
 				.map(subject -> new TrainedSubject(subject, variablesBySubject.get(subject).stream().map(this::map).toList()))
 				.collect(Collectors.toList());
@@ -101,7 +101,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 	private TrainReportBuilder.Inference map(Variable variable) {
 		int horizon = !variable.name().contains("+") ?
 				0 : Integer.parseInt(variable.name().substring(variable.name().lastIndexOf("+") + 1));
-		return new TrainReportBuilder.Inference(variableName(variable), horizon, "", df.format(variable.loss() * 100), variable.contributors());
+		return new TrainReportBuilder.Inference(variableName(variable), horizon, "", df.format(variable.marginOfError()), variable.contributors());
 	}
 
 	private static String variableName(Variable variable) {
@@ -180,7 +180,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 
 	private Variable variable(DigitalTwin digitalTwin, String[] fields) {
 		JsonObject metadata = metadata(digitalTwin, fields);
-		return new Variable(fields[0], fields[1], toDouble(fields[2]), metadata.get(OUT_MIN).getAsDouble(), metadata.get(OUT_MAX).getAsDouble(), contributors(fields));
+		return new Variable(fields[0], fields[1], toDouble(fields[2]), toDouble(fields[3]), metadata.get(OUT_MIN).getAsDouble(), metadata.get(OUT_MAX).getAsDouble(), contributors(fields));
 	}
 
 	private static JsonObject metadata(DigitalTwin digitalTwin, String[] fields) {
@@ -194,7 +194,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 
 	private static Map<String, Double> contributors(String[] fields) {
 		if (fields.length < 4) return Collections.emptyMap();
-		Map<String, Double> collect = Arrays.stream(fields[3].split(",", -1))
+		Map<String, Double> collect = Arrays.stream(fields[4].split(",", -1))
 				.map(t -> t.trim().split("###"))
 				.collect(Collectors.toMap(t -> t[0].trim(), t -> toDouble(t[1].trim())));
 		return merge(collect);

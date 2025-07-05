@@ -1,17 +1,17 @@
-import math
-
 import numpy as np
 import shap
 import torch
-
-from kan.TimeSeriesDataset import TimeSeriesDataset
-from kan.KAN import KAN
+from scipy.stats import norm
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
+from kan.KAN import KAN
+from kan.TimeSeriesDataset import TimeSeriesDataset
+
 
 class KanTrainer:
-    def __init__(self, name, input_variables, output_variable, lookback, means, stds, batch_size, epochs, device,
+    def __init__(self, name, input_variables, output_variable, lookback, means, stds, out_min, out_max, batch_size,
+                 epochs, device,
                  test_proportion,
                  lr,
                  loss_fn,
@@ -22,6 +22,8 @@ class KanTrainer:
         self.outputVariable = output_variable
         self.means = means
         self.stds = stds
+        self.out_min = out_min
+        self.out_max = out_max
         self.batch_size = batch_size
         self.epochs = epochs
         self.device = device
@@ -45,7 +47,7 @@ class KanTrainer:
         architecture = KAN(len(self.inputVariables), self.lookback, self.means, self.stds, 1)
         architecture.to(self.device)
         optimizer = torch.optim.Adam(architecture.parameters(), lr=self.lr)
-        last_arch = (architecture, None)
+        best_arch = (architecture, None)
         for epoch in range(self.epochs):
             architecture.train()
             total_loss = 0.0
@@ -58,12 +60,12 @@ class KanTrainer:
                 optimizer.step()
                 total_loss += loss.item() * out.size(0)
 
-            val_loss = self.validate(architecture, val_loader, val_size)
-            if last_arch[1] is None or last_arch[1] > val_loss:
-                last_arch = (self.copy(architecture), val_loss)
-            #print(f"{self.name}\t{total_loss:.4f}\t{val_loss:.4f}")
+            val_loss, margin_of_error = self.validate(architecture, val_loader)
+            if best_arch[1] is None or best_arch[1] > val_loss:
+                best_arch = (self.copy(architecture), val_loss, margin_of_error)
+            # print(f"{self.name}\t{total_loss:.4f}\t{val_loss:.4f}")
         features = self.explain_features(architecture, val_loader, train_loader)
-        return last_arch[0], last_arch[1], features
+        return best_arch[0], best_arch[1], best_arch[2], features
 
     def explain_features(self, architecture, test_loader, train_loader):
         explainer = shap.GradientExplainer(architecture.kan,
@@ -73,16 +75,22 @@ class KanTrainer:
         shap_normalized = shap_importance / shap_importance.sum()
         return {self.inputVariables[i]: shap_normalized[i] for i in range(len(self.inputVariables))}
 
-    def validate(self, architecture, val_loader, val_size):
+    def validate(self, architecture, val_loader):
         architecture.eval()
-        val_loss = 0.0
+        losses = []
         with torch.no_grad():
             for batch in val_loader:
                 out = batch['out']
                 pred = architecture(batch).squeeze()
-                loss = torch.nn.L1Loss()(pred, out)
-                val_loss += loss.item() * out.size(0)
-        return val_loss / val_size
+                abs_err = torch.abs(pred - out)
+                losses.extend(abs_err.cpu().numpy())
+        mae = np.mean(losses)
+        std_error = np.std(losses, ddof=1)
+        confidence = 0.95
+        alpha = 1 - confidence
+        z = norm.ppf(1 - alpha / 2)
+        margin_of_error = z * std_error * (self.out_max - self.out_min)
+        return mae, margin_of_error
 
     def copy(self, architecture):
         cloned = KAN(len(self.inputVariables), self.lookback, self.means, self.stds, 1)

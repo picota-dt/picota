@@ -1,6 +1,5 @@
 package io.picota.digitaltwin.control.commands.trainvariablescommand;
 
-import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.ColorConstants;
@@ -31,6 +30,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import static com.itextpdf.io.font.constants.StandardFonts.HELVETICA;
+import static com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD;
 import static com.itextpdf.layout.borders.Border.NO_BORDER;
 import static com.itextpdf.layout.properties.TextAlignment.LEFT;
 import static com.itextpdf.layout.properties.TextAlignment.RIGHT;
@@ -42,12 +43,12 @@ public class TrainReportBuilder {
 	private final DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	public TrainReportBuilder() throws IOException {
-		headerFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
-		labelFont = PdfFontFactory.createFont(StandardFonts.HELVETICA);
-		valueFont = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
+		headerFont = PdfFontFactory.createFont(HELVETICA_BOLD);
+		labelFont = PdfFontFactory.createFont(HELVETICA);
+		valueFont = PdfFontFactory.createFont(HELVETICA_BOLD);
 	}
 
-	public void generate(DataSheetReport report, File dest) throws IOException {
+	public void generate(TrainReport report, File dest) throws IOException {
 		PdfDocument pdf = new PdfDocument(new PdfWriter(dest));
 		Document doc = new Document(pdf, PageSize.A4.rotate());
 		doc.setMargins(36, 36, 36, 36);
@@ -92,13 +93,14 @@ public class TrainReportBuilder {
 				.add(new Text((inf.horizon > 0 ? "Prediction" : "Estimation") + ": ").setFont(labelFont).setFontSize(16))
 				.add(new Text(inf.variable()).setFont(valueFont).setFontSize(16));
 		if (!inf.unit.isEmpty())
-			paragraph.add(new Text(" (")).addAll(format(inf.unit())).add(new Text(")").setFont(valueFont).setFontSize(16));
+			paragraph.add(new Text(" (")).addAll(format(inf.unit())).add(new Text(")")).setFont(valueFont).setFontSize(16);
 		if (inf.horizon > 0)
 			paragraph.add(new Text(" - Time Horizon " + inf.horizon()).setFont(valueFont).setFontSize(16));
 		content.add(paragraph);
 		content.add(new Paragraph()
 				.add(new Text("Inference Error: ±").setFont(labelFont).setFontSize(12))
-				.add(new Text(inf.error() + " %").setFont(valueFont).setFontSize(12))
+				.add(inf.error() + " ").setFont(valueFont).setFontSize(12)
+				.addAll(format(inf.unit))
 				.setMarginBottom(4));
 		content.add(new Paragraph("Top Contributing Inputs")
 				.setFont(labelFont).setFontSize(12).setMarginBottom(4));
@@ -135,20 +137,20 @@ public class TrainReportBuilder {
 		return new Text(text.replace("^", "")).setTextRise(6);
 	}
 
-	private Div header(DataSheetReport report) throws IOException {
+	private Div header(TrainReport report) throws IOException {
 		return new Div().add(topBar())
 				.add(headerFirstLine(report))
 				.add(titleAndRelease(report))
 				.add(new LineSeparator(new SolidLine(1f)).setMarginBottom(8));
 	}
 
-	private Table headerFirstLine(DataSheetReport report) {
+	private Table headerFirstLine(TrainReport report) {
 		return new Table(UnitValue.createPercentArray(new float[]{1, 1})).useAllAvailableWidth().setMarginTop(4).setPaddingBottom(0).setMarginBottom(0)
 				.addCell(new Cell().add(new Paragraph().add(new Text("Model Identifier: ").setFont(labelFont).setFontSize(10)).add(new Text(report.getModelId()).setFont(valueFont).setFontSize(10))).setBorder(NO_BORDER))
 				.addCell(new Cell().add(new Paragraph(report.url()).setFont(labelFont).setFontSize(10).setTextAlignment(RIGHT)).setBorder(NO_BORDER));
 	}
 
-	private Table titleAndRelease(DataSheetReport report) {
+	private Table titleAndRelease(TrainReport report) {
 		return new Table(UnitValue.createPercentArray(new float[]{1, 1})).useAllAvailableWidth().setMarginTop(0).setPaddingTop(0).setMarginBottom(4)
 				.addCell(new Cell().add(new Paragraph()
 						.add(new Text("Title: ").setFont(labelFont).setFontSize(10))
@@ -201,8 +203,8 @@ public class TrainReportBuilder {
 		return logo;
 	}
 
-	public record DataSheetReport(String getModelId, String title, Instant releaseDate, String url,
-								  List<TrainedSubject> subjects) {
+	public record TrainReport(String getModelId, String title, Instant releaseDate, String url,
+							  List<TrainedSubject> subjects) {
 	}
 
 	public record TrainedSubject(String subject, List<Inference> estimations) {

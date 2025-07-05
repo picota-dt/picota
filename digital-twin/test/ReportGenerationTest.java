@@ -1,6 +1,6 @@
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder;
-import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.DataSheetReport;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.Inference;
+import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainReportBuilder.TrainReport;
 import org.junit.Test;
 
 import java.io.File;
@@ -14,7 +14,7 @@ public class ReportGenerationTest {
 	public void should_generate_simple_report() throws IOException {
 		File dest = new File("../temp/example-report.pdf");
 		dest.delete();
-		DataSheetReport inferenceReport = new DataSheetReport("32a497be-7330-41ac-8541-5934b9fbda7a", "Inference Report", Instant.now(), "picota.io/commits/32a497be-7330-41ac-8541-5934b9fbda7a", trainings());
+		TrainReport inferenceReport = new TrainReport("32a497be-7330-41ac-8541-5934b9fbda7a", "Inference Report", Instant.now(), "picota.io/commits/32a497be-7330-41ac-8541-5934b9fbda7a", trainings());
 		new TrainReportBuilder().generate(inferenceReport, dest);
 	}
 

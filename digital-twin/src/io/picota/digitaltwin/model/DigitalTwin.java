@@ -153,7 +153,7 @@ public class DigitalTwin {
 								 List<Variable> trainings,
 								 File modelsDir) {
 
-		public record Variable(String dt, String name, double loss, double min, double max,
+		public record Variable(String dt, String name, double loss, double marginOfError, double min, double max,
 							   Map<String, Double> contributors) {
 		}
 	}

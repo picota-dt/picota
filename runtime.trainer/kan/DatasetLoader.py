@@ -7,6 +7,8 @@ class DatasetLoader:
         self.input_variables = None
         self.stds = None
         self.means = None
+        self.out_min = None
+        self.out_max = None
         self.path = path
 
     def load(self):
@@ -18,6 +20,8 @@ class DatasetLoader:
             stats = json.loads(first_line)
             self.means = stats.get("means")
             self.stds = stats.get("stds")
+            self.out_min = stats.get("out_min")
+            self.out_max = stats.get("out_max")
             self.lookback = stats.get("lookback_size")
             self.input_variables = stats.get("input_variables")
             if self.means is None or self.stds is None:
@@ -35,6 +39,12 @@ class DatasetLoader:
 
     def get_stds(self):
         return self.stds
+
+    def get_out_min(self):
+        return self.out_min
+
+    def get_out_max(self):
+        return self.out_max
 
     def get_input_variables(self):
         return self.input_variables

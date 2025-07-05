@@ -47,6 +47,8 @@ rule trigger(callVariable)
 			loader.get_input_variables(),
 			loader.get_means(),
 			loader.get_stds(),
+			loader.get_out_min(),
+			loader.get_out_max(),
 			modelsdir + "/" + s
 		)
 
@@ -72,7 +74,7 @@ rule type(variable)
 	def input_variables(dict, output):
 		return {key: valor for key, valor in dict.items() if key != output}
 
-	def train(subject, datasource, input_variables, means, stds, model_dir):
+	def train(subject, datasource, input_variables, means, stds, out_min, out_max, model_dir):
 		model_path = model_dir + "/$name~$timeHorizon.bin"
 		os.makedirs(model_dir, exist_ok=True)
 		output_variable = "$name~$timeHorizon"
@@ -84,12 +86,12 @@ rule type(variable)
 		validation_loss_fn = nn.L1Loss()
 		test_proportion = 0.3
 		dataset = TimeSeriesDataset(datasource)
-		model, loss, features = (
-                KanTrainer(subject, input_variables, output_variable, $lookback, means, stds,
+		model, loss, margin_of_error, features = (
+                KanTrainer(subject, input_variables, output_variable, $lookback, means, stds, out_min, out_max,
                            batch_size, epochs, device, test_proportion, lr, loss_fn, validation_loss_fn)
                 .train(dataset))
 		torch.save(model.state_dict(), model_path)
 		print(
-            f"{subject}\t{output_variable}\t{loss}\t" +
+            f"{subject}\t{output_variable}\t{loss}\t{margin_of_error}\t" +
             ",".join(f"{k}###{float(v):.2f}" for k, v in sorted(features.items(), key=lambda x: float(x[1]), reverse=True)), flush=True
         )
