@@ -145,7 +145,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 					Variable variable = variable(digitalTwin, line.split("\t"));
 					digitalTwin.progressMessage("processed " + variable.name());
 					count++;
-					digitalTwin.progress((int) ((count / models) * 100));
+					digitalTwin.progress((int) (((count / (double) models)) * 100));
 					Files.writeString(logFile.toPath(), line + "\n");
 				}
 			} catch (IOException e) {

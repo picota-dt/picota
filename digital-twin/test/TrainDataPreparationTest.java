@@ -17,7 +17,7 @@ public class TrainDataPreparationTest {
 	@Test
 	@Ignore
 	public void name() throws URISyntaxException, IOException {
-		ModelParser.Model model = ModelParser.loadFromURL(new URI("https://quassar.io/commits/32a497be-7330-41ac-8541-5934b9fbda7a").toURL());
+		ModelParser.Model model = ModelParser.parse(new URI("https://quassar.io/commits/32a497be-7330-41ac-8541-5934b9fbda7a").toURL());
 		PicotaGraph graph = model.graph();
 		File dir = new File("../temp/test");
 		FileUtils.deleteDirectory(dir);
