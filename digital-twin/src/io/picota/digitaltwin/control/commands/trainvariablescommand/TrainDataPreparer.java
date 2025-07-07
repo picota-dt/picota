@@ -26,16 +26,17 @@ import static io.picota.digitaltwin.model.MetadataFields.STDS;
 import static java.util.stream.Collectors.toMap;
 
 public class TrainDataPreparer extends DataPreparer {
-	public static final int MIN_RECORDS = 1000;
+	private final Archetype archetype;
 	private final File temp;
 	private final DigitalTwin digitalTwin;
-	private final Archetype archetype;
+	private final int minRecords;
 
-	public TrainDataPreparer(Archetype archetype, DigitalTwin digitalTwin) {
-		super(archetype.dataDirectory());
-		this.archetype = archetype;
+	public TrainDataPreparer(DigitalTwin digitalTwin, int minRecords) {
+		super(digitalTwin.archetype().dataDirectory());
+		this.archetype = digitalTwin.archetype();
 		this.temp = archetype.tempDirectory();
 		this.digitalTwin = digitalTwin;
+		this.minRecords = minRecords;
 	}
 
 	public Set<String> prepareData(DigitalSubject ds, InferenceModel inferenceModel, File subjectDataset) throws IOException {
@@ -54,8 +55,8 @@ public class TrainDataPreparer extends DataPreparer {
 				var outName = timeHorizon == 0 ? outputVariable : outputVariable + "+" + timeHorizon;
 				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, features, history);
 				long count = linesOf(tsv);
-				if (count < MIN_RECORDS)
-					throw new IllegalArgumentException("Failed Not enough completed data rows. Currently: " + count + ".\nMinimum required: " + MIN_RECORDS);
+				if (count < minRecords)
+					throw new IllegalArgumentException("Failed Not enough completed data rows. Currently: " + count + ".\nMinimum required: " + minRecords);
 				else digitalTwin.progressMessage("Processing " + outputVariable + " with " + count + " records");
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, features);

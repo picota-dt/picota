@@ -42,7 +42,7 @@ public class EvaluateVariablesCommand implements Command<List<Inference>> {
 		if (digitalTwin.graph() == null)
 			throw new IllegalArgumentException("Digital Twin has no description model");
 		this.dataPreparer = new InferenceDataPreparer(digitalTwin.archetype());
-		new TrainWorkspacePreparer(digitalTwin).generateEvaluator();
+		new TrainWorkspacePreparer(digitalTwin, Integer.parseInt(box.configuration().minRecords())).generateEvaluator();
 		DigitalSubject subject = digitalTwin.graph().digitalTwin().digitalSubject(s -> s.subject().name$().equals(this.subject) || this.subject.startsWith(s.subject().asPrototype().prefix()));
 		if (subject == null) throw new IllegalArgumentException("Subject not found");
 		return new Result<>(true, "", new ArrayList<>(infer(subject, digitalTwin.archetype())));

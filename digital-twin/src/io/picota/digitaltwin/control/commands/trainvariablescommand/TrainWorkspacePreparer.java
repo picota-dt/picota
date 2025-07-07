@@ -28,14 +28,16 @@ public class TrainWorkspacePreparer {
 	private final File evaluatorScriptDir;
 	private final File trainScriptDir;
 	private final DigitalTwin digitalTwin;
+	private final TrainDataPreparer trainDataPreparer;
 	private Map<DigitalSubject, List<String>> subjectTargets;
 	private long models = 0;
 
-	public TrainWorkspacePreparer(DigitalTwin digitalTwin) {
+	public TrainWorkspacePreparer(DigitalTwin digitalTwin, int minRecords) {
 		this.digitalTwin = digitalTwin;
 		this.template = new TorchScriptsTemplate();
 		this.evaluatorScriptDir = digitalTwin.archetype().evaluatorScriptsDirectory();
 		this.trainScriptDir = digitalTwin.archetype().trainerScriptsDirectory();
+		this.trainDataPreparer = new TrainDataPreparer(digitalTwin, minRecords);
 	}
 
 	public long models() {
@@ -84,7 +86,7 @@ public class TrainWorkspacePreparer {
 		files.forEach(subjectDataset -> {
 			try {
 				digitalTwin.progressMessage("Processing " + subjectDataset.getName() + "...");
-				HashMap<InferenceModel, Integer> inferences = subjectSources(digitalTwin.archetype(), subject, subjectDataset);
+				HashMap<InferenceModel, Integer> inferences = subjectSources(subject, subjectDataset);
 				models += inferences.values().stream().mapToInt(i -> i).sum();
 			} catch (IOException e) {
 				exceptions.add(e);
@@ -104,9 +106,8 @@ public class TrainWorkspacePreparer {
 		}
 	}
 
-	private HashMap<InferenceModel, Integer> subjectSources(Archetype archetype, DigitalSubject subject, File subjectDataset) throws IOException {
+	private HashMap<InferenceModel, Integer> subjectSources(DigitalSubject subject, File subjectDataset) throws IOException {
 		HashMap<InferenceModel, Integer> map = new HashMap<>();
-		TrainDataPreparer trainDataPreparer = new TrainDataPreparer(archetype, digitalTwin);
 		for (DigitalSubject.InferenceModel inferenceModel : subject.inferenceModelList())
 			if (!subjectDataset.exists() || subjectDataset.length() == 0)
 				throw new IllegalArgumentException("Expected dataset " + subjectDataset.getName() + ", but it does not exist or is empty.");

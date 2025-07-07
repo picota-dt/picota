@@ -29,6 +29,7 @@ Artifact("io.picota", "1.3.3") digital-twin
 	Parameter("email_conf_file")
 	Parameter("python_venv")
 	Parameter("max_requests")
+	Parameter("min_records")
 	Distribution
 		Artifactory ("monentia-maven") > Release("https://artifactory.monentia.es/artifactory/libs-release-local")
 	Deployment(server = megatron, runConfiguration = pro)
@@ -44,6 +45,7 @@ RunConfiguration pro //m0n_214
 	Argument("api_port", "7070")
 	Argument("python_venv", "/home/developer/picota/.venv")
 	Argument("email_conf_file", "/home/developer/picota/email.properties")
-	Argument(name = "max_requests", value = "1000000")
+	Argument("max_requests", "1000000")
+	Argument("min_records", "12")
 
 Server(type = Pro) megatron

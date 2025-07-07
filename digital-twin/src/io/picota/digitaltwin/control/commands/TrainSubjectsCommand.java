@@ -51,7 +51,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		EmailNotifier notifier = new EmailNotifier(digitalTwin, box.configuration().emailConfFile());
 		try {
 			digitalTwin.progressMessage("Preparing data for build subjects...");
-			TrainWorkspacePreparer preparer = new TrainWorkspacePreparer(digitalTwin);
+			TrainWorkspacePreparer preparer = new TrainWorkspacePreparer(digitalTwin, Integer.parseInt(box.configuration().minRecords()));
 			preparer.generateTrainer();
 			TrainingReport report = train(digitalTwin, preparer.models());
 			digitalTwin.report(report);

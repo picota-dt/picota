@@ -1,5 +1,4 @@
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainDataPreparer;
-import io.picota.digitaltwin.model.Archetype;
 import io.quassar.monentia.picota.DigitalTwin;
 import io.quassar.monentia.picota.ModelParser;
 import io.quassar.monentia.picota.PicotaGraph;
@@ -21,7 +20,7 @@ public class TrainDataPreparationTest {
 		PicotaGraph graph = model.graph();
 		File dir = new File("../temp/test");
 		FileUtils.deleteDirectory(dir);
-		TrainDataPreparer preparer = new TrainDataPreparer(new Archetype(dir), null);
+		TrainDataPreparer preparer = new TrainDataPreparer(null, 1000);
 		DigitalTwin.DigitalSubject ds = graph.digitalTwin().digitalSubject(0);
 		File subjectDataset = new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/lite/SolarPlant.csv");
 		preparer.prepareData(ds, ds.inferenceModel(0), subjectDataset);
