@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.IntStream;
 
+import static io.picota.digitaltwin.control.utils.Utils.variableNamesOf;
 import static io.picota.digitaltwin.control.utils.Utils.variableTypes;
 import static io.picota.digitaltwin.model.MetadataFields.MEANS;
 import static io.picota.digitaltwin.model.MetadataFields.STDS;
@@ -81,7 +82,8 @@ public class TrainDataPreparer extends DataPreparer {
 		String separator = firstLine.contains("\t") ? "\t" : ",";
 		Set<String> header = Set.of(firstLine.split(separator));
 		for (String f : features.keySet()) {
-			if (!header.contains(f)) throw new IllegalArgumentException("Variable " + f + " does not exist in dataset");
+			if (!header.contains(f))
+				throw new IllegalArgumentException("Variable " + f + " does not exist in dataset");
 		}
 	}
 
@@ -121,9 +123,7 @@ public class TrainDataPreparer extends DataPreparer {
 
 	public static String[] outputVariables(InferenceModel inferenceModel) {
 		if (inferenceModel.variable().isComposite())
-			return inferenceModel.variable().asComposite().componentsList().stream().flatMap(l -> l.values().stream())
-					.map(l -> inferenceModel.variable().name$() + LAYER_SEPARATOR + l)
-					.toArray(String[]::new);
+			return variableNamesOf(inferenceModel.variable()).toArray(String[]::new);
 		return new String[]{inferenceModel.variable().name$()};
 	}
 

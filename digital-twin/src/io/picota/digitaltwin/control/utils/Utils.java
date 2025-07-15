@@ -133,10 +133,11 @@ public class Utils {
 	}
 
 	private static List<String> pathsOf(Components c) {
-		Components components = c.core$().ownerAs(Components.class);
-		if (components == null) return c.values();
+		Components container = c.core$().ownerAs(Components.class);
+		if (container == null) return c.values();
+		if (!c.componentsList().isEmpty()) return List.of();
 		else return c.values().stream()
-				.flatMap(cv -> combine(pathsOf(components), cv))
+				.flatMap(cv -> combine(pathsOf(container), cv))
 				.collect(Collectors.toList());
 	}
 
