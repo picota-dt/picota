@@ -57,7 +57,7 @@ public class TrainDataPreparer extends DataPreparer {
 				File tsv = createInitialTsv(ds.resolution(), inferenceModel, outputVariable, outputVariables, features, history);
 				long count = linesOf(tsv);
 				if (count < minRecords)
-					throw new IllegalArgumentException("Failed Not enough completed data rows. Currently: " + count + ".\nMinimum required: " + minRecords);
+					throw new IllegalArgumentException("Failed: Not enough completed data rows to calculate " + outputVariable + ". Currently: " + count + ".\nMinimum required: " + minRecords);
 				else digitalTwin.progressMessage("Processing " + outputVariable + " with " + count + " records");
 				List<String> header = List.of(Files.lines(tsv.toPath()).findFirst().get().split("\t"));
 				header = applyOneHotTransformations(tsv, header, features);
@@ -74,7 +74,7 @@ public class TrainDataPreparer extends DataPreparer {
 	}
 
 	private long linesOf(File tsv) throws IOException {
-		return Files.lines(tsv.toPath()).count();
+		return Files.lines(tsv.toPath()).skip(1).filter(l -> !l.isEmpty()).count();
 	}
 
 	private void checkDataset(Map<String, Variable> features, File dataset) throws IOException {
