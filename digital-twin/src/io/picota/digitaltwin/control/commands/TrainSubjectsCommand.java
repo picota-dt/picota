@@ -41,7 +41,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		this.digitalTwinId = digitalTwinId;
 		this.pythonVenv = new File(box.configuration().pythonVenv());
 		df = new DecimalFormat("#.00");
-		df.setRoundingMode(RoundingMode.HALF_UP);  // redondeo “clásico”
+		df.setRoundingMode(RoundingMode.HALF_UP);
 	}
 
 	@Override
