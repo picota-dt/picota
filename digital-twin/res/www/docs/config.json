@@ -1,0 +1,12 @@
+{
+  "urls": [
+    {
+      "url": "./data/Digitaltwin.json",
+      "name": "Digitaltwin"
+    }
+  ],
+  "subtitle": "",
+  "background": "black",
+  "color": "white",
+  "selectorBorderColor": "black"
+}
