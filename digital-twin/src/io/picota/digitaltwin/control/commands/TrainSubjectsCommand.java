@@ -13,7 +13,6 @@ import io.picota.digitaltwin.model.DigitalTwin;
 import io.picota.digitaltwin.model.DigitalTwin.TrainingReport;
 import io.picota.digitaltwin.model.DigitalTwin.TrainingReport.Variable;
 import org.apache.commons.io.FileUtils;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.math.RoundingMode;
@@ -50,14 +49,7 @@ public class TrainSubjectsCommand implements Command<Void> {
 		if (digitalTwin == null) throw new IllegalArgumentException("Digital Twin not found");
 		EmailNotifier notifier = new EmailNotifier(digitalTwin, box.configuration().emailConfFile());
 		try {
-			digitalTwin.progressMessage("Preparing data for build subjects...");
-			TrainWorkspacePreparer preparer = new TrainWorkspacePreparer(digitalTwin, Integer.parseInt(box.configuration().minRecords()));
-			preparer.generateTrainer();
-			TrainingReport report = train(digitalTwin, preparer.models());
-			digitalTwin.report(report);
-			box.store().save();
-			notifier.notifyExecution(report);
-			return Command.success();
+			return execute(digitalTwin, notifier);
 		} catch (IllegalArgumentException e) {
 			notifyError(digitalTwin, notifier, e.getMessage());
 		} catch (Throwable e) {
@@ -65,6 +57,17 @@ public class TrainSubjectsCommand implements Command<Void> {
 			notifyError(digitalTwin, notifier, e.getMessage());
 		}
 		return new Result<>(false, digitalTwin.progressMessage());
+	}
+
+	private Result<Void> execute(DigitalTwin digitalTwin, EmailNotifier notifier) throws Throwable {
+		digitalTwin.progressMessage("Preparing data for build subjects...");
+		TrainWorkspacePreparer preparer = new TrainWorkspacePreparer(digitalTwin, Integer.parseInt(box.configuration().minRecords()));
+		preparer.generateTrainer();
+		TrainingReport report = train(digitalTwin, preparer.models());
+		digitalTwin.report(report);
+		box.store().save();
+		notifier.notifyExecution(report);
+		return Command.success();
 	}
 
 	private static void notifyError(DigitalTwin digitalTwin, EmailNotifier notifier, String error) {
@@ -110,28 +113,39 @@ public class TrainSubjectsCommand implements Command<Void> {
 
 	private TrainingReport runTrain(DigitalTwin digitalTwin, File dtDirectory, long models) throws IOException, InterruptedException {
 		File scripts = digitalTwin.archetype().trainerScriptsDirectory();
+		File scriptPath = new File(dtDirectory, "scripts/trainer/main.py");
 		File modelsDir = digitalTwin.archetype().trainedVariablesDirectory();
 		File dataDir = digitalTwin.archetype().dataDirectory();
 		modelsDir.mkdirs();
-		File scriptPath = new File(dtDirectory, "scripts/trainer/main.py");
 		if (!scriptPath.exists()) throw new IOException("Main script not found: " + scriptPath.getAbsolutePath());
-		Process process = new ProcessBuilder(pythonVenv.getAbsolutePath() + "/bin/python",
+		Process process = prepareProcess(scriptPath, dataDir, modelsDir, scripts);
+		ProcessResult result = runProcess(digitalTwin, models, process);
+		cleanData(digitalTwin.archetype());
+		return new TrainingReport(dtDirectory.getName(), result.exitValue() == 0 ? SUCCESS : State.FAILED, result.report().toString(), errorMessages(process), trainedVariables(digitalTwin, result.exitValue(), result.report().toString()), modelsDir);
+	}
+
+	private ProcessResult runProcess(DigitalTwin digitalTwin, long models, Process process) throws InterruptedException {
+		StringBuilder report = new StringBuilder();
+		BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+		readOutput(digitalTwin, reader, report, models);
+		int exitValue = process.waitFor();
+		return new ProcessResult(report, exitValue);
+	}
+
+	private Process prepareProcess(File scriptPath, File dataDir, File modelsDir, File scripts) throws IOException {
+		return new ProcessBuilder(pythonVenv.getAbsolutePath() + "/bin/python",
 				scriptPath.getAbsolutePath(),
 				dataDir.getCanonicalPath(),
 				modelsDir.getAbsolutePath())
 				.directory(scripts)
 				.start();
-		StringBuilder report = new StringBuilder();
-		BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
-		readOutput(digitalTwin, reader, report, models);
-		int exitValue = process.waitFor();
-		cleanData(digitalTwin.archetype());
-		return new TrainingReport(dtDirectory.getName(), exitValue == 0 ? SUCCESS : State.FAILED, report.toString(), errorMessages(process), trainedVariables(digitalTwin, exitValue, report.toString()), modelsDir);
 	}
 
-	@NotNull
 	private static String errorMessages(Process process) throws IOException {
 		return new String(process.getErrorStream().readAllBytes()).lines().filter(l -> !l.contains("UserWarning")).collect(Collectors.joining("\n"));
+	}
+
+	private record ProcessResult(StringBuilder report, int exitValue) {
 	}
 
 	private void readOutput(DigitalTwin digitalTwin, BufferedReader reader, StringBuilder report, long models) {

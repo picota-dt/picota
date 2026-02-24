@@ -14,13 +14,12 @@ public class Main {
 		run(args);
 	}
 
-	public static DigitalTwinBox run(String[] args) {
+	public static void run(String[] args) {
 		var configuration = new DigitalTwinConfiguration(args);
 		var workingDir = new File(configuration.home(), "picota");
 		if (args.length > 4 && args[3].equals("--model")) configuration.args().put("model", args[4]);
 		DigitalTwinBox box = new DigitalTwinBox(configuration, workingDir);
 		box.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(box::stop));
-		return box;
 	}
 }

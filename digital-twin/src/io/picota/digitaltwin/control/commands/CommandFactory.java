@@ -53,7 +53,7 @@ public class CommandFactory {
 		return new TrainSubjectsCommand(b, (String) args[0]);
 	}
 
-	private static Command csvTemplate(DigitalTwinBox digitalTwinBox, Object... objects) {
+	private static CsvTemplateCommand csvTemplate(DigitalTwinBox digitalTwinBox, Object... objects) {
 		return new CsvTemplateCommand(digitalTwinBox, (String) objects[0]);
 	}
 

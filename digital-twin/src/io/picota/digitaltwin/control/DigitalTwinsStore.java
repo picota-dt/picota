@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -22,7 +23,7 @@ import java.util.stream.Stream;
 public class DigitalTwinsStore {
 	private final File store;
 	private final Gson gson;
-	private Map<String, DigitalTwin> digitalTwins;
+	private Map<String, DigitalTwin> digitalTwins = new HashMap<>();
 
 	public DigitalTwinsStore(File store) {
 		this.store = store;
