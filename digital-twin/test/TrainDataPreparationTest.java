@@ -16,11 +16,12 @@ import java.io.File;
 import java.io.IOException;
 
 public class TrainDataPreparationTest {
-
-
 	public static final String ID = "32a497be-7330-41ac-8541-5934b9fbda7a";
-	public static final File SUBJECT_DATASET = new File("/Users/oroncal/workspace/projects/picota/digital-twin/test-res/example/lite/SolarPlant.csv");
-	public static final String URL = "https://quassar.io/commits/32a497be-7330-41ac-8541-5934b9fbda7a";
+	public static final String ID_2 = "91eb4373-d8f8-438b-ad9d-d0fd980a09b1";
+	public static final String BASE_PATH = "../runtime.test/data";
+	public static final File SUBJECT_DATASET = new File(BASE_PATH + "/solar_plant/SolarPlant.csv");
+	public static final File SUBJECT_2_DATASET = new File(BASE_PATH + "/house/house.csv");
+	public static final String URL = "https://quassar.io/commits/" + ID_2;
 	private DigitalTwinBox box;
 	private CommandFactory factory;
 
@@ -38,21 +39,20 @@ public class TrainDataPreparationTest {
 	public void should_train_model() {
 		Command.Result<io.picota.digitaltwin.model.DigitalTwin> resultDt = factory.build(ReadModelCommand.class, URL).execute();
 		if (!resultDt.success()) Assert.fail(resultDt.remarks());
-		var result = factory.build(BuildModelCommand.class, ID, "or@monentia.es", new Resource(SUBJECT_DATASET)).execute();
+		var result = factory.build(BuildModelCommand.class, ID_2, "or@monentia.es", new Resource(SUBJECT_2_DATASET)).execute();
 		if (!result.success()) Assert.fail(result.remarks());
-		result = factory.build(TrainSubjectsCommand.class, ID).execute();
+		result = factory.build(TrainSubjectsCommand.class, ID_2).execute();
 		if (!result.success()) Assert.fail(result.remarks());
 	}
 
 	@Test
 	@Ignore
-	public void name() throws IOException {
+	public void should_prepare_data() throws IOException {
 		PicotaGraph graph = PicotaModel.parse(URL);
 		File dir = new File("../temp/test");
 		FileUtils.deleteDirectory(dir);
 		TrainDataPreparer preparer = new TrainDataPreparer(null, 1000);
 		DigitalTwin.DigitalSubject ds = graph.digitalTwin().digitalSubject(0);
-		File subjectDataset = SUBJECT_DATASET;
-		preparer.prepareData(ds, ds.inferenceModel(0), subjectDataset);
+		preparer.prepareData(ds, ds.inferenceModel(0), SUBJECT_DATASET);
 	}
 }

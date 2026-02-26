@@ -44,11 +44,10 @@ public class TrainWorkspacePreparer {
 		return models;
 	}
 
-	public Map<DigitalSubject, List<String>> generateTrainer() throws Throwable {
+	public void generateTrainer() throws Throwable {
 		try {
 			loadSubjectTargetsForTrain();
 			createTrainerScripts();
-			return subjectTargets;
 		} catch (IllegalArgumentException e) {
 			throw e;
 		} catch (Throwable e) {

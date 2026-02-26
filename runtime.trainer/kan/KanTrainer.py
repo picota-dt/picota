@@ -51,19 +51,42 @@ class KanTrainer:
         for epoch in range(self.epochs):
             architecture.train()
             total_loss = 0.0
+            supervised_component_sum = 0.0
+            metamorphic_component_sum = 0.0
+            target_mapped_component_sum = 0.0
+            component_samples = 0
             for batch in train_loader:
                 out = batch['out']
                 optimizer.zero_grad()
                 pred = architecture(batch).squeeze()
-                loss = self.criterion(pred, out)
+                loss = self.compute_train_loss(architecture, batch, out, pred)
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item() * out.size(0)
+                if self.loss_fn is not None and hasattr(self.loss_fn, 'last_metrics') and self.loss_fn.last_metrics:
+                    supervised_component_sum += self.loss_fn.last_metrics.get('supervised_loss', 0.0) * out.size(0)
+                    metamorphic_component_sum += self.loss_fn.last_metrics.get('metamorphic_penalty', 0.0) * out.size(0)
+                    target_mapped_component_sum += self.loss_fn.last_metrics.get('target_mapped_supervised_loss',
+                                                                                 0.0) * out.size(0)
+                    component_samples += out.size(0)
 
             val_loss, margin_of_error = self.validate(architecture, val_loader)
             if best_arch[1] is None or best_arch[1] > val_loss:
                 best_arch = (self.copy(architecture), val_loss, margin_of_error)
-            # print(f"{self.name}\t{total_loss:.4f}\t{val_loss:.4f}")
+            if component_samples > 0 and getattr(self.loss_fn, 'metamorphic_tests', None):
+                avg_total = total_loss / max(1, train_size)
+                avg_supervised = supervised_component_sum / component_samples
+                avg_metamorphic = metamorphic_component_sum / component_samples
+                avg_target_mapped = target_mapped_component_sum / component_samples
+                print(
+                    f"{self.name}\tepoch={epoch + 1}/{self.epochs}\t"
+                    f"train_total={avg_total:.6f}\t"
+                    f"train_supervised={avg_supervised:.6f}\t"
+                    f"train_metamorphic={avg_metamorphic:.6f}\t"
+                    f"train_target_mapped={avg_target_mapped:.6f}\t"
+                    f"val_mae={val_loss:.6f}",
+                    flush=True
+                )
         features = self.explain_features(architecture, val_loader, train_loader)
         return best_arch[0], best_arch[1], best_arch[2], features
 
@@ -91,6 +114,13 @@ class KanTrainer:
         z = norm.ppf(1 - alpha / 2)
         margin_of_error = z * std_error * (self.out_max - self.out_min)
         return mae, margin_of_error
+
+    def compute_train_loss(self, architecture, batch, out, pred):
+        if self.loss_fn is None:
+            return self.criterion(pred, out)
+        if hasattr(self.loss_fn, 'compute_training_loss'):
+            return self.loss_fn.compute_training_loss(model=architecture, batch=batch, target=out, prediction=pred)
+        return self.loss_fn(pred, out)
 
     def copy(self, architecture):
         cloned = KAN(len(self.inputVariables), self.lookback, self.means, self.stds, 1)

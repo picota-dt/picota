@@ -24,6 +24,20 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/runtime.test/data/solar_plant/SolarPlant.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/runtime.test/data/weather/weatherHistory.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
       </map>
     </option>
   </component>
