@@ -3,9 +3,11 @@ import os
 import torch
 from torch import nn
 
-import trainer.Device as Device
-from trainer.kan.KanTrainer import KanTrainer
-from trainer.kan.TimeSeriesDataset import TimeSeriesDataset
+import Device
+from kan.KanTrainer import KanTrainer
+from kan.MetamorphicCatalog import build_solar_plant_active_power_rule_specs
+from kan.MetamorphicLoss import CompositeMetamorphicLoss
+from kan.TimeSeriesDataset import TimeSeriesDataset
 
 
 def input_variables(dict, output):
@@ -20,7 +22,17 @@ def train(subject, datasource, input_variables, means, stds, out_min, out_max, m
     batch_size = 32
     epochs = 50
     lr = 0.0001
-    loss_fn = nn.MSELoss()
+    numerical_t_feature_names = list(input_variables)[-len(means):]
+    rule_specs = build_solar_plant_active_power_rule_specs(
+        numerical_t_feature_names=numerical_t_feature_names,
+        categorical_t_feature_count=0,
+    )
+    loss_fn = CompositeMetamorphicLoss.from_rule_specs(
+        rule_specs=rule_specs,
+        supervised_loss=nn.MSELoss(),
+        supervised_weight=1.0,
+        relation_constraint_weight=0.25,
+    )
     validation_loss_fn = nn.L1Loss()
     test_proportion = 0.3
     dataset = TimeSeriesDataset(datasource)

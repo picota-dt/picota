@@ -1,6 +1,7 @@
+import math
+
 import torch
 import torch.nn.functional as F
-import math
 
 
 class KAL(torch.nn.Module):
@@ -219,7 +220,7 @@ class KAL(torch.nn.Module):
         Compute the regularization loss.
 
         This is a dumb simulation of the original L1 regularization as stated in the
-        paper, since the original one requires computing absolutes and entropy from the
+        original publication, since the original one requires computing absolutes and entropy from the
         expanded (batch, in_features, out_features) intermediate tensor, which is hidden
         behind the F.linear function if we want an memory efficient implementation.
 

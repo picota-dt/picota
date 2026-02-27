@@ -3,9 +3,9 @@ import os
 import torch
 from torch import nn
 
-import trainer.Device as Device
-from trainer.kan.KanTrainer import KanTrainer
-from trainer.kan.TimeSeriesDataset import TimeSeriesDataset
+import Device
+from kan.KanTrainer import KanTrainer
+from kan.TimeSeriesDataset import TimeSeriesDataset
 
 
 def input_variables(dict, output):

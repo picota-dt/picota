@@ -2,7 +2,7 @@ import os
 
 import trainer.solarPlant.generatedActivePower
 import trainer.solarPlant.generatedReactivePower
-from trainer.kan.DatasetLoader import DatasetLoader
+from kan.DatasetLoader import DatasetLoader
 
 
 def train(source, modelsdir):

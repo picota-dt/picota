@@ -283,7 +283,7 @@ class CatalogRuleSpec:
     name: str
     category: RuleCategory
     relation_test: MetamorphicTest | None = None
-    paper_transform: MetamorphicTransform | None = None
+    over_T_transform: MetamorphicTransform | None = None
     description: str | None = None
     consistency_profile: str | None = None
 
@@ -291,17 +291,17 @@ class CatalogRuleSpec:
 def summarize_rule_specs(specs: Iterable[CatalogRuleSpec]) -> dict:
     counts = {category.value: 0 for category in RuleCategory}
     total_relation = 0
-    total_paper = 0
+    total_over_T = 0
     for spec in specs:
         counts[spec.category.value] += 1
         if spec.relation_test is not None:
             total_relation += 1
-        if spec.paper_transform is not None:
-            total_paper += 1
+        if spec.over_T_transform is not None:
+            total_over_T += 1
     return {
         "num_specs": sum(counts.values()),
         "num_relation_tests": total_relation,
-        "num_paper_transforms": total_paper,
+        "num_over_T_transforms": total_over_T,
         "by_category": counts,
     }
 
@@ -363,7 +363,7 @@ def build_solar_plant_active_power_rule_specs(
                         weight=0.1,
                         target_transform=shift_target(-0.005),
                     ),
-                    paper_transform=make_transform(
+                    over_T_transform=make_transform(
                         transform=transform,
                         target_transform=shift_target(-0.005),
                         name="cell_temperature_small_shift_target_proxy",
@@ -384,7 +384,7 @@ def build_solar_plant_active_power_rule_specs(
                     name="categorical_dropout_invariance_soft",
                     weight=0.1,
                 ),
-                paper_transform=make_transform(
+                over_T_transform=make_transform(
                     transform=cat_transform,
                     name="categorical_dropout_invariance_soft",
                 ),
@@ -394,36 +394,6 @@ def build_solar_plant_active_power_rule_specs(
         )
 
     return specs
-
-
-def build_solar_plant_active_power_rules(
-        numerical_t_feature_names: Iterable[str],
-        categorical_t_feature_count: int = 0,
-        include_target_mapped: bool = False,
-) -> list[MetamorphicTest]:
-    """
-    Curated defaults for solar active power data.
-    These are generic hypotheses and should be tuned with domain validation.
-    """
-    specs = build_solar_plant_active_power_rule_specs(
-        numerical_t_feature_names=numerical_t_feature_names,
-        categorical_t_feature_count=categorical_t_feature_count,
-        include_target_mapped=include_target_mapped,
-    )
-    return [spec.relation_test for spec in specs if spec.relation_test is not None]
-
-
-def build_solar_plant_active_power_paper_transform_set(
-        numerical_t_feature_names: Iterable[str],
-        categorical_t_feature_count: int = 0,
-        include_target_mapped: bool = False,
-) -> TransformSet:
-    specs = build_solar_plant_active_power_rule_specs(
-        numerical_t_feature_names=numerical_t_feature_names,
-        categorical_t_feature_count=categorical_t_feature_count,
-        include_target_mapped=include_target_mapped,
-    )
-    return TransformSet(spec.paper_transform for spec in specs if spec.paper_transform is not None)
 
 
 def build_house_temperature_rule_specs(
@@ -471,7 +441,7 @@ def build_house_temperature_rule_specs(
                         weight=0.1,
                         target_transform=shift_target(+1.0),
                     ),
-                    paper_transform=make_transform(
+                    over_T_transform=make_transform(
                         transform=apparent_temp_up,
                         target_transform=shift_target(+1.0),
                         name="apparent_temperature_shift_target_proxy",
@@ -493,7 +463,7 @@ def build_house_temperature_rule_specs(
                     name="categorical_weather_summary_dropout_soft",
                     weight=0.05,
                 ),
-                paper_transform=make_transform(
+                over_T_transform=make_transform(
                     transform=zero_categorical_t_features(),
                     name="categorical_weather_summary_dropout_soft",
                 ),
