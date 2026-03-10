@@ -125,19 +125,40 @@ class Monotonic(MetamorphicRelation):
 
 
 class Proportional(MetamorphicRelation):
-    def __init__(self, factor: float, weight: float = 1.0, eps: float = 1e-8):
+    def __init__(
+            self,
+            factor: float,
+            weight: float = 1.0,
+            eps: float = 1e-8,
+            raw_out_min: float | None = None,
+            raw_out_max: float | None = None,
+    ):
         super().__init__(weight=weight)
         self.factor = factor
         self.eps = eps
+        self.raw_out_min = float(raw_out_min) if raw_out_min is not None else None
+        self.raw_out_max = float(raw_out_max) if raw_out_max is not None else None
 
     @property
     def kind(self) -> MetamorphicRelationKind:
         return MetamorphicRelationKind.PROPORTIONAL
 
+    def _to_relation_space(self, prediction: torch.Tensor) -> torch.Tensor:
+        if (
+                self.raw_out_min is None
+                or self.raw_out_max is None
+                or not self.raw_out_max > self.raw_out_min
+        ):
+            return prediction
+        span = self.raw_out_max - self.raw_out_min
+        return prediction * span + self.raw_out_min
+
     def penalty(self, base_prediction: torch.Tensor, transformed_prediction: torch.Tensor) -> torch.Tensor:
-        expected = base_prediction * self.factor
+        base_relation = self._to_relation_space(base_prediction)
+        transformed_relation = self._to_relation_space(transformed_prediction)
+        expected = base_relation * self.factor
         scale = torch.clamp(torch.abs(expected), min=self.eps)
-        return torch.mean(torch.abs(transformed_prediction - expected) / scale)
+        return torch.mean(torch.abs(transformed_relation - expected) / scale)
 
 
 @dataclass(frozen=True)
@@ -151,6 +172,11 @@ class MetamorphicTransform:
     transform: BatchTransform
     target_transform: TargetTransform | None = None
     name: str | None = None
+    weight: float = 1.0
+
+    def __post_init__(self):
+        if self.weight < 0:
+            raise ValueError("MetamorphicTransform.weight must be >= 0")
 
 
 class TransformSet:
@@ -184,6 +210,15 @@ class MetamorphicTest:
     transform: BatchTransform
     name: str | None = None
     target_transform: TargetTransform | None = None
+    violation_atol: float | None = None
+    violation_rtol: float | None = None
+
+    def __post_init__(self):
+        if self.target_transform is not None:
+            raise ValueError(
+                "Relation constraints cannot define target_transform. "
+                "Use a target-mapped over_T MetamorphicTransform instead."
+            )
 
 
 def _normalize_rule_category(category) -> str | None:
@@ -198,14 +233,11 @@ def _normalize_rule_category(category) -> str | None:
 def partition_rule_specs_exclusive(rule_specs: Iterable[object] | None) -> tuple[
     list[MetamorphicTest], TransformSet, dict]:
     """
-    Partition catalog rule specs into relation-constraint vs worst-case-over-T branches with an exclusive policy.
+    Partition catalog rule specs into relation-constraint vs worst-case-over-T branches.
 
-    Preferred assignment by category:
-    - invariance -> worst_case_over_T
-    - target_mapped -> worst_case_over_T
-    - directional_ordinal -> relation_constraints
-
-    Fallbacks are applied when the preferred artifact is not available.
+    Rule specs are expected to be exclusive by construction (exactly one artifact):
+    - relation_test
+    - over_T_transform
     """
     relation_tests: list[MetamorphicTest] = []
     over_T_transforms: list[MetamorphicTransform] = []
@@ -219,12 +251,6 @@ def partition_rule_specs_exclusive(rule_specs: Iterable[object] | None) -> tuple
         "unknown_category_defaults": 0,
         "by_category": {},
     }
-    category_preference = {
-        "invariance": "worst_case_over_T",
-        "target_mapped": "worst_case_over_T",
-        "directional_ordinal": "relation_constraints",
-    }
-
     for spec in list(rule_specs or ()):
         summary["num_rule_specs"] += 1
         name = getattr(spec, "name", None)
@@ -233,37 +259,18 @@ def partition_rule_specs_exclusive(rule_specs: Iterable[object] | None) -> tuple
 
         relation_test = getattr(spec, "relation_test", None)
         over_T_transform = getattr(spec, "over_T_transform", None)
-        if relation_test is None and over_T_transform is None:
+        has_relation = relation_test is not None
+        has_over_t = over_T_transform is not None
+        if has_relation == has_over_t:
             summary["dropped_rule_specs"] += 1
             continue
 
-        preferred = category_preference.get(category_name)
-        if preferred is None:
-            # Deterministic default for unknown categories to avoid overlaps.
-            if over_T_transform is not None and relation_test is not None:
-                preferred = "worst_case_over_T"
-                summary["unknown_category_defaults"] += 1
-            elif over_T_transform is not None:
-                preferred = "worst_case_over_T"
-            else:
-                preferred = "relation_constraints"
-
-        if preferred == "worst_case_over_T":
-            if over_T_transform is not None:
-                over_T_transforms.append(over_T_transform)
-                summary["assigned_over_T_transforms"] += 1
-            elif relation_test is not None:
-                relation_tests.append(relation_test)
-                summary["assigned_relation_constraints"] += 1
-                summary["fallback_to_relation"] += 1
+        if has_relation:
+            relation_tests.append(relation_test)
+            summary["assigned_relation_constraints"] += 1
         else:
-            if relation_test is not None:
-                relation_tests.append(relation_test)
-                summary["assigned_relation_constraints"] += 1
-            elif over_T_transform is not None:
-                over_T_transforms.append(over_T_transform)
-                summary["assigned_over_T_transforms"] += 1
-                summary["fallback_to_over_T"] += 1
+            over_T_transforms.append(over_T_transform)
+            summary["assigned_over_T_transforms"] += 1
 
         # Keep linter quiet for debugging expansions where `name` is useful.
         _ = name
@@ -279,7 +286,6 @@ class CompositeMetamorphicLoss(nn.Module):
     - supervised source loss               : l(f(x), y)
     - worst-case-over-T transformed loss   : max_t l(f(t(x)), y_t)
     - relation constraint penalties        : Agg_i penalty_i(f(x), f(t_i(x)))
-    - target-mapped supervised (relations) : Agg_j l(f(t_j(x)), g_j(y))
 
     Use weights to enable/disable each term.
     """
@@ -304,6 +310,11 @@ class CompositeMetamorphicLoss(nn.Module):
             raise ValueError("relation_aggregation must be 'mean' or 'max'")
         if target_mapped_aggregation not in ("mean", "max"):
             raise ValueError("target_mapped_aggregation must be 'mean' or 'max'")
+        if target_mapped_weight != 0:
+            raise ValueError(
+                "target_mapped_weight is no longer supported for relation constraints. "
+                "Encode target-mapped rules as over_T transforms and use worst_case_over_T_weight."
+            )
 
         if rule_specs is not None and (metamorphic_tests is not None or transform_set is not None):
             raise ValueError("Use either rule_specs or (metamorphic_tests/transform_set), not both")
@@ -336,7 +347,7 @@ class CompositeMetamorphicLoss(nn.Module):
         self.supervised_weight = supervised_weight
         self.relation_constraint_weight = relation_constraint_weight
         self.worst_case_over_T_weight = worst_case_over_T_weight
-        self.target_mapped_weight = target_mapped_weight
+        self.target_mapped_weight = 0.0
         self.relation_aggregation = relation_aggregation
         self.target_mapped_aggregation = target_mapped_aggregation
         self.last_metrics: dict[str, float | str | None] | None = None
@@ -365,7 +376,7 @@ class CompositeMetamorphicLoss(nn.Module):
 
         supervised = self.supervised_loss(prediction, target)
 
-        relation_constraint_penalty, relation_worst_name, relation_raw = self._compute_relation_constraint_penalty(
+        relation_constraint_penalty, relation_worst_name = self._compute_relation_constraint_penalty(
             model=model,
             batch=batch,
             target=target,
@@ -376,29 +387,19 @@ class CompositeMetamorphicLoss(nn.Module):
             batch=batch,
             target=target,
         )
-        target_mapped_supervised = self._compute_relation_target_mapped_supervised(
-            model=model,
-            batch=batch,
-            target=target,
-        )
-
         supervised_contrib = self.supervised_weight * supervised
         relation_constraint_contrib = self.relation_constraint_weight * relation_constraint_penalty
         worst_case_over_T_contrib = self.worst_case_over_T_weight * worst_case_over_T_loss
-        target_mapped_contrib = self.target_mapped_weight * target_mapped_supervised
-        total = supervised_contrib + relation_constraint_contrib + worst_case_over_T_contrib + target_mapped_contrib
+        target_mapped_contrib = supervised.new_tensor(0.0)
+        total = supervised_contrib + relation_constraint_contrib + worst_case_over_T_contrib
 
         enabled_relation_constraints = bool(self.relation_constraints and (self.relation_constraint_weight > 0))
         enabled_over_T = bool(self.over_T_transform_set and (self.worst_case_over_T_weight > 0))
-        enabled_target_mapped = bool(
-            self.relation_constraints and (self.target_mapped_weight > 0) and relation_raw[
-                "num_target_mapped_terms"] > 0
-        )
         if enabled_relation_constraints and enabled_over_T:
             loss_type = "composite"
         elif enabled_over_T:
             loss_type = "worst_case_over_T"
-        elif enabled_relation_constraints or enabled_target_mapped:
+        elif enabled_relation_constraints:
             loss_type = "relation_constraints"
         else:
             loss_type = "supervised"
@@ -409,17 +410,17 @@ class CompositeMetamorphicLoss(nn.Module):
             "supervised_loss": float(supervised_contrib.detach().item()),
             "relation_constraint_penalty": float(relation_constraint_contrib.detach().item()),
             "worst_case_over_T_loss": float(worst_case_over_T_contrib.detach().item()),
-            "target_mapped_supervised_loss": float(target_mapped_contrib.detach().item()),
+            "target_mapped_supervised_loss": 0.0,
             "raw_supervised_loss": float(supervised.detach().item()),
             "raw_relation_constraint_penalty": float(relation_constraint_penalty.detach().item()),
             "raw_worst_case_over_T_loss": float(worst_case_over_T_loss.detach().item()),
-            "raw_target_mapped_supervised_loss": float(target_mapped_supervised.detach().item()),
+            "raw_target_mapped_supervised_loss": 0.0,
             "worst_transform_name": worst_over_T_name or relation_worst_name,
             "worst_relation_constraint_name": relation_worst_name,
             "worst_over_T_transform_name": worst_over_T_name,
             "num_relation_constraints": float(len(self.relation_constraints)),
             "num_over_T_transforms": float(len(self.over_T_transform_set)),
-            "num_target_mapped_terms": float(relation_raw["num_target_mapped_terms"]),
+            "num_target_mapped_terms": 0.0,
             "num_rule_specs": float(self.rule_assignment_summary.get("num_rule_specs", 0)),
             "dropped_rule_specs": float(self.rule_assignment_summary.get("dropped_rule_specs", 0)),
         }
@@ -431,30 +432,26 @@ class CompositeMetamorphicLoss(nn.Module):
             batch: Batch,
             target: torch.Tensor,
             prediction: torch.Tensor,
-    ) -> tuple[torch.Tensor, str | None, dict[str, int]]:
+    ) -> tuple[torch.Tensor, str | None]:
         _ = target  # kept for symmetry/future extensions
         if not self.relation_constraints:
             zero = prediction.new_tensor(0.0)
-            return zero, None, {"num_target_mapped_terms": 0}
+            return zero, None
         if self.relation_constraint_weight == 0:
             zero = prediction.new_tensor(0.0)
-            count = sum(1 for test in self.relation_constraints if test.target_transform is not None)
-            return zero, None, {"num_target_mapped_terms": count}
+            return zero, None
 
         penalties = []
         names: list[str | None] = []
-        target_mapped_terms = 0
         for test in self.relation_constraints:
             transformed_batch = test.transform(_clone_batch(batch))
             transformed_prediction = model(transformed_batch).squeeze()
             penalties.append(test.relation.weight * test.relation.penalty(prediction, transformed_prediction))
             names.append(test.name)
-            if test.target_transform is not None:
-                target_mapped_terms += 1
 
         penalties_tensor = torch.stack(penalties) if penalties else prediction.new_zeros(0)
         if not penalties:
-            return prediction.new_tensor(0.0), None, {"num_target_mapped_terms": target_mapped_terms}
+            return prediction.new_tensor(0.0), None
         if self.relation_aggregation == "max":
             relation_constraint_penalty, worst_idx_tensor = torch.max(penalties_tensor, dim=0)
             worst_idx = int(worst_idx_tensor.item()) if worst_idx_tensor.dim() == 0 else int(
@@ -462,39 +459,7 @@ class CompositeMetamorphicLoss(nn.Module):
         else:
             relation_constraint_penalty = torch.mean(penalties_tensor)
             worst_idx = int(torch.argmax(penalties_tensor).item())
-        return relation_constraint_penalty, names[worst_idx], {"num_target_mapped_terms": target_mapped_terms}
-
-    def _compute_relation_target_mapped_supervised(
-            self,
-            model: nn.Module,
-            batch: Batch,
-            target: torch.Tensor,
-    ) -> torch.Tensor:
-        if not self.relation_constraints or self.target_mapped_weight == 0:
-            if torch.is_tensor(target):
-                return target.new_tensor(0.0)
-            return torch.tensor(0.0)
-
-        mapped_losses = []
-        for test in self.relation_constraints:
-            if test.target_transform is None:
-                continue
-            transformed_batch = test.transform(_clone_batch(batch))
-            transformed_prediction = model(transformed_batch).squeeze()
-            transformed_target = _apply_target_transform(
-                test.target_transform,
-                target=target,
-                source_batch=batch,
-                transformed_batch=transformed_batch,
-            )
-            mapped_losses.append(self.supervised_loss(transformed_prediction, transformed_target))
-
-        if not mapped_losses:
-            return target.new_tensor(0.0)
-        mapped_losses_tensor = torch.stack(mapped_losses)
-        if self.target_mapped_aggregation == "max":
-            return torch.max(mapped_losses_tensor)
-        return torch.mean(mapped_losses_tensor)
+        return relation_constraint_penalty, names[worst_idx]
 
     def _compute_worst_case_over_T_loss(
             self,
@@ -518,7 +483,9 @@ class CompositeMetamorphicLoss(nn.Module):
                 source_batch=batch,
                 transformed_batch=transformed_batch,
             )
-            transformed_losses.append(self.supervised_loss(transformed_prediction, transformed_target))
+            transformed_loss = self.supervised_loss(transformed_prediction, transformed_target)
+            transform_weight = float(getattr(transform_spec, "weight", 1.0))
+            transformed_losses.append(transform_weight * transformed_loss)
             transform_names.append(transform_spec.name)
 
         if not transformed_losses:

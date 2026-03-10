@@ -184,8 +184,9 @@ def make_transform(
         transform: BatchTransform,
         name: str | None = None,
         target_transform: TargetTransform | None = None,
+        weight: float = 1.0,
 ) -> MetamorphicTransform:
-    return MetamorphicTransform(transform=transform, target_transform=target_transform, name=name)
+    return MetamorphicTransform(transform=transform, target_transform=target_transform, name=name, weight=weight)
 
 
 def make_transform_set(transforms: Iterable[MetamorphicTransform]) -> TransformSet:
@@ -197,12 +198,16 @@ def make_equal_test(
         name: str | None = None,
         weight: float = 1.0,
         target_transform: TargetTransform | None = None,
+        violation_atol: float | None = None,
+        violation_rtol: float | None = None,
 ) -> MetamorphicTest:
     return MetamorphicTest(
         relation=Equal(weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
@@ -213,62 +218,91 @@ def make_monotonic_test(
         name: str | None = None,
         weight: float = 1.0,
         target_transform: TargetTransform | None = None,
+        violation_atol: float | None = None,
+        violation_rtol: float | None = None,
 ) -> MetamorphicTest:
     return MetamorphicTest(
         relation=Monotonic(direction=direction, margin=margin, weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
 def make_greater_test(transform: BatchTransform, margin: float = 0.0, name: str | None = None,
-                      weight: float = 1.0, target_transform: TargetTransform | None = None) -> MetamorphicTest:
+                      weight: float = 1.0,
+                      target_transform: TargetTransform | None = None,
+                      violation_atol: float | None = None,
+                      violation_rtol: float | None = None) -> MetamorphicTest:
     return MetamorphicTest(
         relation=Greater(margin=margin, weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
 def make_lower_test(transform: BatchTransform, margin: float = 0.0, name: str | None = None,
-                    weight: float = 1.0, target_transform: TargetTransform | None = None) -> MetamorphicTest:
+                    weight: float = 1.0,
+                    target_transform: TargetTransform | None = None,
+                    violation_atol: float | None = None,
+                    violation_rtol: float | None = None) -> MetamorphicTest:
     return MetamorphicTest(
         relation=Lower(margin=margin, weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
 def make_greater_or_equal_test(transform: BatchTransform, margin: float = 0.0, name: str | None = None,
-                               weight: float = 1.0, target_transform: TargetTransform | None = None) -> MetamorphicTest:
+                               weight: float = 1.0,
+                               target_transform: TargetTransform | None = None,
+                               violation_atol: float | None = None,
+                               violation_rtol: float | None = None) -> MetamorphicTest:
     return MetamorphicTest(
         relation=GreaterOrEqual(margin=margin, weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
 def make_lower_or_equal_test(transform: BatchTransform, margin: float = 0.0, name: str | None = None,
-                             weight: float = 1.0, target_transform: TargetTransform | None = None) -> MetamorphicTest:
+                             weight: float = 1.0,
+                             target_transform: TargetTransform | None = None,
+                             violation_atol: float | None = None,
+                             violation_rtol: float | None = None) -> MetamorphicTest:
     return MetamorphicTest(
         relation=LowerOrEqual(margin=margin, weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
 def make_proportional_test(transform: BatchTransform, factor: float, name: str | None = None,
-                           weight: float = 1.0, target_transform: TargetTransform | None = None) -> MetamorphicTest:
+                           weight: float = 1.0,
+                           target_transform: TargetTransform | None = None,
+                           violation_atol: float | None = None,
+                           violation_rtol: float | None = None) -> MetamorphicTest:
     return MetamorphicTest(
         relation=Proportional(factor=factor, weight=weight),
         transform=transform,
         name=name,
         target_transform=target_transform,
+        violation_atol=violation_atol,
+        violation_rtol=violation_rtol,
     )
 
 
@@ -286,6 +320,20 @@ class CatalogRuleSpec:
     over_T_transform: MetamorphicTransform | None = None
     description: str | None = None
     consistency_profile: str | None = None
+
+    def __post_init__(self):
+        has_relation = self.relation_test is not None
+        has_over_t = self.over_T_transform is not None
+        if has_relation == has_over_t:
+            raise ValueError(
+                "CatalogRuleSpec must define exactly one branch: "
+                "either relation_test or over_T_transform."
+            )
+        if has_relation and getattr(self.relation_test, "target_transform", None) is not None:
+            raise ValueError(
+                "Relation constraints cannot define target_transform. "
+                "Use over_T_transform for target-mapped rules."
+            )
 
 
 def summarize_rule_specs(specs: Iterable[CatalogRuleSpec]) -> dict:
@@ -357,12 +405,6 @@ def build_solar_plant_active_power_rule_specs(
                 CatalogRuleSpec(
                     name="cell_temperature_small_shift_target_proxy",
                     category=RuleCategory.TARGET_MAPPED,
-                    relation_test=make_lower_or_equal_test(
-                        transform,
-                        name="cell_temperature_small_shift_target_proxy_relation",
-                        weight=0.1,
-                        target_transform=shift_target(-0.005),
-                    ),
                     over_T_transform=make_transform(
                         transform=transform,
                         target_transform=shift_target(-0.005),
@@ -379,11 +421,6 @@ def build_solar_plant_active_power_rule_specs(
             CatalogRuleSpec(
                 name="categorical_dropout_invariance_soft",
                 category=RuleCategory.INVARIANCE,
-                relation_test=make_equal_test(
-                    cat_transform,
-                    name="categorical_dropout_invariance_soft",
-                    weight=0.1,
-                ),
                 over_T_transform=make_transform(
                     transform=cat_transform,
                     name="categorical_dropout_invariance_soft",
@@ -435,12 +472,6 @@ def build_house_temperature_rule_specs(
                 CatalogRuleSpec(
                     name="apparent_temperature_shift_target_proxy",
                     category=RuleCategory.TARGET_MAPPED,
-                    relation_test=make_equal_test(
-                        apparent_temp_up,
-                        name="apparent_temperature_shift_target_proxy_relation",
-                        weight=0.1,
-                        target_transform=shift_target(+1.0),
-                    ),
                     over_T_transform=make_transform(
                         transform=apparent_temp_up,
                         target_transform=shift_target(+1.0),
@@ -458,11 +489,6 @@ def build_house_temperature_rule_specs(
             CatalogRuleSpec(
                 name="categorical_weather_summary_dropout_soft",
                 category=RuleCategory.INVARIANCE,
-                relation_test=make_equal_test(
-                    zero_categorical_t_features(),
-                    name="categorical_weather_summary_dropout_soft",
-                    weight=0.05,
-                ),
                 over_T_transform=make_transform(
                     transform=zero_categorical_t_features(),
                     name="categorical_weather_summary_dropout_soft",

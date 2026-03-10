@@ -4,8 +4,6 @@ import io.picota.digitaltwin.DigitalTwinConfiguration;
 import io.picota.digitaltwin.control.commands.*;
 import io.picota.digitaltwin.control.commands.trainvariablescommand.TrainDataPreparer;
 import io.quassar.monentia.picota.DigitalTwin;
-import io.quassar.monentia.picota.PicotaGraph;
-import io.quassar.monentia.picota.PicotaModel;
 import org.apache.commons.io.FileUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -21,6 +19,8 @@ public class TrainDataPreparationTest {
 	public static final String BASE_PATH = "../runtime.test/data";
 	public static final File SUBJECT_DATASET = new File(BASE_PATH + "/solar_plant/SolarPlant.csv");
 	public static final File SUBJECT_2_DATASET = new File(BASE_PATH + "/house/house.csv");
+	public static final File SUBJECT_SYNTHETIC_TRAIN_DATASET = new File(BASE_PATH + "/synthetic/audit_test_shift.tsv");
+	public static final File SUBJECT_3_DATASETS = new File(BASE_PATH + "/spanish_homes");
 	public static final String URL = "https://quassar.io/commits/" + ID_2;
 	private DigitalTwinBox box;
 	private CommandFactory factory;
@@ -30,7 +30,6 @@ public class TrainDataPreparationTest {
 		String[] args = {"python_venv=/Users/oroncal/workspace/projects/picota-smartbeach/.venv1", "min_records=0", "api_port=9090", "home=../temp"};
 		var configuration = new DigitalTwinConfiguration(args);
 		var workingDir = new File(configuration.home(), "picota");
-		if (args.length > 4 && args[3].equals("--model")) configuration.args().put("model", args[4]);
 		box = new DigitalTwinBox(configuration, workingDir);
 		factory = new CommandFactory(box);
 	}
@@ -48,11 +47,39 @@ public class TrainDataPreparationTest {
 	@Test
 	@Ignore
 	public void should_prepare_data() throws IOException {
-		PicotaGraph graph = PicotaModel.parse(URL);
+		Command.Result<io.picota.digitaltwin.model.DigitalTwin> resultDt = factory.build(ReadModelCommand.class, URL).execute();
+		io.picota.digitaltwin.model.DigitalTwin dt = resultDt.resource();
+		DigitalTwin.DigitalSubject ds = dt.graph().digitalTwin().digitalSubject(0);
 		File dir = new File("../temp/test");
 		FileUtils.deleteDirectory(dir);
-		TrainDataPreparer preparer = new TrainDataPreparer(null, 1000);
-		DigitalTwin.DigitalSubject ds = graph.digitalTwin().digitalSubject(0);
-		preparer.prepareData(ds, ds.inferenceModel(0), SUBJECT_DATASET);
+		TrainDataPreparer preparer = new TrainDataPreparer(dt, 1000);
+		preparer.prepareData(ds, ds.inferenceModel(0), SUBJECT_2_DATASET);
+	}
+
+	@Test
+	@Ignore
+	public void should_prepare_spanish_homes_dataset() throws IOException {
+		Command.Result<io.picota.digitaltwin.model.DigitalTwin> resultDt = factory.build(ReadModelCommand.class, URL).execute();
+		io.picota.digitaltwin.model.DigitalTwin dt = resultDt.resource();
+		DigitalTwin.DigitalSubject ds = dt.graph().digitalTwin().digitalSubject(0);
+		File dir = new File("../temp/test");
+		FileUtils.deleteDirectory(dir);
+		TrainDataPreparer preparer = new TrainDataPreparer(dt, 1000);
+		preparer.prepareData(ds, ds.inferenceModel(0), SUBJECT_2_DATASET);
+	}
+
+
+	@Test
+	@Ignore
+	public void should_prepare_synthetic_dataset() throws IOException {
+		String URL = "https://quassar.io/commits/" + "effbd248-8c78-41cb-b900-19f1b8326c45";
+		Command.Result<io.picota.digitaltwin.model.DigitalTwin> resultDt = factory.build(ReadModelCommand.class, URL).execute();
+		io.picota.digitaltwin.model.DigitalTwin dt = resultDt.resource();
+		DigitalTwin.DigitalSubject ds = dt.graph().digitalTwin().digitalSubject(0);
+		File dir = new File("../temp/test");
+		FileUtils.deleteDirectory(dir);
+		TrainDataPreparer preparer = new TrainDataPreparer(dt, 1000);
+		preparer.prepareData(ds, ds.inferenceModel(0), new File(BASE_PATH + "/synthetic/audit_train.tsv"));
+		preparer.prepareData(ds, ds.inferenceModel(0), new File(BASE_PATH + "/synthetic/audit_test_shift.tsv"));
 	}
 }

@@ -64,7 +64,7 @@ echo "[bootstrap] Verifying imports"
 "${VENV_PY}" - <<'PY'
 import importlib
 
-for mod in ["Device", "kan", "kan.MetamorphicLoss", "kan.MetamorphicCatalog", "kan.MetamorphicEvaluation"]:
+for mod in ["Device", "kan", "kan.MetamorphicLoss", "kan.MetamorphicCatalog", "trainer.metamorphic_evaluation"]:
     importlib.import_module(mod)
 print("Shared framework imports OK")
 PY

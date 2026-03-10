@@ -15,6 +15,7 @@ from kan.MetamorphicCatalog import (
     build_solar_plant_active_power_rule_specs,
 )
 from trainer.metamorphic_evaluation import validate_metamorphic_transforms_on_batch, violation_mask
+from trainer.spanishHomes.metamorphic_rules import build_spanish_homes_monetary_spending_rule_specs
 from kan.MetamorphicLoss import (
     CompositeMetamorphicLoss,
     Equal,
@@ -140,7 +141,7 @@ class SolarPlantMetamorphicDatasetTest(unittest.TestCase):
         self.assertEqual(loss_fn.last_metrics["worst_transform_name"], "plus1_same_target")
         self.assertAlmostEqual(loss_fn.last_metrics["raw_worst_case_over_T_loss"], 2.5, places=6)
 
-    def test_relation_loss_can_add_target_mapped_supervised_term(self):
+    def test_relation_tests_cannot_define_target_transform(self):
         def add_x(delta):
             def _transform(batch):
                 batch["x"] = batch["x"] + delta
@@ -154,31 +155,22 @@ class SolarPlantMetamorphicDatasetTest(unittest.TestCase):
 
             return _target_transform
 
-        model = _EchoXModel()
-        batch = {"x": torch.tensor([1.0, 2.0], dtype=torch.float32)}
-        target = torch.tensor([1.0, 1.0], dtype=torch.float32)
-
-        # Relation penalty is not the focus here; we validate the additional target-mapped supervised term.
         from kan.MetamorphicCatalog import make_equal_test  # local import to avoid import clutter
 
-        test = make_equal_test(
-            transform=add_x(1.0),
-            name="x_plus_1",
-            target_transform=shift_target(1.0),
-        )
-        loss_fn = CompositeMetamorphicLoss(
-            supervised_loss=torch.nn.MSELoss(),
-            metamorphic_tests=[test],
-            supervised_weight=1.0,
-            relation_constraint_weight=0.0,
-            target_mapped_weight=1.0,
-        )
+        with self.assertRaisesRegex(ValueError, "Relation constraints cannot define target_transform"):
+            make_equal_test(
+                transform=add_x(1.0),
+                name="x_plus_1",
+                target_transform=shift_target(1.0),
+            )
 
-        pred = model(batch).squeeze()
-        total = loss_fn.compute_training_loss(model=model, batch=batch, target=target, prediction=pred)
-        # Base MSE = 0.5 ; transformed pred=x+1 ; transformed target=y+1 => MSE still 0.5 ; total=1.0
-        self.assertAlmostEqual(float(total.item()), 1.0, places=6)
-        self.assertAlmostEqual(loss_fn.last_metrics["raw_target_mapped_supervised_loss"], 0.5, places=6)
+    def test_composite_loss_rejects_nonzero_target_mapped_weight(self):
+        with self.assertRaisesRegex(ValueError, "target_mapped_weight is no longer supported"):
+            CompositeMetamorphicLoss(
+                supervised_loss=torch.nn.MSELoss(),
+                metamorphic_tests=[],
+                target_mapped_weight=0.1,
+            )
 
     def test_violation_mask_semantics_for_strict_and_non_strict_relations(self):
         base = torch.tensor([1.0], dtype=torch.float32)
@@ -219,6 +211,20 @@ class SolarPlantMetamorphicDatasetTest(unittest.TestCase):
             violation_mask(Proportional(factor=2.0), base, torch.tensor([1.5]), atol=1e-6, rtol=0.0).item()
         )
 
+    def test_proportional_relation_with_raw_output_scale_passes_in_normalized_space(self):
+        # raw_out_min/raw_out_max allow checking proportionality in raw-space even when model output is normalized.
+        relation = Proportional(factor=1.2, raw_out_min=10.0, raw_out_max=110.0)
+
+        base_norm = torch.tensor([0.20, 0.40], dtype=torch.float32)
+        # base raw = [30, 50] -> expected transformed raw = [36, 60] -> normalized = [0.26, 0.50]
+        transformed_norm = torch.tensor([0.26, 0.50], dtype=torch.float32)
+
+        penalty = relation.penalty(base_norm, transformed_norm)
+        self.assertAlmostEqual(float(penalty.item()), 0.0, places=6)
+
+        violations = violation_mask(relation, base_norm, transformed_norm, atol=1e-6, rtol=1e-3)
+        self.assertFalse(bool(violations.any().item()))
+
     def test_solarplant_rule_catalog_classification_and_transform_consistency(self):
         loader = DatasetLoader(str(self.jsonl_path))
         raw_items = loader.load()
@@ -255,6 +261,41 @@ class SolarPlantMetamorphicDatasetTest(unittest.TestCase):
         )
         self.assertTrue(report["is_valid"])
         self.assertEqual(report["errors"], [])
+
+    def test_spanish_homes_monetary_spending_catalog_matches_expected_rules(self):
+        jsonl_path = ROOT / "data" / "spanish_homes" / "data" / "hogar01_gastoMonetario:productosAlimenticios11.jsonl"
+        loader = DatasetLoader(str(jsonl_path))
+        raw_items = loader.load()
+        dataset = TimeSeriesDataset(raw_items[:8])
+        batch = next(iter(DataLoader(dataset, batch_size=4, shuffle=False)))
+
+        numerical_count = batch["numerical_t_features"].shape[-1] if batch["numerical_t_features"].dim() > 1 else 0
+        input_variables = loader.get_input_variables()
+        numerical_names = input_variables[8:8 + numerical_count]
+        specs = build_spanish_homes_monetary_spending_rule_specs(
+            numerical_t_feature_names=numerical_names,
+            include_target_mapped=True,
+        )
+
+        self.assertGreaterEqual(len(specs), 5)
+        names = {spec.name for spec in specs}
+        self.assertIn("net_income_up_implies_monetary_spending_non_decreasing", names)
+        self.assertIn(
+            "basic_needs_spending_scales_with_household_size_under_constant_income_per_capita",
+            names,
+        )
+        self.assertIn("cpi_up_implies_nominal_spending_non_decreasing", names)
+        self.assertIn("spending_invariant_under_gender_income_redistribution", names)
+        self.assertIn("members_income_scaling_target_mapped_proxy", names)
+
+        assigned = CompositeMetamorphicLoss.from_rule_specs(
+            rule_specs=specs,
+            supervised_weight=0.0,
+            relation_constraint_weight=0.0,
+            worst_case_over_T_weight=0.0,
+        )
+        self.assertGreaterEqual(assigned.rule_assignment_summary["assigned_relation_constraints"], 4)
+        self.assertGreaterEqual(assigned.rule_assignment_summary["assigned_over_T_transforms"], 1)
 
 
 if __name__ == "__main__":

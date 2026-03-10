@@ -62,7 +62,10 @@ def compute_violation_report(
                 test_name = test.name or f"{test.relation.kind.value}_{i}"
                 transformed = test.transform(clone_batch(batch))
                 transformed_pred = model(transformed).squeeze().reshape(-1)
-                violations = violation_mask(test.relation, base_pred, transformed_pred, atol=atol, rtol=rtol)
+                local_atol = atol if getattr(test, "violation_atol", None) is None else float(test.violation_atol)
+                local_rtol = rtol if getattr(test, "violation_rtol", None) is None else float(test.violation_rtol)
+                violations = violation_mask(test.relation, base_pred, transformed_pred, atol=local_atol,
+                                            rtol=local_rtol)
 
                 if test_name not in per_test:
                     per_test[test_name] = {"violations": 0, "total": 0}
@@ -105,6 +108,14 @@ def violation_mask(
     def tol(reference: torch.Tensor):
         return atol + rtol * torch.abs(reference)
 
+    def to_relation_space(prediction: torch.Tensor) -> torch.Tensor:
+        raw_out_min = getattr(relation, "raw_out_min", None)
+        raw_out_max = getattr(relation, "raw_out_max", None)
+        if raw_out_min is None or raw_out_max is None or not raw_out_max > raw_out_min:
+            return prediction
+        span = float(raw_out_max) - float(raw_out_min)
+        return prediction * span + float(raw_out_min)
+
     if isinstance(relation, Equal):
         diff = torch.abs(transformed_pred - base_pred)
         return diff > tol(base_pred)
@@ -139,8 +150,10 @@ def violation_mask(
         return transformed_pred > (threshold + tol(threshold))
 
     if isinstance(relation, Proportional):
-        expected = base_pred * getattr(relation, "factor", 1.0)
-        diff = torch.abs(transformed_pred - expected)
+        base_relation = to_relation_space(base_pred)
+        transformed_relation = to_relation_space(transformed_pred)
+        expected = base_relation * getattr(relation, "factor", 1.0)
+        diff = torch.abs(transformed_relation - expected)
         return diff > tol(expected)
 
     raise TypeError(f"Unsupported relation type for violation check: {type(relation).__name__}")
@@ -240,6 +253,77 @@ def evaluate_worst_case_over_T(
     if tolerance is not None:
         report["worst_case_acc@tol_over_T"] = acc_worst_hits / total
     return report
+
+
+def compute_over_T_violation_report(
+        model,
+        data_loader,
+        transform_set: TransformSet | None,
+        tolerance: float | None = None,
+        atol: float = 1e-6,
+        rtol: float = 1e-4,
+) -> dict:
+    """
+    Violation report for over-T transforms.
+
+    A sample violates transform t when:
+      |f(t(x)) - y_t| > threshold
+    where y_t is target transformed by t.target_transform (or y if None).
+    """
+    if transform_set is None or len(transform_set) == 0:
+        return {
+            "available": False,
+            "reason": "empty_transform_set",
+            "num_transforms": 0,
+            "overall_violation_rate": float("nan"),
+            "total_violations": 0,
+            "total_cases": 0,
+            "by_transform": {},
+        }
+
+    model.eval()
+    per_transform: dict[str, dict[str, float | int]] = {}
+
+    with torch.no_grad():
+        for batch in data_loader:
+            target = batch["out"].reshape(-1)
+            for idx, transform_spec in enumerate(transform_set):
+                transform_name = getattr(transform_spec, "name", None) or f"transform_{idx}"
+                transformed_batch = transform_spec.transform(clone_batch(batch))
+                transformed_pred = model(transformed_batch).squeeze().reshape(-1)
+                transformed_target = _apply_target_transform(transform_spec, target, batch, transformed_batch).reshape(
+                    -1
+                )
+
+                abs_err = torch.abs(transformed_pred - transformed_target)
+                if tolerance is not None:
+                    threshold = torch.full_like(abs_err, float(tolerance))
+                else:
+                    threshold = atol + rtol * torch.abs(transformed_target)
+                violations = abs_err > threshold
+
+                if transform_name not in per_transform:
+                    per_transform[transform_name] = {"violations": 0, "total": 0}
+                per_transform[transform_name]["violations"] += int(violations.sum().item())
+                per_transform[transform_name]["total"] += int(violations.numel())
+
+    total_violations = 0
+    total_cases = 0
+    for transform_name, stats in per_transform.items():
+        violations = int(stats["violations"])
+        total = int(stats["total"])
+        stats["violation_rate"] = (violations / total) if total else float("nan")
+        total_violations += violations
+        total_cases += total
+
+    return {
+        "available": True,
+        "num_transforms": len(transform_set),
+        "overall_violation_rate": (total_violations / total_cases) if total_cases else float("nan"),
+        "total_violations": total_violations,
+        "total_cases": total_cases,
+        "by_transform": per_transform,
+    }
 
 
 def validate_metamorphic_transforms_on_batch(

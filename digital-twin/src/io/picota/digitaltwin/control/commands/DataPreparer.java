@@ -80,6 +80,7 @@ public abstract class DataPreparer {
 		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
 		if (inference.timeHorizon() > 0) column.add(new LeadFilter(inference.timeHorizon()));
 		column.add(new MinMaxNormalization(summary.min().value(), summary.max() == null ? summary.first().value() : summary.max().value()));//TODO remove ternary when max will be fixed.
+//		column.add(new ZScoreNormalization());
 		return column;
 	}
 
