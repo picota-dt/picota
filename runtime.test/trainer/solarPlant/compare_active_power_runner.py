@@ -4,7 +4,7 @@ import json
 import math
 import random
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -14,23 +14,35 @@ from torch.utils.data import DataLoader
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+PROJECT_ROOT = ROOT.parent
 
 import Device
 from kan.DatasetLoader import DatasetLoader
 from kan.KAN import KAN
-from kan.MetamorphicCatalog import (
-    build_solar_plant_active_power_rule_specs,
-    summarize_rule_specs,
-)
+from kan.MetamorphicCatalog import summarize_rule_specs
 from trainer.metamorphic_evaluation import (
+    clone_batch,
     compute_violation_report,
     evaluate_worst_case_over_T,
     validate_metamorphic_transforms_on_batch,
+    violation_mask,
 )
+from trainer.solarPlant.metamorphic_rules import build_solar_plant_active_power_rule_specs
 from kan.MetamorphicLoss import (
     CompositeMetamorphicLoss,
+    MetamorphicTest,
 )
 from kan.TimeSeriesDataset import TimeSeriesDataset
+
+# Editable map: per-rule weight overrides.
+# The final contribution of each rule is:
+#   relation rules   -> relation_constraint_weight (global) * RULE_WEIGHT_MAP[rule]
+#   over-T transforms -> worst_case_over_T_weight (global) * RULE_WEIGHT_MAP[rule]
+RULE_WEIGHT_MAP: dict[str, float] = {
+    # Directional / relation rules:
+    "radiation_up_implies_active_power_non_decreasing": 1.0,
+    "cell_temperature_up_tends_to_reduce_efficiency": 0.3,
+}
 
 
 @dataclass
@@ -55,6 +67,116 @@ class ModelResult:
     test_metrics: dict[str, float]
     violation_report: dict | None = None
     worst_case_over_T_report: dict | None = None
+
+
+def find_relation_test_by_name(relation_tests: list[MetamorphicTest], rule_name: str) -> MetamorphicTest | None:
+    for test in relation_tests:
+        if (test.name or "") == rule_name:
+            return test
+    return None
+
+
+def compute_single_rule_debug_stats(
+        model,
+        data_loader,
+        relation_test: MetamorphicTest,
+        max_batches: int | None = None,
+) -> dict[str, float]:
+    model.eval()
+    total_violations = 0
+    total_cases = 0
+    delta_sum = 0.0
+    delta_min = float("inf")
+    delta_max = float("-inf")
+
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(data_loader):
+            if max_batches is not None and batch_idx >= max_batches:
+                break
+
+            base_pred = model(batch).squeeze().reshape(-1)
+            transformed_batch = relation_test.transform(clone_batch(batch))
+            transformed_pred = model(transformed_batch).squeeze().reshape(-1)
+
+            local_atol = 1e-6 if getattr(relation_test, "violation_atol", None) is None else float(
+                relation_test.violation_atol)
+            local_rtol = 1e-4 if getattr(relation_test, "violation_rtol", None) is None else float(
+                relation_test.violation_rtol)
+            violations = violation_mask(
+                relation_test.relation,
+                base_pred,
+                transformed_pred,
+                atol=local_atol,
+                rtol=local_rtol,
+            )
+
+            delta = transformed_pred - base_pred
+            total_violations += int(violations.sum().item())
+            total_cases += int(violations.numel())
+            delta_sum += float(delta.sum().item())
+            delta_min = min(delta_min, float(delta.min().item()))
+            delta_max = max(delta_max, float(delta.max().item()))
+
+    if total_cases == 0:
+        return {
+            "available": 0.0,
+            "violation_rate": float("nan"),
+            "violations": 0.0,
+            "cases": 0.0,
+            "mean_delta_pred": float("nan"),
+            "min_delta_pred": float("nan"),
+            "max_delta_pred": float("nan"),
+        }
+
+    return {
+        "available": 1.0,
+        "violation_rate": float(total_violations / total_cases),
+        "violations": float(total_violations),
+        "cases": float(total_cases),
+        "mean_delta_pred": float(delta_sum / total_cases),
+        "min_delta_pred": float(delta_min),
+        "max_delta_pred": float(delta_max),
+    }
+
+
+def apply_rule_weight_map(rule_specs: list[object], rule_weight_map: dict[str, float]) -> tuple[
+    list[object], dict[str, float], list[str]]:
+    adjusted_specs: list[object] = []
+    effective_weights: dict[str, float] = {}
+    active_rule_names: list[str] = []
+
+    for spec in rule_specs:
+        spec_name = str(getattr(spec, "name", ""))
+        if spec_name:
+            active_rule_names.append(spec_name)
+        relation_test = getattr(spec, "relation_test", None)
+        over_t_transform = getattr(spec, "over_T_transform", None)
+
+        if relation_test is not None:
+            if spec_name in rule_weight_map:
+                weight = float(rule_weight_map[spec_name])
+                if weight < 0:
+                    raise ValueError(f"RULE_WEIGHT_MAP['{spec_name}'] must be >= 0")
+                relation_test.relation.weight = weight
+            effective_weights[spec_name] = float(relation_test.relation.weight)
+            adjusted_specs.append(spec)
+            continue
+
+        if over_t_transform is not None:
+            if spec_name in rule_weight_map:
+                weight = float(rule_weight_map[spec_name])
+                if weight < 0:
+                    raise ValueError(f"RULE_WEIGHT_MAP['{spec_name}'] must be >= 0")
+                over_t_transform = replace(over_t_transform, weight=weight)
+                spec = replace(spec, over_T_transform=over_t_transform)
+            effective_weights[spec_name] = float(getattr(over_t_transform, "weight", 1.0))
+            adjusted_specs.append(spec)
+            continue
+
+        adjusted_specs.append(spec)
+
+    inactive_configured = sorted(set(rule_weight_map.keys()) - set(active_rule_names))
+    return adjusted_specs, effective_weights, inactive_configured
 
 
 def set_seed(seed: int) -> None:
@@ -120,6 +242,10 @@ def train_model(
         device,
         loss_fn,
         config: TrainingConfig,
+        run_name: str = "model",
+        debug_rule_test: MetamorphicTest | None = None,
+        debug_log_every: int = 1,
+        debug_max_batches: int | None = 4,
 ) -> ModelResult:
     set_seed(config.seed)
     model = KAN(len(input_variables), lookback, means, stds, 1).to(device)
@@ -176,6 +302,37 @@ def train_model(
             row["train_relation_constraint_penalty"] = relation_constraint_sum / metric_count
             row["train_worst_case_over_T_loss"] = worst_case_over_T_sum / metric_count
             row["train_target_mapped_supervised_loss"] = target_mapped_sum / metric_count
+
+        if debug_rule_test is not None and debug_log_every > 0 and ((epoch + 1) % debug_log_every == 0):
+            train_debug = compute_single_rule_debug_stats(
+                model=model,
+                data_loader=make_loader(split.train_items, config.batch_size, shuffle=False),
+                relation_test=debug_rule_test,
+                max_batches=debug_max_batches,
+            )
+            val_debug = compute_single_rule_debug_stats(
+                model=model,
+                data_loader=val_loader,
+                relation_test=debug_rule_test,
+                max_batches=debug_max_batches,
+            )
+            row["debug_train_rule_violation_rate"] = train_debug["violation_rate"]
+            row["debug_val_rule_violation_rate"] = val_debug["violation_rate"]
+            row["debug_train_rule_mean_delta_pred"] = train_debug["mean_delta_pred"]
+            row["debug_val_rule_mean_delta_pred"] = val_debug["mean_delta_pred"]
+            print(
+                f"[rule_debug:{run_name}] "
+                f"epoch={epoch + 1}/{config.epochs} "
+                f"rule={debug_rule_test.name} "
+                f"train_violation={train_debug['violation_rate']:.6f}"
+                f" ({int(train_debug['violations'])}/{int(train_debug['cases'])}) "
+                f"val_violation={val_debug['violation_rate']:.6f}"
+                f" ({int(val_debug['violations'])}/{int(val_debug['cases'])}) "
+                f"train_delta_mean={train_debug['mean_delta_pred']:.6f} "
+                f"val_delta_mean={val_debug['mean_delta_pred']:.6f} "
+                f"train_delta_range=[{train_debug['min_delta_pred']:.6f},{train_debug['max_delta_pred']:.6f}] "
+                f"val_delta_range=[{val_debug['min_delta_pred']:.6f},{val_debug['max_delta_pred']:.6f}]"
+            )
         history.append(row)
 
     model.load_state_dict(best_state)
@@ -410,13 +567,13 @@ def main():
     parser.add_argument(
         "--jsonl",
         type=Path,
-        default=ROOT / "data" / "solar_plant" / "SolarPlant_generatedActivePower.jsonl",
+        default=PROJECT_ROOT / "temp" / "data" / "infecar" / "SolarPlant_generatedActivePower.jsonl",
         help="Path to SolarPlant_generatedActivePower.jsonl",
     )
     parser.add_argument(
         "--md",
         type=Path,
-        default=ROOT / "data" / "solar_plant" / "SolarPlant_generatedActivePower+6.md",
+        default=PROJECT_ROOT / "temp" / "data" / "infecar" / "SolarPlant_generatedActivePower+6.md",
         help="Path to SolarPlant_generatedActivePower+6.md",
     )
     parser.add_argument("--epochs", type=int, default=20)
@@ -489,6 +646,24 @@ def main():
         "--print-json",
         action="store_true",
         help="Print summary as JSON after the human-readable report",
+    )
+    parser.add_argument(
+        "--debug-rule-name",
+        type=str,
+        default="radiation_up_implies_active_power_non_decreasing",
+        help="Rule name to trace per-epoch during training",
+    )
+    parser.add_argument(
+        "--debug-log-every",
+        type=int,
+        default=1,
+        help="Log rule diagnostics every N epochs (<=0 disables)",
+    )
+    parser.add_argument(
+        "--debug-max-batches",
+        type=int,
+        default=4,
+        help="Max batches per split used for rule diagnostics (<=0 uses all batches)",
     )
     args = parser.parse_args()
 
@@ -569,7 +744,14 @@ def main():
         categorical_t_feature_count=categorical_t_feature_count,
         include_target_mapped=args.include_target_mapped_over_T_transforms,
     )
+    rule_specs, effective_rule_weights, inactive_configured_rules = apply_rule_weight_map(
+        rule_specs=rule_specs,
+        rule_weight_map=RULE_WEIGHT_MAP,
+    )
     rule_summary = summarize_rule_specs(rule_specs)
+    print(f"rule_weight_map={effective_rule_weights}")
+    if inactive_configured_rules:
+        print(f"rule_weight_map(inactive_for_this_run)={inactive_configured_rules}")
     print(
         "catalog: "
         f"specs={rule_summary['num_specs']} "
@@ -586,6 +768,15 @@ def main():
     )
     relation_constraints = assignment_probe.assigned_relation_constraints
     over_T_transform_set = assignment_probe.assigned_over_T_transform_set
+    debug_rule_test = find_relation_test_by_name(relation_constraints, args.debug_rule_name)
+    debug_log_every = max(0, int(args.debug_log_every))
+    debug_max_batches = None if int(args.debug_max_batches) <= 0 else int(args.debug_max_batches)
+    if debug_log_every > 0 and debug_rule_test is None:
+        available_rule_names = sorted([test.name for test in relation_constraints if test.name])
+        print(
+            f"WARNING: debug rule '{args.debug_rule_name}' not found. "
+            f"Available relation rules: {available_rule_names}"
+        )
     print(
         "catalog_assignment(exclusive): "
         f"relation_constraints={assignment_probe.rule_assignment_summary['assigned_relation_constraints']} "
@@ -599,6 +790,19 @@ def main():
             "WARNING: worst_case_over_T_loss is enabled but over_T_transform_set is empty; "
             "the composite loss will reduce to supervised-only for this branch."
         )
+    has_relation_constraints = assignment_probe.rule_assignment_summary["assigned_relation_constraints"] > 0
+    has_over_t_transforms = assignment_probe.rule_assignment_summary["assigned_over_T_transforms"] > 0
+    has_target_mapped_rules = rule_summary["by_category"].get("target_mapped", 0) > 0
+    print(
+        "rule_weight_config: "
+        f"supervised={args.supervised_weight} "
+        f"relation_constraint={args.relation_constraint_weight} "
+        f"worst_case_over_T={args.worst_case_over_T_weight} "
+        f"target_mapped={args.target_mapped_weight} "
+        f"active_relation={has_relation_constraints} "
+        f"active_over_T={has_over_t_transforms} "
+        f"active_target_mapped={has_target_mapped_rules}"
+    )
 
     transform_consistency_report = {"checked_transforms": 0, "errors": [], "warnings": [], "is_valid": True}
     if split.train_items:
@@ -630,6 +834,10 @@ def main():
         device=device,
         loss_fn=baseline_loss,
         config=config,
+        run_name="baseline",
+        debug_rule_test=debug_rule_test,
+        debug_log_every=debug_log_every,
+        debug_max_batches=debug_max_batches,
     )
     baseline_result.test_metrics = evaluate_regression(
         baseline_result.model,
@@ -655,6 +863,10 @@ def main():
         device=device,
         loss_fn=composite_loss,
         config=config,
+        run_name="composite",
+        debug_rule_test=debug_rule_test,
+        debug_log_every=debug_log_every,
+        debug_max_batches=debug_max_batches,
     )
     composite_result.test_metrics = evaluate_regression(
         composite_result.model,

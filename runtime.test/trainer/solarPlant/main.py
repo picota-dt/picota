@@ -1,8 +1,19 @@
-import os
+from __future__ import annotations
 
+import argparse
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+from kan.DatasetLoader import DatasetLoader
+
+import trainer
 import trainer.solarPlant.generatedActivePower
 import trainer.solarPlant.generatedReactivePower
-from kan.DatasetLoader import DatasetLoader
+
+DEFAULT_SOURCE = "/Users/oroncal/workspace/projects/picota/temp/data/infecar"
+DEFAULT_MODELS_DIR = "/Users/oroncal/workspace/projects/picota/temp/test-models"
 
 
 def train(source, modelsdir):
@@ -40,3 +51,42 @@ def train(source, modelsdir):
             loader.get_out_max(),
             modelsdir + "/" + s
         )
+
+
+def _ensure_local_paths() -> None:
+    runtime_test_root = Path(__file__).resolve().parents[1]
+    runtime_trainer_root = Path(__file__).resolve().parents[2] / "runtime.trainer"
+
+    if str(runtime_test_root) not in sys.path:
+        sys.path.insert(0, str(runtime_test_root))
+
+    if importlib.util.find_spec("kan") and importlib.util.find_spec("Device"):
+        return
+
+    if runtime_trainer_root.exists() and str(runtime_trainer_root) not in sys.path:
+        sys.path.insert(0, str(runtime_trainer_root))
+
+    if importlib.util.find_spec("kan") and importlib.util.find_spec("Device"):
+        return
+
+    raise ModuleNotFoundError(
+        "No se pudo cargar la dependencia compartida desde runtime.trainer "
+        "(modulos 'kan' y 'Device'). Ejecuta ./bootstrap.sh dentro de runtime.test."
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train SolarPlant models")
+    parser.add_argument("source", nargs="?", default=DEFAULT_SOURCE)
+    parser.add_argument("models_dir", nargs="?", default=DEFAULT_MODELS_DIR)
+    args = parser.parse_args()
+
+    _ensure_local_paths()
+
+    from trainer.solarPlant import main as solar_plant_main
+
+    solar_plant_main.train(args.source, args.models_dir)
+
+
+if __name__ == "__main__":
+    main()

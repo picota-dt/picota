@@ -71,7 +71,11 @@ public abstract class DataPreparer {
 		return variableTypes.keySet().stream()
 				.filter(k -> history.tags().contains(k))
 				.filter(t -> prediction || !outputVariables.contains(t))
-				.map(tag -> new ColumnDefinition(tag, tag + ".first", typeOf(tag, variableTypes))).toList();
+				.map(tag -> new ColumnDefinition(tag, tag + "." + aggregation(variableTypes.get(tag)), typeOf(tag, variableTypes))).toList();
+	}
+
+	private String aggregation(Variable variable) {
+		return variable.isNumeric() ? variable.asNumeric().aggregation().name().toLowerCase() : "first";
 	}
 
 	protected ColumnDefinition outputVariable(InferenceModel inference, String name, SubjectHistory history) {
@@ -80,7 +84,6 @@ public abstract class DataPreparer {
 		ColumnDefinition column = new ColumnDefinition(colName, name + ".first");
 		if (inference.timeHorizon() > 0) column.add(new LeadFilter(inference.timeHorizon()));
 		column.add(new MinMaxNormalization(summary.min().value(), summary.max() == null ? summary.first().value() : summary.max().value()));//TODO remove ternary when max will be fixed.
-//		column.add(new ZScoreNormalization());
 		return column;
 	}
 

@@ -1143,23 +1143,17 @@ def _second_pass(
 
 
 def main() -> int:
-    default_data_dir = Path(__file__).resolve().parents[2] / "data" / "europlatano"
+    default_data_dir = Path("/Users/oroncal/workspace/projects/picota/temp/data/europlatano")
     default_input = default_data_dir / "raw" / "produccion.jsonl"
     default_output = default_data_dir / "produccion.tsv"
     default_meteo_dir = default_data_dir / "raw" / "meteo"
     default_fincas_tsv = default_data_dir / "raw" / "fincas.tsv"
-    default_incidencias_jsonl = default_data_dir / "raw" / "incidencias.jsonl"
 
     parser = argparse.ArgumentParser(
         description="Transform produccion.jsonl into TSV, removing duplicate rows and constant columns."
     )
     parser.add_argument("--input-jsonl", default=str(default_input), help="Input JSONL path.")
     parser.add_argument("--output-tsv", default=str(default_output), help="Output TSV path.")
-    parser.add_argument(
-        "--incidencias-jsonl",
-        default=str(default_incidencias_jsonl),
-        help="Incidencias JSONL path. Used to pivot Cod columns with Dañadas/Piñas ratios in [0,1].",
-    )
     parser.add_argument(
         "--meteo-dir",
         default=str(default_meteo_dir),
@@ -1171,14 +1165,11 @@ def main() -> int:
 
     input_jsonl = Path(args.input_jsonl)
     output_tsv = Path(args.output_tsv)
-    incidencias_jsonl = Path(args.incidencias_jsonl)
     meteo_dir = Path(args.meteo_dir)
     fincas_tsv = default_fincas_tsv
 
     if not input_jsonl.exists():
         raise SystemExit(f"Input file not found: {input_jsonl}")
-    if not incidencias_jsonl.exists():
-        raise SystemExit(f"Incidencias file not found: {incidencias_jsonl}")
 
     output_tsv.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1252,22 +1243,6 @@ def main() -> int:
             tmp_dir=args.tmp_dir,
             drop_fca=False,
         )
-        (
-            incidencias_total_rows,
-            incidencias_indexed_rows,
-            incidencias_skipped_invalid_ratio,
-            incidencias_skipped_missing_cod,
-            incidencias_skipped_excluded_cod,
-            incidencias_clipped_ratio_rows,
-            incidencias_feature_columns_added,
-            produccion_rows_with_incidencias,
-            produccion_rows_without_incidencias,
-            joined_rows_written,
-        ) = _enrich_output_tsv_with_incidencias(
-            output_tsv=output_tsv,
-            incidencias_jsonl=incidencias_jsonl,
-            tmp_dir=args.tmp_dir,
-        )
         albaran_rows_before_aggregation, albaran_rows_after_aggregation = _aggregate_output_tsv_by_albaran(
             output_tsv=output_tsv,
             tmp_dir=args.tmp_dir,
@@ -1319,17 +1294,6 @@ def main() -> int:
         print(f"Rows without meteo assigned due finca position X,Y = 0,0: {meteo_rows_blocked_zero_position}")
         print(f"Rows with finca metadata join hit: {finca_rows_with_metadata}")
         print(f"Rows without finca metadata (fca[:3] not found): {finca_rows_without_metadata}")
-        print(f"Incidencias rows read: {incidencias_total_rows}")
-        print(f"Incidencias rows indexed for pivot: {incidencias_indexed_rows}")
-        print(f"Incidencias feature columns added (Cod): {incidencias_feature_columns_added}")
-        print("Incidencias Cod excluded: " + ", ".join(sorted(EXCLUDED_INCIDENCIA_CODES)))
-        print(f"Incidencias skipped (invalid Piñas/Dañadas ratio): {incidencias_skipped_invalid_ratio}")
-        print(f"Incidencias skipped (missing Cod): {incidencias_skipped_missing_cod}")
-        print(f"Incidencias skipped (excluded Cod): {incidencias_skipped_excluded_cod}")
-        print(f"Incidencias rows with ratio clipped to [0,1]: {incidencias_clipped_ratio_rows}")
-        print(f"Produccion rows with incidencias match (Albaran=Vale): {produccion_rows_with_incidencias}")
-        print(f"Produccion rows without incidencias match (filled with 0): {produccion_rows_without_incidencias}")
-        print(f"Rows written after incidencias join: {joined_rows_written}")
         print(f"Rows before aggregation by Albaran: {albaran_rows_before_aggregation}")
         print(f"Rows after aggregation by Albaran: {albaran_rows_after_aggregation}")
         print(f"Final rows checked for completeness: {final_total_rows}")
