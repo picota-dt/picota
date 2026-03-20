@@ -4,9 +4,9 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/digital-twin/digital-twin.iml" filepath="$PROJECT_DIR$/digital-twin/digital-twin.iml" />
       <module fileurl="file://$PROJECT_DIR$/dsl/dsl.iml" filepath="$PROJECT_DIR$/dsl/dsl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/picota-service/picota-service.iml" filepath="$PROJECT_DIR$/picota-service/picota-service.iml" />
       <module fileurl="file://$PROJECT_DIR$/runtime.evaluator/runtime.evaluator.iml" filepath="$PROJECT_DIR$/runtime.evaluator/runtime.evaluator.iml" />
       <module fileurl="file://$PROJECT_DIR$/runtime.test/runtime.test.iml" filepath="$PROJECT_DIR$/runtime.test/runtime.test.iml" />
-      <module fileurl="file://$PROJECT_DIR$/runtime.trainer/runtime.trainer.iml" filepath="$PROJECT_DIR$/runtime.trainer/runtime.trainer.iml" />
     </modules>
   </component>
 </project>

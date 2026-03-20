@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: picota-runtime-trainer
+Version: 0.1.0
+Summary: Shared runtime trainer framework for Picota
+Requires-Python: >=3.10

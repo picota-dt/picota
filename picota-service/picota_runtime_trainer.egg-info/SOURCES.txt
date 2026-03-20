@@ -1,0 +1,16 @@
+Device.py
+pyproject.toml
+kan/DatasetLoader.py
+kan/KAL.py
+kan/KAN.py
+kan/KanTrainer.py
+kan/MetamorphicCatalog.py
+kan/MetamorphicLoss.py
+kan/NormalizationLayer.py
+kan/ParametricSigmoid.py
+kan/TimeSeriesDataset.py
+kan/__init__.py
+picota_runtime_trainer.egg-info/PKG-INFO
+picota_runtime_trainer.egg-info/SOURCES.txt
+picota_runtime_trainer.egg-info/dependency_links.txt
+picota_runtime_trainer.egg-info/top_level.txt
