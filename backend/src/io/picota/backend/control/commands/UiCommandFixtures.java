@@ -17,11 +17,9 @@ public final class UiCommandFixtures {
 				"usr_demo_001",
 				"Alex Laurent",
 				DEFAULT_EMAIL,
-				"Engineer",
-				"Acme Industries",
 				"AL",
 				1_248,
-				"January 2024"
+				"2024-01-15T00:00:00Z"
 		);
 	}
 
@@ -60,7 +58,7 @@ public final class UiCommandFixtures {
 				),
 				new InferenceEngine(
 						true,
-						TrainingAlgorithm.LSTM,
+						TrainingAlgorithm.KAN,
 						Instant.parse("2024-11-10T14:32:00Z"),
 						200,
 						0.001,
@@ -111,8 +109,6 @@ public final class UiCommandFixtures {
 				user.id(),
 				user.name(),
 				user.email(),
-				user.role(),
-				user.organization(),
 				user.avatarInitials(),
 				user.credits(),
 				user.joinedAt()

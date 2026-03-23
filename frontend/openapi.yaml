@@ -122,9 +122,6 @@ components:
           type: string
           format: password
           minLength: 8
-        organization:
-          type: string
-          example: Acme Industries
 
     AuthResponse:
       type: object
@@ -157,7 +154,7 @@ components:
 
     User:
       type: object
-      required: [ id, name, email, role, credits, avatarInitials, joinedAt, organization ]
+      required: [ id, name, email, credits, avatarInitials, joinedAt ]
       properties:
         id:
           type: string
@@ -169,12 +166,6 @@ components:
           type: string
           format: email
           example: alex.laurent@acme.io
-        role:
-          type: string
-          example: Engineer
-        organization:
-          type: string
-          example: Acme Industries
         avatarInitials:
           type: string
           maxLength: 3
@@ -186,8 +177,8 @@ components:
           example: 1248
         joinedAt:
           type: string
-          description: Human-readable membership date
-          example: January 2024
+          description: ISO-8601 membership timestamp
+          example: "2024-01-15T00:00:00Z"
 
     UpdateUserRequest:
       type: object
@@ -197,8 +188,6 @@ components:
         email:
           type: string
           format: email
-        organization:
-          type: string
 
     # ── Credits ───────────────────────────────────────────────────────────────
 
@@ -893,7 +882,7 @@ paths:
     patch:
       tags: [ User ]
       operationId: updateMe
-      summary: Update name, email or organization
+      summary: Update name or email
       requestBody:
         required: true
         content:

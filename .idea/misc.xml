@@ -12,6 +12,7 @@
       <list>
         <option value="$PROJECT_DIR$/runtime.trainer/test/pom.xml" />
         <option value="$PROJECT_DIR$/runtime.evaluator/untitled/pom.xml" />
+        <option value="$PROJECT_DIR$/backend/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">

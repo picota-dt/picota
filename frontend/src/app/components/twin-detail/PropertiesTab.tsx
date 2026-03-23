@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {DigitalTwin, TwinStatus, useApp} from "../../context/AppContext";
-import {Power, Save, Check, Tag, FileText, Hash, Coins, Info} from "lucide-react";
+import {Check, Coins, FileText, Hash, Info, Power, Save, Tag} from "lucide-react";
 
 const STATUS_OPTIONS: { value: TwinStatus; label: string; dot: string; text: string }[] = [
     {value: "active", label: "Active", dot: "bg-emerald-400", text: "text-emerald-400"},
@@ -12,6 +12,23 @@ interface Props {
     twin: DigitalTwin;
 }
 
+function hasDefinedModel(model: string): boolean {
+    const content = model?.trim();
+    if (!content) return false;
+
+    const nonCommentLines = content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+    const looksLikeDefaultTemplate =
+        nonCommentLines.length === 2 &&
+        nonCommentLines.includes("subjects: []") &&
+        nonCommentLines.includes("constraints: []");
+
+    return !looksLikeDefaultTemplate;
+}
+
 export function PropertiesTab({twin}: Props) {
     const {updateTwin} = useApp();
     const [name, setName] = useState(twin.name);
@@ -21,8 +38,10 @@ export function PropertiesTab({twin}: Props) {
 
     const currentStatus = STATUS_OPTIONS.find((s) => s.value === twin.status)!;
     const isActive = twin.status === "active";
+    const canActivate = hasDefinedModel(twin.model);
 
     const handleToggleActive = () => {
+        if (!isActive && !canActivate) return;
         const next: TwinStatus = isActive ? "offline" : "active";
         updateTwin(twin.id, {status: next});
     };
@@ -53,14 +72,20 @@ export function PropertiesTab({twin}: Props) {
                         <p className="text-white/30 text-xs">
                             {isActive ? "Twin is running and consuming credits" : "Twin is not active"}
                         </p>
+                        {!isActive && !canActivate && (
+                            <p className="text-amber-400/80 text-xs mt-1">
+                                Define and save a model before activation.
+                            </p>
+                        )}
                     </div>
                 </div>
                 <button
                     onClick={handleToggleActive}
+                    disabled={!isActive && !canActivate}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${
                         isActive
                             ? "bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400"
-                            : "bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/25 text-emerald-400"
+                            : "bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/25 text-emerald-400 disabled:bg-white/6 disabled:border-white/10 disabled:text-white/30 disabled:cursor-not-allowed disabled:hover:bg-white/6"
                     }`}
                     style={{fontWeight: 500}}
                 >
@@ -116,27 +141,6 @@ export function PropertiesTab({twin}: Props) {
                         <p className="text-white/60 text-sm px-3.5 py-2.5 bg-white/3 border border-white/6 rounded-xl">
                             {twin.type}
                         </p>
-                    </div>
-                </div>
-
-                {/* Status selector */}
-                <div>
-                    <label className="text-white/40 text-xs uppercase tracking-wider mb-2 block">Status</label>
-                    <div className="flex gap-2">
-                        {STATUS_OPTIONS.map((opt) => (
-                            <button
-                                key={opt.value}
-                                onClick={() => updateTwin(twin.id, {status: opt.value})}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all ${
-                                    twin.status === opt.value
-                                        ? `${opt.text} bg-white/8 border-white/20`
-                                        : "text-white/30 border-white/8 hover:border-white/15 hover:text-white/50"
-                                }`}
-                            >
-                                <span className={`w-1.5 h-1.5 rounded-full ${opt.dot}`}/>
-                                {opt.label}
-                            </button>
-                        ))}
                     </div>
                 </div>
 

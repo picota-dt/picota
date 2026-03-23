@@ -17,8 +17,10 @@ import io.picota.backend.control.ui.schemas.requests.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static io.javalin.apibuilder.ApiBuilder.*;
@@ -42,7 +44,8 @@ public class BackendWebServer {
 
 	public synchronized void start() {
 		if (app != null) return;
-		boolean frontendAvailable = hasBundledFrontend();
+		FrontendAssets frontendAssets = resolveFrontendAssets();
+		boolean frontendAvailable = frontendAssets.available();
 
 		app = Javalin.create(javalin -> {
 			javalin.http.defaultContentType = "application/json";
@@ -50,20 +53,20 @@ public class BackendWebServer {
 			if (frontendAvailable) {
 				javalin.staticFiles.add(files -> {
 					files.hostedPath = "/";
-					files.directory = FRONTEND_RESOURCES_DIR;
-					files.location = Location.CLASSPATH;
+					files.directory = frontendAssets.directory();
+					files.location = frontendAssets.location();
 				});
 			}
 
 			javalin.routes.exception(UiCommandException.class, (e, ctx) -> writeError(ctx, e.statusCode(), e.code(), e.getMessage(), e.details()));
 			javalin.routes.exception(Exception.class, (e, ctx) -> writeError(ctx, 500, "INTERNAL_ERROR", "Unexpected server error", Map.of("reason", e.getMessage())));
 			javalin.routes.apiBuilder(() -> {
-				registerSystemRoutes(frontendAvailable);
+				registerSystemRoutes(frontendAssets);
 				registerApiAtConfiguredPrefix();
 			});
 			if (frontendAvailable) {
 				javalin.routes.error(404, "text/html", ctx -> {
-					if (!isApiPath(ctx.path())) serveClasspathIndex(ctx);
+					if (!isApiPath(ctx.path())) serveIndex(ctx, frontendAssets);
 				});
 			}
 		});
@@ -81,13 +84,9 @@ public class BackendWebServer {
 		return config;
 	}
 
-	private void registerSystemRoutes(boolean frontendAvailable) {
+	private void registerSystemRoutes(FrontendAssets frontendAssets) {
 		get("health", ctx -> ctx.json(Map.of("ok", true)));
-		if (!frontendAvailable) {
-			get(ctx -> ctx.json(Map.of("service", "picota-backend", "status", "up")));
-		} else {
-			get(BackendWebServer::serveClasspathIndex);
-		}
+		get(ctx -> serveIndex(ctx, frontendAssets));
 	}
 
 	private void registerApiAtConfiguredPrefix() {
@@ -222,12 +221,46 @@ public class BackendWebServer {
 		return path.equals(prefix) || path.startsWith(prefix + "/");
 	}
 
+	private FrontendAssets resolveFrontendAssets() {
+		if (hasBundledFrontend()) return FrontendAssets.classpath();
+		Path externalWebapp = resolveExternalWebappDir();
+		if (externalWebapp != null) return FrontendAssets.external(externalWebapp);
+		return FrontendAssets.unavailable();
+	}
+
+	private Path resolveExternalWebappDir() {
+		List<Path> candidates = List.of(
+				config.workdir().resolve("webapp"),
+				Path.of("res", "webapp"),
+				Path.of("backend", "res", "webapp"),
+				Path.of("../backend", "res", "webapp")
+		);
+		for (Path candidate : candidates) {
+			Path normalized = candidate.toAbsolutePath().normalize();
+			if (Files.isRegularFile(normalized.resolve("index.html"))) {
+				return normalized;
+			}
+		}
+		return null;
+	}
+
 	private static boolean hasBundledFrontend() {
 		try (InputStream in = classpathResource(FRONTEND_INDEX_RESOURCE)) {
 			return in != null;
 		} catch (IOException e) {
 			return false;
 		}
+	}
+
+	private static void serveIndex(Context ctx, FrontendAssets frontendAssets) {
+		if (frontendAssets == null || !frontendAssets.available()) {
+			throw new UiCommandException(500, "FRONTEND_NOT_AVAILABLE", "Frontend entrypoint could not be served");
+		}
+		if (frontendAssets.location() == Location.CLASSPATH) {
+			serveClasspathIndex(ctx);
+			return;
+		}
+		serveExternalIndex(ctx, frontendAssets.indexFile());
 	}
 
 	private static void serveClasspathIndex(Context ctx) {
@@ -240,8 +273,38 @@ public class BackendWebServer {
 		}
 	}
 
+	private static void serveExternalIndex(Context ctx, Path indexFile) {
+		if (indexFile == null) {
+			throw new UiCommandException(500, "FRONTEND_NOT_AVAILABLE", "Frontend entrypoint could not be served");
+		}
+		try {
+			ctx.contentType("text/html; charset=utf-8");
+			ctx.result(Files.readString(indexFile, StandardCharsets.UTF_8));
+		} catch (IOException e) {
+			throw new UiCommandException(500, "FRONTEND_NOT_AVAILABLE", "Frontend entrypoint could not be served");
+		}
+	}
+
 	private static InputStream classpathResource(String resourcePath) {
 		return BackendWebServer.class.getClassLoader().getResourceAsStream(resourcePath);
+	}
+
+	private record FrontendAssets(Location location, String directory, Path indexFile) {
+		private static FrontendAssets classpath() {
+			return new FrontendAssets(Location.CLASSPATH, FRONTEND_RESOURCES_DIR, null);
+		}
+
+		private static FrontendAssets external(Path webappDir) {
+			return new FrontendAssets(Location.EXTERNAL, webappDir.toString(), webappDir.resolve("index.html"));
+		}
+
+		private static FrontendAssets unavailable() {
+			return new FrontendAssets(null, null, null);
+		}
+
+		private boolean available() {
+			return location != null && directory != null && !directory.isBlank();
+		}
 	}
 
 	public record Config(

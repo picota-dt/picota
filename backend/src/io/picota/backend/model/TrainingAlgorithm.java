@@ -6,11 +6,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Arrays;
 
 public enum TrainingAlgorithm {
-	LSTM("LSTM"),
-	GRU("GRU"),
-	TRANSFORMER("Transformer"),
-	TCN("TCN"),
-	MLP("MLP");
+	KAN("KAN"),
+	TABNET("TabNet");
 
 	private final String wireValue;
 

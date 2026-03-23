@@ -31,8 +31,13 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 
 public class RealCommandState {
+	private static final Pattern DEFAULT_TWIN_MODEL_PATTERN = Pattern.compile(
+			"(?is)^\\s*#\\s*.+?digital twin model\\s*subjects:\\s*\\[\\s*]\\s*constraints:\\s*\\[\\s*]\\s*$"
+	);
+
 	private final ConcurrentMap<String, StoredUser> usersById = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, String> userIdByEmail = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, String> userIdByToken = new ConcurrentHashMap<>();
@@ -65,15 +70,10 @@ public class RealCommandState {
 
 		String userId = "usr_" + shortId();
 		String name = request.name() == null || request.name().isBlank() ? "New User" : request.name().trim();
-		String organization = request.organization() == null || request.organization().isBlank()
-				? "Picota Organization"
-				: request.organization().trim();
 		User user = new User(
 				userId,
 				name,
 				normalizedEmail,
-				"Engineer",
-				organization,
 				initials(name),
 				1_000,
 				Instant.now().toString()
@@ -132,8 +132,6 @@ public class RealCommandState {
 				current.id(),
 				coalesce(request == null ? null : request.name(), current.name()),
 				normalizeEmail(coalesce(request == null ? null : request.email(), current.email())),
-				current.role(),
-				coalesce(request == null ? null : request.organization(), current.organization()),
 				current.avatarInitials(),
 				current.credits(),
 				current.joinedAt()
@@ -180,8 +178,6 @@ public class RealCommandState {
 				current.id(),
 				current.name(),
 				current.email(),
-				current.role(),
-				current.organization(),
 				current.avatarInitials(),
 				current.credits() + creditsAdded,
 				current.joinedAt()
@@ -226,10 +222,11 @@ public class RealCommandState {
 		String userId = requireUserId(authToken);
 		validate(request != null && request.name() != null && !request.name().isBlank(), 422, "VALIDATION_ERROR", "Twin name is required");
 		validate(request.type() != null, 422, "VALIDATION_ERROR", "Twin type is required");
+		String twinName = request.name().trim();
 
 		DigitalTwin twin = new DigitalTwin(
 				"twin_" + shortId(),
-				request.name().trim(),
+				twinName,
 				request.description() == null || request.description().isBlank() ? "No description provided." : request.description().trim(),
 				"0.1.0",
 				"https://images.unsplash.com/photo-1647427060118-4911c9821b82?auto=format&fit=crop&w=1080&q=80",
@@ -237,7 +234,7 @@ public class RealCommandState {
 				TwinStatus.DRAFT,
 				"Just now",
 				0,
-				"# " + request.name().trim() + " — Digital Twin Model\nsubjects: []\nconstraints: []\n",
+				defaultTwinModel(twinName),
 				List.of(),
 				null,
 				List.of()
@@ -256,23 +253,37 @@ public class RealCommandState {
 		String userId = requireUserId(authToken);
 		DigitalTwin current = requireTwin(userId, twinId);
 		Map<String, Object> safeUpdates = updates == null ? Map.of() : updates;
+		String nextName = stringOrDefault(safeUpdates.get("name"), current.name());
+		String nextDescription = stringOrDefault(safeUpdates.get("description"), current.description());
+		String nextVersion = stringOrDefault(safeUpdates.get("version"), current.version());
+		String nextImage = stringOrDefault(safeUpdates.get("image"), current.image());
+		TwinType nextType = enumOrDefault(safeUpdates.get("type"), TwinType.class, current.type());
+		TwinStatus nextStatus = enumOrDefault(safeUpdates.get("status"), TwinStatus.class, current.status());
+		String nextModel = stringOrDefault(safeUpdates.get("model"), current.model());
+		List<DigitalSubject> nextSubjects = listOrDefault(safeUpdates.get("subjects"), new TypeReference<List<DigitalSubject>>() {
+		}, current.subjects());
+		InferenceEngine nextEngine = objectOrDefault(safeUpdates.get("inferenceEngine"), InferenceEngine.class, current.inferenceEngine());
+		List<SubjectDataset> nextDatasets = listOrDefault(safeUpdates.get("datasets"), new TypeReference<List<SubjectDataset>>() {
+		}, current.datasets());
+
+		if (current.status() != TwinStatus.ACTIVE && nextStatus == TwinStatus.ACTIVE) {
+			validate(hasDefinedModel(nextModel), 422, "PRECONDITION_FAILED", "Twin model must be defined before activation");
+		}
 
 		DigitalTwin updated = new DigitalTwin(
 				current.id(),
-				stringOrDefault(safeUpdates.get("name"), current.name()),
-				stringOrDefault(safeUpdates.get("description"), current.description()),
-				stringOrDefault(safeUpdates.get("version"), current.version()),
-				stringOrDefault(safeUpdates.get("image"), current.image()),
-				enumOrDefault(safeUpdates.get("type"), TwinType.class, current.type()),
-				enumOrDefault(safeUpdates.get("status"), TwinStatus.class, current.status()),
+				nextName,
+				nextDescription,
+				nextVersion,
+				nextImage,
+				nextType,
+				nextStatus,
 				stringOrDefault(safeUpdates.get("updatedAt"), "Just now"),
 				intOrDefault(safeUpdates.get("creditsUsed"), current.creditsUsed()),
-				stringOrDefault(safeUpdates.get("model"), current.model()),
-				listOrDefault(safeUpdates.get("subjects"), new TypeReference<List<DigitalSubject>>() {
-				}, current.subjects()),
-				objectOrDefault(safeUpdates.get("inferenceEngine"), InferenceEngine.class, current.inferenceEngine()),
-				listOrDefault(safeUpdates.get("datasets"), new TypeReference<List<SubjectDataset>>() {
-				}, current.datasets())
+				nextModel,
+				nextSubjects,
+				nextEngine,
+				nextDatasets
 		);
 
 		twinsByUser.get(userId).put(updated.id(), updated);
@@ -447,7 +458,7 @@ public class RealCommandState {
 						: current != null && current.trained(),
 				request != null && request.algorithm() != null
 						? request.algorithm()
-						: current != null && current.algorithm() != null ? current.algorithm() : TrainingAlgorithm.LSTM,
+						: current != null && current.algorithm() != null ? current.algorithm() : TrainingAlgorithm.KAN,
 				request != null ? request.trainedAt() : current == null ? null : current.trainedAt(),
 				request != null && request.epochs() != null
 						? request.epochs()
@@ -492,7 +503,7 @@ public class RealCommandState {
 		String userId = requireUserId(authToken);
 		DigitalTwin twin = requireTwin(userId, twinId);
 		InferenceEngine current = twin.inferenceEngine() == null
-				? new InferenceEngine(false, TrainingAlgorithm.LSTM, null, 100, 0.001, 60, 32, List.of(), null)
+				? new InferenceEngine(false, TrainingAlgorithm.KAN, null, 100, 0.001, 60, 32, List.of(), null)
 				: twin.inferenceEngine();
 		RetrainingConfig retraining = request == null
 				? new RetrainingConfig(false, RetrainingSchedule.WEEKLY, 500, "02:00")
@@ -763,6 +774,15 @@ public class RealCommandState {
 				.toList();
 
 		return new Application(users, sessions, twins, jobs);
+	}
+
+	private static String defaultTwinModel(String twinName) {
+		return "# " + twinName + " — Digital Twin Model\nsubjects: []\nconstraints: []\n";
+	}
+
+	private static boolean hasDefinedModel(String model) {
+		if (model == null || model.isBlank()) return false;
+		return !DEFAULT_TWIN_MODEL_PATTERN.matcher(model.trim()).matches();
 	}
 
 	private CsvStats computeCsvStats(DigitalSubject subject, byte[] content) {

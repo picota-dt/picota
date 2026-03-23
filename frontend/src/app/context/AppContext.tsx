@@ -1,4 +1,4 @@
-import {createContext, useContext, useEffect, useState, ReactNode} from "react";
+import {createContext, ReactNode, useContext, useEffect, useState} from "react";
 
 export type TwinStatus = "active" | "draft" | "offline";
 
@@ -80,11 +80,9 @@ export interface User {
     id?: string;
     name: string;
     email: string;
-    role: string;
     credits: number;
     avatarInitials: string;
     joinedAt: string;
-    organization: string;
 }
 
 interface AuthResponse {
@@ -98,23 +96,24 @@ interface AppContextValue {
     twins: DigitalTwin[];
     setTwins: React.Dispatch<React.SetStateAction<DigitalTwin[]>>;
     getTwin: (id: string) => DigitalTwin | undefined;
+    updateProfile: (updates: { name?: string; email?: string }) => Promise<User>;
+    changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+    deleteAccount: () => Promise<void>;
     updateTwin: (id: string, updates: Partial<DigitalTwin>) => Promise<void>;
     createTwin: (name: string, description: string, type: string, image: string) => Promise<DigitalTwin>;
     isLoggedIn: boolean;
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (name: string, email: string, password: string, organization?: string) => Promise<void>;
+    register: (name: string, email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 
 const GUEST_USER: User = {
     name: "Guest",
     email: "guest@picota.local",
-    role: "Engineer",
     credits: 0,
     avatarInitials: "GU",
     joinedAt: "-",
-    organization: "Picota",
 };
 
 const TOKEN_KEY = "picota.auth.token";
@@ -184,10 +183,10 @@ export function AppProvider({children}: { children: ReactNode }) {
         setTwins(catalog);
     };
 
-    const register = async (name: string, email: string, password: string, organization?: string) => {
+    const register = async (name: string, email: string, password: string) => {
         const auth = await apiRequest<AuthResponse>("/auth/register", {
             method: "POST",
-            body: {name, email, password, organization},
+            body: {name, email, password},
             skipAuth: true,
         });
         setSession(auth.token, auth.user);
@@ -204,6 +203,38 @@ export function AppProvider({children}: { children: ReactNode }) {
     };
 
     const getTwin = (id: string) => twins.find((t) => t.id === id);
+
+    const updateProfile = async (updates: { name?: string; email?: string }): Promise<User> => {
+        const activeToken = token;
+        if (!activeToken) throw new Error("No authenticated session");
+        const updated = await apiRequest<User>("/users/me", {
+            method: "PATCH",
+            body: updates,
+            token: activeToken,
+        });
+        setUser(updated);
+        return updated;
+    };
+
+    const changePassword = async (currentPassword: string, newPassword: string) => {
+        const activeToken = token;
+        if (!activeToken) throw new Error("No authenticated session");
+        await apiRequest<void>("/auth/change-password", {
+            method: "POST",
+            body: {currentPassword, newPassword},
+            token: activeToken,
+        });
+    };
+
+    const deleteAccount = async () => {
+        const activeToken = token;
+        if (!activeToken) throw new Error("No authenticated session");
+        await apiRequest<void>("/users/me", {
+            method: "DELETE",
+            token: activeToken,
+        });
+        clearSession();
+    };
 
     const updateTwin = async (id: string, updates: Partial<DigitalTwin>) => {
         const activeToken = token;
@@ -242,6 +273,9 @@ export function AppProvider({children}: { children: ReactNode }) {
                 twins,
                 setTwins,
                 getTwin,
+                updateProfile,
+                changePassword,
+                deleteAccount,
                 updateTwin,
                 createTwin,
                 isLoggedIn,

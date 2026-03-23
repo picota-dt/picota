@@ -19,8 +19,6 @@ public final class ModelViewMapper {
 				account.id(),
 				account.name(),
 				account.email(),
-				account.role(),
-				account.organization(),
 				account.avatarInitials(),
 				account.credits(),
 				account.joinedAt() == null ? null : account.joinedAt().toString()
@@ -34,8 +32,6 @@ public final class ModelViewMapper {
 				user.name(),
 				user.email(),
 				passwordHash == null ? "" : passwordHash,
-				user.role(),
-				user.organization(),
 				user.avatarInitials(),
 				user.credits() == null ? 0 : user.credits(),
 				parseInstant(user.joinedAt())

@@ -1,14 +1,33 @@
-import {useState, useEffect, useRef} from "react";
+import {useEffect, useRef, useState} from "react";
 import {DigitalTwin, InferenceEngine, RetrainingConfig, useApp} from "../../context/AppContext";
 import {
-    Cpu, CheckCircle2, AlertCircle, Save, Check,
-    BarChart3, Zap, Settings2, Play, RefreshCw, Clock,
-    ChevronDown, ToggleLeft, ToggleRight, Calendar, Info,
+    AlertCircle,
+    BarChart3,
+    Calendar,
+    Check,
+    CheckCircle2,
+    Clock,
+    Cpu,
+    Info,
+    Play,
+    RefreshCw,
+    Save,
+    Settings2,
+    ToggleLeft,
+    ToggleRight,
+    Zap,
 } from "lucide-react";
 
 // ─── Config form ──────────────────────────────────────────────────────────────
 
-const ALGORITHMS = ["LSTM", "GRU", "Transformer", "TCN", "MLP"];
+const ALGORITHMS = ["KAN", "TabNet"] as const;
+const DEFAULT_ALGORITHM = "KAN";
+
+function normalizeAlgorithm(algorithm: string | undefined): string {
+    return ALGORITHMS.includes((algorithm ?? "") as (typeof ALGORITHMS)[number])
+        ? algorithm!
+        : DEFAULT_ALGORITHM;
+}
 
 interface ConfigFormProps {
     engine: InferenceEngine | null;
@@ -16,7 +35,7 @@ interface ConfigFormProps {
 }
 
 function ConfigForm({engine, onSave}: ConfigFormProps) {
-    const [algorithm, setAlgorithm] = useState(engine?.algorithm ?? "LSTM");
+    const [algorithm, setAlgorithm] = useState(normalizeAlgorithm(engine?.algorithm));
     const [epochs, setEpochs] = useState(String(engine?.epochs ?? 100));
     const [learningRate, setLearningRate] = useState(String(engine?.learningRate ?? 0.001));
     const [windowSize, setWindowSize] = useState(String(engine?.windowSize ?? 60));
@@ -141,7 +160,7 @@ function LaunchPanel({twin, onTrainingComplete}: LaunchPanelProps) {
 
         addLog("Initialising training pipeline…");
         await animateProgress(0, 8, 800);
-        addLog(`Algorithm: ${engine?.algorithm ?? "LSTM"}`);
+        addLog(`Algorithm: ${normalizeAlgorithm(engine?.algorithm)}`);
         addLog(`Epochs: ${engine?.epochs ?? 100} · LR: ${engine?.learningRate ?? 0.001}`);
         addLog(`Window: ${engine?.windowSize ?? 60} · Batch: ${engine?.batchSize ?? 32}`);
 
@@ -179,7 +198,7 @@ function LaunchPanel({twin, onTrainingComplete}: LaunchPanelProps) {
             }));
 
         const updatedEngine: InferenceEngine = {
-            ...(engine ?? {algorithm: "LSTM"}),
+            ...(engine ?? {algorithm: DEFAULT_ALGORITHM}),
             trained: true,
             trainedAt: new Date().toISOString(),
             inferredVariables: inferredVars.length > 0 ? inferredVars : undefined,
@@ -588,7 +607,10 @@ export function InferenceTab({twin}: Props) {
 
     const handleSaveRetraining = (cfg: RetrainingConfig) => {
         updateTwin(twin.id, {
-            inferenceEngine: {...(twin.inferenceEngine ?? {trained: false, algorithm: "LSTM"}), retrainingConfig: cfg},
+            inferenceEngine: {
+                ...(twin.inferenceEngine ?? {trained: false, algorithm: DEFAULT_ALGORITHM}),
+                retrainingConfig: cfg
+            },
         });
     };
 
