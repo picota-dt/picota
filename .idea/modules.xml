@@ -2,11 +2,13 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/backend/backend.iml" filepath="$PROJECT_DIR$/backend/backend.iml" />
       <module fileurl="file://$PROJECT_DIR$/digital-twin/digital-twin.iml" filepath="$PROJECT_DIR$/digital-twin/digital-twin.iml" />
       <module fileurl="file://$PROJECT_DIR$/dsl/dsl.iml" filepath="$PROJECT_DIR$/dsl/dsl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/frontend/frontend.iml" filepath="$PROJECT_DIR$/frontend/frontend.iml" />
       <module fileurl="file://$PROJECT_DIR$/picota-service/picota-service.iml" filepath="$PROJECT_DIR$/picota-service/picota-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/runtime.evaluator/runtime.evaluator.iml" filepath="$PROJECT_DIR$/runtime.evaluator/runtime.evaluator.iml" />
       <module fileurl="file://$PROJECT_DIR$/runtime.test/runtime.test.iml" filepath="$PROJECT_DIR$/runtime.test/runtime.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/untitled.iml" filepath="$PROJECT_DIR$/untitled.iml" />
     </modules>
   </component>
 </project>

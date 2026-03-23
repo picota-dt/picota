@@ -23,7 +23,9 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="backend" target="21" />
       <module name="test" target="21" />
+      <module name="untitled" target="21" />
     </bytecodeTargetLevel>
   </component>
 </project>

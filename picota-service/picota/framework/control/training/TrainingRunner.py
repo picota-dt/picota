@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -18,20 +19,42 @@ from picota.framework.control.training.TabNetBaselineTrainer import TabNetBaseli
 from picota.framework.control.training.TabNetMetamorphicTrainer import TabNetMetamorphicTrainer
 from picota.framework.model.TrainingRequest import TrainingRequest
 
+logger = logging.getLogger(__name__)
+
 
 class TrainingRunner:
     def run(self, request: TrainingRequest, output_root: Path) -> dict[str, Any]:
+        logger.info(
+            "TrainingRunner started (job_name=%s, family=%s, mode=%s, data_source_kind=%s)",
+            request.job_name,
+            request.architecture.family,
+            request.architecture.mode,
+            request.data_source.kind,
+        )
         prepared = AdapterFactory.buildPreparedData(request)
+        logger.info(
+            "Data prepared (job=%s, case=%s, train=%s, val=%s, test=%s, n_features=%s)",
+            prepared.job_name,
+            prepared.case_name,
+            len(prepared.train_items),
+            len(prepared.val_items),
+            len(prepared.test_items),
+            len(prepared.input_variables),
+        )
         rule_specs = ApiRuleBuilder.buildRuleSpecsFromApi(
             request.metamorphic.rule_specs,
             feature_names=(prepared.metadata.get("feature_names") or {}),
         )
+        logger.info("Metamorphic rule specs built (count=%s)", len(rule_specs))
         device = Device.getDevice()
+        logger.info("Using device: %s", str(device))
         output_root.mkdir(parents=True, exist_ok=True)
         model_path = output_root / "model.pt"
 
         use_metamorphic_mode = request.architecture.mode == "metamorphic" or request.metamorphic.enabled
         can_use_metamorphic = use_metamorphic_mode and len(rule_specs) > 0
+        if use_metamorphic_mode and not can_use_metamorphic:
+            logger.info("Metamorphic mode requested but no valid rules were provided, using baseline trainer")
 
         if request.architecture.family == "kan":
             if can_use_metamorphic:
@@ -117,9 +140,19 @@ class TrainingRunner:
                 trainer_mode = "baseline"
         else:
             raise ValueError(f"Unsupported architecture.family: {request.architecture.family}")
+        logger.info(
+            "Trainer selected (trainer=%s, mode=%s, epochs=%s, batch_size=%s)",
+            trainer.__class__.__name__,
+            trainer_mode,
+            request.architecture.epochs,
+            request.architecture.batch_size,
+        )
 
+        logger.info("Starting model training")
         model, best_val_metrics = trainer.train(prepared.train_items, prepared.val_items)
+        logger.info("Training completed (best_val_mae=%s)", best_val_metrics.get("mae_model"))
         if can_use_metamorphic and hasattr(trainer, "evaluate_with_rule_violations"):
+            logger.info("Evaluating model with metamorphic violation reports")
             test_metrics, test_violation_report = trainer.evaluate_with_rule_violations(
                 model=model,
                 items=prepared.test_items,
@@ -133,6 +166,7 @@ class TrainingRunner:
                 rtol=request.metamorphic.violation_rtol,
             )
         else:
+            logger.info("Evaluating model without integrated metamorphic trainer")
             test_metrics = trainer.evaluate(model, prepared.test_items)
             val_metrics = trainer.evaluate(model, prepared.val_items)
             val_violation_report = self._evaluateRuleViolations(
@@ -153,6 +187,9 @@ class TrainingRunner:
             )
 
         torch.save(model.state_dict(), model_path)
+        logger.info("Model artifact saved (path=%s)", str(model_path))
+        self._logViolationReport(scope="validation", report=val_violation_report)
+        self._logViolationReport(scope="test", report=test_violation_report)
         if rule_specs:
             rule_summary = summarize_rule_specs(rule_specs)
         else:
@@ -162,10 +199,18 @@ class TrainingRunner:
                 "num_over_T_transforms": 0,
                 "by_category": {},
             }
+        logger.info(
+            "TrainingRunner finished (job=%s, case=%s, trainer_mode=%s, test_samples=%s)",
+            prepared.job_name,
+            prepared.case_name,
+            trainer_mode,
+            test_metrics.get("n_samples"),
+        )
 
         return {
             "trainer_mode": trainer_mode,
             "architecture_family": request.architecture.family,
+            "job_name": prepared.job_name,
             "case_name": prepared.case_name,
             "device": str(device),
             "model_path": str(model_path),
@@ -208,6 +253,33 @@ class TrainingRunner:
             atol=float(atol),
             rtol=float(rtol),
         )
+
+    @staticmethod
+    def _logViolationReport(*, scope: str, report: dict | None) -> None:
+        if report is None:
+            logger.info("%s violation report: not available", scope)
+            return
+        logger.info(
+            "%s violation report summary (overall_rate=%s, total_violations=%s, total_cases=%s)",
+            scope,
+            report.get("overall_violation_rate"),
+            report.get("total_violations"),
+            report.get("total_cases"),
+        )
+        by_test = report.get("by_test")
+        if not isinstance(by_test, dict) or not by_test:
+            logger.info("%s violation report by rule: empty", scope)
+            return
+        for rule_name in sorted(by_test.keys()):
+            stats = by_test.get(rule_name) or {}
+            logger.info(
+                "%s violation by rule (rule=%s, violations=%s, total=%s, violation_rate=%s)",
+                scope,
+                rule_name,
+                stats.get("violations"),
+                stats.get("total"),
+                stats.get("violation_rate"),
+            )
 
 
 __all__ = ["TrainingRunner"]

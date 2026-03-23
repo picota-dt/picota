@@ -13,9 +13,7 @@ class TrainingOutputPathResolver:
         self.config = config
 
     def resolve(self, *, ticket_id: str, request: TrainingRequest) -> Path:
-        if request.output_dir:
-            root = Path(request.output_dir).expanduser().resolve() / ticket_id
-        else:
-            root = self.ticket_store.root_dir / self.config.artifacts_subdir / ticket_id
+        _ = request
+        root = self.ticket_store.ticket_dir(ticket_id)
         root.mkdir(parents=True, exist_ok=True)
         return root

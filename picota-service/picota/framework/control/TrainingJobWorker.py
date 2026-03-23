@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from picota.framework.control.TrainingJobExecutor import TrainingJobExecutor
 from picota.framework.control.TrainingOutputPathResolver import TrainingOutputPathResolver
 from picota.framework.control.TrainingTicketLifecycle import TrainingTicketLifecycle
 from picota.framework.model.TrainingRequest import TrainingRequest
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingJobWorker:
@@ -19,10 +23,14 @@ class TrainingJobWorker:
         self.job_executor = job_executor
 
     def run(self, *, ticket_id: str, request: TrainingRequest) -> None:
+        logger.info("Marking ticket as running (ticket_id=%s)", ticket_id)
         self.ticket_lifecycle.mark_running(ticket_id)
         try:
             output_root = self.output_path_resolver.resolve(ticket_id=ticket_id, request=request)
+            logger.info("Resolved output directory (ticket_id=%s, output_root=%s)", ticket_id, str(output_root))
             result = self.job_executor.execute(request=request, output_root=output_root)
             self.ticket_lifecycle.mark_completed(ticket_id, result=result)
+            logger.info("Ticket completed (ticket_id=%s)", ticket_id)
         except Exception as exc:  # pragma: no cover
             self.ticket_lifecycle.mark_failed(ticket_id, exc=exc)
+            logger.exception("Ticket failed (ticket_id=%s): %s", ticket_id, exc)

@@ -12,6 +12,7 @@ from picota.framework.model.TrainingConfigError import TrainingConfigError
 class DataSourceConfig:
     kind: str
     path: str | None = None
+    dataset_id: str | None = None
     limit_rows: int | None = None
     options: dict[str, Any] = field(default_factory=dict)
 
@@ -25,13 +26,24 @@ class DataSourceConfig:
         path = data.get("path")
         if path is not None:
             path = str(path)
+        dataset_id = data.get("dataset_id")
+        if dataset_id is not None:
+            dataset_id = str(dataset_id).strip()
+            if not dataset_id:
+                raise TrainingConfigError("data_source.dataset_id must not be empty")
         limit_rows = data.get("limit_rows")
         if limit_rows is not None:
             limit_rows = FieldParser.readInt(limit_rows, fieldName="data_source.limit_rows", minimum=1)
         options = data.get("options") or {}
         if not isinstance(options, dict):
             raise TrainingConfigError("data_source.options must be an object")
-        return cls(kind=kind, path=path, limit_rows=limit_rows, options=dict(options))
+        return cls(
+            kind=kind,
+            path=path,
+            dataset_id=dataset_id,
+            limit_rows=limit_rows,
+            options=dict(options),
+        )
 
     def resolved_path(self) -> Path | None:
         if self.path is None:
@@ -42,6 +54,7 @@ class DataSourceConfig:
         return {
             "kind": self.kind,
             "path": self.path,
+            "dataset_id": self.dataset_id,
             "limit_rows": self.limit_rows,
             "options": dict(self.options),
         }

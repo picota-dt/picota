@@ -1,0 +1,1251 @@
+openapi: 3.0.3
+info:
+  title: Picota Training API
+  version: 1.0.0
+  description: |
+    API REST para lanzamiento asíncrono de entrenamientos y consulta de estado por ticket.
+servers:
+  - url: http://localhost:8080
+    description: Local runtime trainer
+tags:
+  - name: Trainings
+    description: Operaciones de entrenamiento asíncrono
+  - name: Cases
+    description: Gestión de casos y datasets
+paths:
+  /api/v1/trainings:
+    post:
+      tags: [ Trainings ]
+      summary: Create training job
+      operationId: createTraining
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingCreateRequest'
+            example:
+              job_name: generic-timeseries-training
+              created_by: qa-user
+              data_source:
+                kind: tabular_timeseries
+                path: /abs/path/to/dataset.tsv
+                limit_rows: 4000
+                options:
+                  case_name: generic_case
+                  timestamp_column: instant
+                  target_column: target
+                  time_bucket: hour
+                  entity_key_columns: [ ]
+                  numerical_input_columns:
+                    - feature_1
+                    - feature_2
+                    - feature_3
+                  categorical_input_columns: [ ]
+                  numerical_scaler: zscore
+                  categorical_encoding: none
+              target_variable: target
+              lookback: 0
+              time_horizon:
+                value: 24
+                unit: hours
+              split:
+                train_ratio: 0.64
+                val_ratio: 0.16
+                test_ratio: 0.20
+              architecture:
+                family: kan
+                mode: metamorphic
+                epochs: 50
+                batch_size: 64
+                learning_rate: 0.0005
+                seed: 7
+              metamorphic:
+                enabled: true
+                supervised_weight: 1.0
+                relation_constraint_weight: 0.2
+                worst_case_over_t_weight: 0.0
+                violation_atol: 1.0e-6
+                violation_rtol: 1.0e-4
+                rule_specs:
+                  - name: feature_3_up_implies_target_non_decreasing
+                    kind: relation
+                    category: directional_ordinal
+                    relation: greater_or_equal
+                    weight: 1.0
+                    transforms:
+                      - op: add
+                        field: numerical_t_features
+                        feature: feature_3
+                        delta: 25.0
+      responses:
+        '202':
+          description: Training accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingAcceptedResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequestError'
+  /api/v1/trainings/{ticket_id}:
+    get:
+      tags: [ Trainings ]
+      summary: Get training ticket status/result
+      operationId: getTraining
+      parameters:
+        - name: ticket_id
+          in: path
+          required: true
+          description: Ticket identifier returned by create endpoint
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ticket found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '404':
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketNotFoundError'
+  /api/v1/inferences:
+    post:
+      tags: [ Trainings ]
+      summary: Run inference with a pretrained model from a completed training ticket
+      operationId: createInference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InferenceRequest'
+            example:
+              training_ticket_id: 1b9e99d91b2348259463c8f0051458b7
+              output_scale: both
+              instances:
+                - variables:
+                    month_sin: 0.0
+                    month_cos: 1.0
+                    day_sin: 0.0
+                    day_cos: 1.0
+                    hour_sin: 0.5
+                    hour_cos: 0.86
+                    quarter_sin: 0.0
+                    quarter_cos: 1.0
+                    feature_1: 12.3
+                    feature_2: 5.5
+                    feature_3: 0.4
+      responses:
+        '200':
+          description: Inference completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InferenceResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequestError'
+        '404':
+          description: Source training ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingTicketNotFoundError'
+        '409':
+          description: Source training ticket is not in completed state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidTrainingStateError'
+  /api/v1/cases:
+    post:
+      tags: [ Cases ]
+      summary: Create a new case workspace
+      operationId: createCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCaseRequest'
+            example:
+              case_id: case_a
+      responses:
+        '201':
+          description: Case created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseCreatedResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequestError'
+        '409':
+          description: Case already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseAlreadyExistsError'
+  /api/v1/cases/{case_id}:
+    delete:
+      tags: [ Cases ]
+      summary: Delete a case workspace
+      operationId: deleteCase
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Case deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDeletedResponse'
+        '404':
+          description: Case not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseNotFoundError'
+  /api/v1/cases/{case_id}/datasets:
+    post:
+      tags: [ Cases ]
+      summary: Add dataset file to case
+      operationId: createCaseDataset
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDatasetRequest'
+            example:
+              dataset_id: dataset_main
+              source_path: /abs/path/to/dataset.tsv
+      responses:
+        '201':
+          description: Dataset added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequestError'
+        '404':
+          description: Case or source file not found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/CaseNotFoundError'
+                  - $ref: '#/components/schemas/DatasetSourceNotFoundError'
+        '409':
+          description: Dataset id already exists in case
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetAlreadyExistsError'
+    get:
+      tags: [ Cases ]
+      summary: List datasets for case
+      operationId: listCaseDatasets
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dataset list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetListResponse'
+        '404':
+          description: Case not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseNotFoundError'
+  /api/v1/cases/{case_id}/trainings:
+    post:
+      tags: [ Cases ]
+      summary: Create training job for case using dataset id
+      operationId: createCaseTraining
+      parameters:
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingCreateRequest'
+            example:
+              job_name: case-a-training
+              data_source:
+                kind: tabular_timeseries
+                dataset_id: dataset_main
+                limit_rows: 4000
+                options:
+                  case_name: case_a
+                  timestamp_column: instant
+                  target_column: target
+                  time_bucket: hour
+                  entity_key_columns: [ ]
+                  numerical_input_columns:
+                    - feature_1
+                    - feature_2
+                    - feature_3
+                  categorical_input_columns: [ ]
+                  numerical_scaler: zscore
+                  categorical_encoding: none
+              target_variable: target
+              time_horizon:
+                value: 24
+                unit: hours
+              architecture:
+                family: kan
+                mode: baseline
+                epochs: 50
+                batch_size: 64
+                learning_rate: 0.0005
+                seed: 7
+              split:
+                train_ratio: 0.64
+                val_ratio: 0.16
+                test_ratio: 0.20
+      responses:
+        '202':
+          description: Training accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingAcceptedResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequestError'
+        '404':
+          description: Case or dataset not found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/CaseNotFoundError'
+                  - $ref: '#/components/schemas/DatasetNotFoundError'
+components:
+  schemas:
+    TrainingCreateRequest:
+      type: object
+      properties:
+        job_name:
+          type: string
+          description: Nombre lógico del job
+        created_by:
+          type: string
+          nullable: true
+        data_source:
+          $ref: '#/components/schemas/DataSourceConfig'
+        target_variable:
+          type: string
+          description: Variable objetivo
+        lookback:
+          type: integer
+          minimum: 0
+          default: 0
+        time_horizon:
+          $ref: '#/components/schemas/TimeHorizon'
+        split:
+          $ref: '#/components/schemas/SplitConfig'
+        architecture:
+          $ref: '#/components/schemas/ArchitectureConfig'
+        metamorphic:
+          $ref: '#/components/schemas/MetamorphicConfig'
+        output_dir:
+          type: string
+          nullable: true
+      required:
+        - data_source
+    DataSourceConfig:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [ tabular_timeseries ]
+        path:
+          type: string
+          nullable: true
+          description: Optional absolute path to dataset file (legacy mode).
+        dataset_id:
+          type: string
+          nullable: true
+          description: Dataset identifier registered in case workspace.
+        limit_rows:
+          type: integer
+          minimum: 1
+          nullable: true
+        options:
+          $ref: '#/components/schemas/TabularTimeseriesOptions'
+      required:
+        - kind
+    TabularTimeseriesOptions:
+      type: object
+      additionalProperties: true
+      properties:
+        case_name:
+          type: string
+          description: Logical use-case label used in trainer naming and returned in results.
+        timestamp_column:
+          type: string
+        target_column:
+          type: string
+        delimiter:
+          type: string
+        time_bucket:
+          type: string
+          enum: [ none, hour, day ]
+          description: Timestamp bucketing granularity used for row aggregation, horizon alignment and time-feature encoding.
+        entity_key_columns:
+          type: array
+          items:
+            type: string
+        numerical_input_columns:
+          type: array
+          items:
+            type: string
+        categorical_input_columns:
+          type: array
+          items:
+            type: string
+        exclude_input_columns:
+          type: array
+          items:
+            type: string
+        numerical_scaler:
+          type: string
+          enum: [ zscore, minmax, none ]
+        categorical_encoding:
+          type: string
+          enum: [ one_hot, none ]
+    TimeHorizon:
+      type: object
+      properties:
+        value:
+          type: integer
+          minimum: 1
+        unit:
+          type: string
+          enum: [ hours, days, steps ]
+      required:
+        - value
+        - unit
+    SplitConfig:
+      type: object
+      properties:
+        train_ratio:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.64
+        val_ratio:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.16
+        test_ratio:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.20
+    ArchitectureConfig:
+      type: object
+      properties:
+        family:
+          type: string
+          enum: [ kan, tabnet ]
+          default: kan
+        mode:
+          type: string
+          enum: [ baseline, metamorphic ]
+          default: baseline
+        epochs:
+          type: integer
+          minimum: 1
+          default: 50
+        batch_size:
+          type: integer
+          minimum: 1
+          default: 32
+        learning_rate:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.0005
+        seed:
+          type: integer
+          default: 42
+        tabnet_n_steps:
+          type: integer
+          minimum: 1
+          default: 4
+        tabnet_n_d:
+          type: integer
+          minimum: 1
+          default: 24
+        tabnet_n_a:
+          type: integer
+          minimum: 1
+          default: 24
+        tabnet_gamma:
+          type: number
+          format: float
+          minimum: 0
+          default: 1.3
+        tabnet_dropout:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.05
+        tabnet_mask_temperature:
+          type: number
+          format: float
+          minimum: 1.0e-9
+          default: 1.0
+    MetamorphicConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: false
+        supervised_weight:
+          type: number
+          format: float
+          minimum: 0
+          default: 1.0
+        relation_constraint_weight:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.25
+        worst_case_over_t_weight:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.0
+        violation_atol:
+          type: number
+          format: float
+          minimum: 0
+          default: 1.0e-6
+        violation_rtol:
+          type: number
+          format: float
+          minimum: 0
+          default: 1.0e-4
+        rule_specs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleSpec'
+          default: [ ]
+    RuleSpec:
+      type: object
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [ relation, over_t ]
+          default: relation
+        category:
+          type: string
+          enum: [ invariance, directional_ordinal, target_mapped ]
+          default: directional_ordinal
+        relation:
+          type: string
+          enum: [ equal, greater, greater_or_equal, lower, lower_or_equal, monotonic, proportional ]
+        direction:
+          type: string
+          enum: [ increasing, decreasing ]
+        weight:
+          type: number
+          format: float
+          default: 1.0
+        margin:
+          type: number
+          format: float
+          default: 0.0
+        factor:
+          type: number
+          format: float
+          default: 1.0
+        violation_atol:
+          type: number
+          format: float
+          nullable: true
+        violation_rtol:
+          type: number
+          format: float
+          nullable: true
+        description:
+          type: string
+        consistency_profile:
+          type: string
+        transforms:
+          oneOf:
+            - $ref: '#/components/schemas/RuleTransform'
+            - type: array
+              items:
+                $ref: '#/components/schemas/RuleTransform'
+        target_transform:
+          $ref: '#/components/schemas/RuleTargetTransform'
+    RuleTransform:
+      type: object
+      properties:
+        op:
+          type: string
+          enum: [ add, scale, scale_if_positive, noise, gaussian_noise, zero ]
+        type:
+          type: string
+          description: Alias de op
+        field:
+          type: string
+          enum:
+            - t
+            - numerical_t_features
+            - categorical_t_features
+            - lookback_t
+            - numerical_lookback_features
+            - categorical_lookback_features
+        index:
+          type: integer
+          minimum: 0
+        feature:
+          type: string
+        delta:
+          type: number
+          format: float
+        factor:
+          type: number
+          format: float
+        stddev:
+          type: number
+          format: float
+        clamp_min:
+          type: number
+          format: float
+        clamp_max:
+          type: number
+          format: float
+      required:
+        - field
+    RuleTargetTransform:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [ scale, shift ]
+        type:
+          type: string
+          description: Alias de kind
+        factor:
+          type: number
+          format: float
+        delta:
+          type: number
+          format: float
+    TrainingAcceptedResponse:
+      type: object
+      properties:
+        ticket_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        created_at:
+          type: string
+          format: date-time
+        links:
+          type: object
+          properties:
+            self:
+              type: string
+      required:
+        - ticket_id
+        - status
+        - created_at
+    TicketResponse:
+      type: object
+      properties:
+        ticket_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        request:
+          type: object
+          additionalProperties: true
+        result:
+          allOf:
+            - $ref: '#/components/schemas/TrainingResult'
+          nullable: true
+        error:
+          allOf:
+            - $ref: '#/components/schemas/TicketError'
+          nullable: true
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketHistoryItem'
+      required:
+        - ticket_id
+        - status
+        - created_at
+        - updated_at
+        - request
+        - result
+        - error
+        - history
+    TrainingResult:
+      type: object
+      properties:
+        job_name:
+          type: string
+        case_name:
+          type: string
+        trainer_mode:
+          type: string
+          enum: [ baseline, metamorphic ]
+        architecture_family:
+          type: string
+          enum: [ kan, tabnet ]
+        device:
+          type: string
+        model_path:
+          type: string
+        best_val_metrics:
+          $ref: '#/components/schemas/EvalMetrics'
+        val_metrics:
+          $ref: '#/components/schemas/EvalMetrics'
+        test_metrics:
+          $ref: '#/components/schemas/EvalMetrics'
+        val_violation_report:
+          allOf:
+            - $ref: '#/components/schemas/ViolationReport'
+          nullable: true
+        test_violation_report:
+          allOf:
+            - $ref: '#/components/schemas/ViolationReport'
+          nullable: true
+        input_variables:
+          type: array
+          items:
+            type: string
+        output_variable:
+          type: string
+        lookback:
+          type: integer
+        out_min:
+          type: number
+          format: float
+        out_max:
+          type: number
+          format: float
+        rule_summary:
+          $ref: '#/components/schemas/RuleSummary'
+        rule_specs_count:
+          type: integer
+        metadata:
+          type: object
+          additionalProperties: true
+        request:
+          type: object
+          additionalProperties: true
+      required:
+        - job_name
+        - case_name
+        - trainer_mode
+        - architecture_family
+        - device
+        - model_path
+        - best_val_metrics
+        - val_metrics
+        - test_metrics
+        - input_variables
+        - output_variable
+        - lookback
+        - out_min
+        - out_max
+        - rule_summary
+        - rule_specs_count
+        - metadata
+        - request
+    RuleSummary:
+      type: object
+      properties:
+        num_specs:
+          type: integer
+        num_relation_tests:
+          type: integer
+        num_over_T_transforms:
+          type: integer
+        by_category:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+        - num_specs
+        - num_relation_tests
+        - num_over_T_transforms
+        - by_category
+    EvalMetrics:
+      type: object
+      properties:
+        n_samples:
+          type: integer
+        output_scale:
+          type: string
+        mae_model:
+          type: number
+          format: float
+        rmse_model:
+          type: number
+          format: float
+        r2:
+          type: number
+          format: float
+        mae_raw:
+          type: number
+          format: float
+        rmse_raw:
+          type: number
+          format: float
+        max_abs_err_raw:
+          type: number
+          format: float
+        p95_abs_err_raw:
+          type: number
+          format: float
+        p99_abs_err_raw:
+          type: number
+          format: float
+        tail5_mean_abs_err_raw:
+          type: number
+          format: float
+      required:
+        - n_samples
+        - output_scale
+        - mae_model
+        - rmse_model
+        - r2
+        - mae_raw
+        - rmse_raw
+        - max_abs_err_raw
+        - p95_abs_err_raw
+        - p99_abs_err_raw
+        - tail5_mean_abs_err_raw
+    ViolationReport:
+      type: object
+      properties:
+        overall_violation_rate:
+          type: number
+          format: float
+        total_violations:
+          type: integer
+        total_cases:
+          type: integer
+        by_test:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ViolationStats'
+      required:
+        - overall_violation_rate
+        - total_violations
+        - total_cases
+        - by_test
+    ViolationStats:
+      type: object
+      properties:
+        violations:
+          type: integer
+        total:
+          type: integer
+        violation_rate:
+          type: number
+          format: float
+      required:
+        - violations
+        - total
+        - violation_rate
+    TicketHistoryItem:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        at:
+          type: string
+          format: date-time
+      required:
+        - status
+        - at
+    TicketError:
+      type: object
+      properties:
+        type:
+          type: string
+        message:
+          type: string
+        traceback:
+          type: string
+      required:
+        - type
+        - message
+        - traceback
+    TicketStatus:
+      type: string
+      enum: [ queued, running, completed, failed ]
+    InferenceRequest:
+      type: object
+      properties:
+        training_ticket_id:
+          type: string
+        output_scale:
+          type: string
+          enum: [ raw, normalized, both ]
+          default: raw
+        instances:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/InferenceInstance'
+      required:
+        - training_ticket_id
+        - instances
+    InferenceInstance:
+      type: object
+      properties:
+        variables:
+          type: object
+          additionalProperties:
+            type: number
+        t:
+          type: array
+          items:
+            type: number
+        numerical_t_features:
+          type: array
+          items:
+            type: number
+        categorical_t_features:
+          type: array
+          items:
+            type: number
+        lookback_t:
+          type: array
+          items:
+            type: number
+        numerical_lookback_features:
+          type: array
+          items:
+            type: number
+        categorical_lookback_features:
+          type: array
+          items:
+            type: number
+      description: |
+        Each instance can be sent as:
+        - `variables` map using model input variable names, or
+        - explicit internal vectors (`t`, `numerical_t_features`, etc).
+    InferenceResponse:
+      type: object
+      properties:
+        source_training_ticket_id:
+          type: string
+        job_name:
+          type: string
+        case_name:
+          type: string
+        architecture_family:
+          type: string
+          enum: [ kan, tabnet ]
+        trainer_mode:
+          type: string
+          enum: [ baseline, metamorphic ]
+        device:
+          type: string
+        model_path:
+          type: string
+        input_variables:
+          type: array
+          items:
+            type: string
+        output_variable:
+          type: string
+        output_scale:
+          type: string
+          enum: [ raw, normalized, both ]
+        predictions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InferencePrediction'
+        inferred_at:
+          type: string
+          format: date-time
+        request:
+          $ref: '#/components/schemas/InferenceRequest'
+      required:
+        - source_training_ticket_id
+        - job_name
+        - case_name
+        - architecture_family
+        - trainer_mode
+        - device
+        - model_path
+        - input_variables
+        - output_variable
+        - output_scale
+        - predictions
+        - inferred_at
+        - request
+    InferencePrediction:
+      type: object
+      properties:
+        index:
+          type: integer
+        value:
+          type: number
+        raw:
+          type: number
+        normalized:
+          type: number
+      required:
+        - index
+    CreateCaseRequest:
+      type: object
+      properties:
+        case_id:
+          type: string
+      required:
+        - case_id
+    CaseCreatedResponse:
+      type: object
+      properties:
+        case_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        paths:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - case_id
+        - created_at
+        - paths
+    CaseDeletedResponse:
+      type: object
+      properties:
+        case_id:
+          type: string
+        deleted:
+          type: boolean
+      required:
+        - case_id
+        - deleted
+    CreateDatasetRequest:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        source_path:
+          type: string
+      required:
+        - source_path
+    DatasetResponse:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        case_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        source_path:
+          type: string
+        stored_path:
+          type: string
+        original_filename:
+          type: string
+        stored_filename:
+          type: string
+        size_bytes:
+          type: integer
+      required:
+        - dataset_id
+        - case_id
+        - created_at
+        - source_path
+        - stored_path
+        - original_filename
+        - stored_filename
+        - size_bytes
+    DatasetListResponse:
+      type: object
+      properties:
+        case_id:
+          type: string
+        datasets:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetResponse'
+      required:
+        - case_id
+        - datasets
+    InvalidRequestError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ invalid_request ]
+        message:
+          type: string
+      required:
+        - error
+        - message
+    CaseNotFoundError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ case_not_found ]
+        case_id:
+          type: string
+      required:
+        - error
+        - case_id
+    CaseAlreadyExistsError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ case_already_exists ]
+        case_id:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - case_id
+        - message
+    DatasetNotFoundError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ dataset_not_found ]
+        message:
+          type: string
+      required:
+        - error
+        - message
+    DatasetSourceNotFoundError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ dataset_source_not_found ]
+        message:
+          type: string
+      required:
+        - error
+        - message
+    DatasetAlreadyExistsError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ dataset_already_exists ]
+        message:
+          type: string
+      required:
+        - error
+        - message
+    TicketNotFoundError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ ticket_not_found ]
+        ticket_id:
+          type: string
+      required:
+        - error
+        - ticket_id
+    TrainingTicketNotFoundError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ training_ticket_not_found ]
+        training_ticket_id:
+          type: string
+      required:
+        - error
+        - training_ticket_id
+    InvalidTrainingStateError:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [ invalid_training_state ]
+        message:
+          type: string
+      required:
+        - error
+        - message

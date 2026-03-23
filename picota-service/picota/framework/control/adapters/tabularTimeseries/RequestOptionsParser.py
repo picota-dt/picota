@@ -31,16 +31,11 @@ class RequestOptionsParser:
         time_bucket = str(raw.get("time_bucket") or inferred_bucket).strip().lower()
         if time_bucket not in {"none", "hour", "day"}:
             raise ValueError(f"Unsupported data_source.options.time_bucket '{time_bucket}'")
-
-        inferred_time_features = "none"
-        if time_bucket == "hour":
-            inferred_time_features = "hourly"
-        elif time_bucket == "day":
-            inferred_time_features = "daily"
-        time_features = str(raw.get("time_features") or inferred_time_features).strip().lower()
-        if time_features not in {"none", "hourly", "daily"}:
-            raise ValueError(f"Unsupported data_source.options.time_features '{time_features}'")
-
+        if raw.get("time_features") is not None:
+            raise ValueError(
+                "data_source.options.time_features is no longer supported; "
+                "use data_source.options.time_bucket only"
+            )
         case_name = str(raw.get("case_name") or request.job_name).strip()
         if not case_name:
             case_name = request.job_name
@@ -73,7 +68,6 @@ class RequestOptionsParser:
             target_column=target_column,
             delimiter=delimiter,
             time_bucket=time_bucket,
-            time_features=time_features,
             entity_key_columns=entity_key_columns,
             numerical_input_columns=numerical_input_columns,
             categorical_input_columns=categorical_input_columns,

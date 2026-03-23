@@ -12,7 +12,6 @@ def energigran_data_source(repo_root: Path, *, limit_rows: int | None = None) ->
             "timestamp_column": "instant",
             "target_column": "generation",
             "time_bucket": "hour",
-            "time_features": "hourly",
             "entity_key_columns": [],
             "numerical_input_columns": [
                 "cellTemperature",
@@ -40,7 +39,6 @@ def europlatano_data_source(repo_root: Path, *, limit_rows: int | None = None) -
             "timestamp_column": "instant",
             "target_column": "Production",
             "time_bucket": "day",
-            "time_features": "daily",
             "entity_key_columns": ["Category", "Island", "Area", "Altitude"],
             "numerical_scaler": "minmax",
             "categorical_encoding": "one_hot",

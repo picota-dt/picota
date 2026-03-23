@@ -10,7 +10,6 @@ class AdapterOptions:
     target_column: str
     delimiter: str | None
     time_bucket: str
-    time_features: str
     entity_key_columns: list[str]
     numerical_input_columns: list[str] | None
     categorical_input_columns: list[str] | None

@@ -11,10 +11,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Bind host")
     parser.add_argument("--port", type=int, default=8080, help="Bind port")
     parser.add_argument(
-        "--tickets-dir",
+        "--workspace-dir",
         type=Path,
         default=None,
-        help="Directory where ticket JSON files and artifacts are persisted",
+        help="Workspace directory where cases, datasets and tickets are persisted",
     )
     return parser
 
@@ -24,7 +24,7 @@ def main() -> None:
     TrainingService.runHttpService(
         host=args.host,
         port=int(args.port),
-        ticket_dir=args.tickets_dir,
+        workspace_dir=args.workspace_dir,
     )
 
 

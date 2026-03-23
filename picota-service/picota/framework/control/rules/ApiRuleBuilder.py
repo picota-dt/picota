@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 import torch
@@ -23,6 +24,7 @@ from picota.framework.control.rules.apiRuleBuilder.RuleBuildContext import RuleB
 
 Batch = dict[str, torch.Tensor]
 BatchTransform = Callable[[Batch], Batch]
+logger = logging.getLogger(__name__)
 
 
 class ApiRuleBuilder:
@@ -42,13 +44,16 @@ class ApiRuleBuilder:
             feature_names: dict[str, list[str]] | None = None,
     ) -> list[CatalogRuleSpec]:
         if raw_rule_specs is None:
+            logger.info("No metamorphic rule specs provided")
             return []
+        logger.info("Building metamorphic rule specs from API payload (count=%s)", len(raw_rule_specs))
         context = RuleBuildContext(feature_names=feature_names or {})
         built: list[CatalogRuleSpec] = []
         for index, raw_spec in enumerate(raw_rule_specs):
             if not isinstance(raw_spec, dict):
                 raise ValueError(f"metamorphic.rule_specs[{index}] must be an object")
             built.append(ApiRuleBuilder._buildSingleRuleSpec(raw_spec, index=index, context=context))
+        logger.info("Built metamorphic catalog specs (count=%s)", len(built))
         return built
 
     @staticmethod
@@ -144,13 +149,20 @@ class ApiRuleBuilder:
             else:
                 raise ValueError(f"Unsupported relation kind '{relation_kind}' for rule '{name}'")
 
-            return CatalogRuleSpec(
+            spec = CatalogRuleSpec(
                 name=name,
                 category=category,
                 relation_test=relation_test,
                 description=str(description) if description is not None else None,
                 consistency_profile=str(consistency_profile) if consistency_profile is not None else None,
             )
+            logger.info(
+                "Built relation rule spec (name=%s, relation=%s, category=%s)",
+                name,
+                relation_kind,
+                category.value,
+            )
+            return spec
 
         if spec_kind == "over_t":
             weight = float(raw_spec.get("weight", 1.0))
@@ -161,13 +173,15 @@ class ApiRuleBuilder:
                 weight=weight,
                 target_transform=target_transform,
             )
-            return CatalogRuleSpec(
+            spec = CatalogRuleSpec(
                 name=name,
                 category=category,
                 over_T_transform=over_t_transform,
                 description=str(description) if description is not None else None,
                 consistency_profile=str(consistency_profile) if consistency_profile is not None else None,
             )
+            logger.info("Built over_t rule spec (name=%s, category=%s)", name, category.value)
+            return spec
 
         raise ValueError(f"Unsupported rule spec kind '{spec_kind}' for rule '{name}'")
 

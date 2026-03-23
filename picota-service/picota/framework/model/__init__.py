@@ -1,6 +1,7 @@
 from picota.framework.model.ArchitectureConfig import ArchitectureConfig
 from picota.framework.model.DataSourceConfig import DataSourceConfig
 from picota.framework.model.FieldParser import FieldParser
+from picota.framework.model.InferenceRequest import InferenceRequest
 from picota.framework.model.MetamorphicConfig import MetamorphicConfig
 from picota.framework.model.SplitConfig import SplitConfig
 from picota.framework.model.TimeHorizon import TimeHorizon
@@ -18,6 +19,7 @@ __all__ = [
     "ArchitectureConfig",
     "MetamorphicConfig",
     "DataSourceConfig",
+    "InferenceRequest",
     "TrainingRequest",
     "TrainingDefaults",
 ]

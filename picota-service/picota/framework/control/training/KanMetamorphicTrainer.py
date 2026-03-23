@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 from typing import Iterable
 
 import torch
@@ -9,6 +10,8 @@ from picota.framework.control.MetamorphicEvaluation import MetamorphicEvaluation
 from picota.framework.control.kan.KAN import KAN
 from picota.framework.control.kan.MetamorphicLoss import CompositeMetamorphicLoss
 from picota.framework.control.training.KanBaselineTrainer import KanBaselineTrainer
+
+logger = logging.getLogger(__name__)
 
 
 class KanMetamorphicTrainer(KanBaselineTrainer):
@@ -59,6 +62,12 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
     def train(self, train_items: list[dict], val_items: list[dict]) -> tuple[KAN, dict[str, float | int | str]]:
         if len(train_items) == 0 or len(val_items) == 0:
             raise ValueError("train_items and val_items must be non-empty")
+        logger.info(
+            "KAN metamorphic training started (name=%s, epochs=%s, batch_size=%s)",
+            self.name,
+            self.epochs,
+            self.batch_size,
+        )
         self._set_seed()
         model = KAN(
             input_features=len(self.input_variables),
@@ -74,8 +83,10 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
         best_state = copy.deepcopy(model.state_dict())
         best_val_mae = float("inf")
         best_metrics: dict[str, float | int | str] | None = None
-        for _ in range(self.epochs):
+        for epoch in range(1, self.epochs + 1):
             model.train()
+            epoch_loss_sum = 0.0
+            epoch_batches = 0
             for batch in train_loader:
                 out = batch["out"]
                 optimizer.zero_grad()
@@ -88,7 +99,18 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
                 )
                 loss.backward()
                 optimizer.step()
+                epoch_loss_sum += float(loss.item())
+                epoch_batches += 1
             val_metrics = self._evaluate_loader(model, val_loader)
+            train_loss = (epoch_loss_sum / float(epoch_batches)) if epoch_batches > 0 else float("nan")
+            logger.info(
+                "KAN metamorphic epoch %s/%s finished (train_loss=%s, val_mae=%s, val_rmse=%s)",
+                epoch,
+                self.epochs,
+                train_loss,
+                val_metrics.mae_model,
+                val_metrics.rmse_model,
+            )
             if val_metrics.mae_model < best_val_mae:
                 best_val_mae = val_metrics.mae_model
                 best_state = copy.deepcopy(model.state_dict())
@@ -97,6 +119,7 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
         if best_metrics is None:
             best_metrics = self._evaluate_loader(model, val_loader).as_dict()
         self.last_validation_metrics = best_metrics
+        logger.info("KAN metamorphic training completed (best_val_mae=%s)", best_metrics.get("mae_model"))
         return model, best_metrics
 
     def evaluate_with_rule_violations(

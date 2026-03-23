@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
 from typing import Any
 
 from picota.framework.control.ticket.TicketStore import TicketStore
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingThreadRegistry:
@@ -23,10 +26,12 @@ class TrainingThreadRegistry:
         with self._threads_lock:
             self._threads[ticket_id] = thread
         thread.start()
+        logger.info("Training thread launched (ticket_id=%s, thread=%s)", ticket_id, thread.name)
 
     def remove(self, ticket_id: str) -> None:
         with self._threads_lock:
             self._threads.pop(ticket_id, None)
+        logger.info("Training thread removed from registry (ticket_id=%s)", ticket_id)
 
     def wait_terminal(
             self,

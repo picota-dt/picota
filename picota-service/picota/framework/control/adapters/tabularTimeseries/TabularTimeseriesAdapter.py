@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from picota.framework.control.adapters.tabularTimeseries.ColumnResolver import ColumnResolver
@@ -13,6 +14,8 @@ from picota.framework.control.adapters.tabularTimeseries.TemporalDatasetBuilder 
 from picota.framework.model.TrainingRequest import TrainingRequest
 from picota.framework.model.data.PreparedTrainingData import PreparedTrainingData
 
+logger = logging.getLogger(__name__)
+
 
 class TabularTimeseriesAdapter:
     def __init__(self, request: TrainingRequest):
@@ -23,11 +26,13 @@ class TabularTimeseriesAdapter:
 
     def prepare(self) -> PreparedTrainingData:
         source_path = self._resolve_source_path()
+        logger.info("Loading tabular_timeseries source: %s", str(source_path))
         options = self.options_parser.parse(self.request)
         raw_rows, headers, _delimiter = self.data_loader.load(source_path, explicit_delimiter=options.delimiter)
 
         if self.request.data_source.limit_rows is not None:
             raw_rows = raw_rows[: int(self.request.data_source.limit_rows)]
+        logger.info("Raw rows loaded: %s", len(raw_rows))
         if len(raw_rows) < 10:
             raise ValueError(f"Need >=10 raw rows, got {len(raw_rows)}")
 
@@ -41,6 +46,7 @@ class TabularTimeseriesAdapter:
             categorical_columns=selection.categorical_columns,
         )
         aggregated_rows = dataset_builder.aggregate_rows(raw_rows)
+        logger.info("Aggregated rows: %s", len(aggregated_rows))
         if len(aggregated_rows) < 10:
             raise ValueError(f"Need >=10 aggregated rows, got {len(aggregated_rows)}")
 
@@ -50,6 +56,7 @@ class TabularTimeseriesAdapter:
             time_bucket=options.time_bucket,
         )
         horizon_rows = dataset_builder.build_horizon_examples(aggregated_rows, horizon_delta=horizon_delta)
+        logger.info("Rows after horizon pairing: %s (horizon_delta=%s)", len(horizon_rows), horizon_delta)
         if len(horizon_rows) < 10:
             raise ValueError(f"Need >=10 rows after horizon pairing, got {len(horizon_rows)}")
 
@@ -59,6 +66,12 @@ class TabularTimeseriesAdapter:
             val_ratio=self.request.split.val_ratio,
             test_ratio=self.request.split.test_ratio,
         ).split(horizon_rows)
+        logger.info(
+            "Dataset split completed (train=%s, val=%s, test=%s)",
+            len(train_rows),
+            len(val_rows),
+            len(test_rows),
+        )
 
         target_min, target_max = self._fit_target_minmax(train_rows)
         scaler = self.scaler_factory.build(
@@ -71,11 +84,12 @@ class TabularTimeseriesAdapter:
         if options.categorical_encoding == "one_hot" and len(selection.categorical_columns) > 0:
             one_hot_map = ItemEncoder.build_one_hot_map(train_rows, selection.categorical_columns)
 
+        time_features_kind = ItemEncoder.time_features_kind_from_bucket(options.time_bucket)
         one_hot_feature_names = ItemEncoder.build_one_hot_feature_names(one_hot_map)
-        time_feature_names = ItemEncoder.time_feature_names(options.time_features)
+        time_feature_names = ItemEncoder.time_feature_names(time_features_kind)
 
         encoder = ItemEncoder(
-            time_features_kind=options.time_features,
+            time_features_kind=time_features_kind,
             numerical_columns=selection.numerical_columns,
             numerical_value_getter=scaler.value_getter,
             one_hot_map=one_hot_map,
@@ -87,10 +101,17 @@ class TabularTimeseriesAdapter:
         test_items = encoder.build_items(test_rows)
 
         input_variables = [*time_feature_names, *selection.numerical_columns, *one_hot_feature_names]
-        case_name = options.case_name or self.request.job_name
+        logger.info(
+            "Prepared training data (job=%s, case=%s, numerical=%s, categorical=%s)",
+            self.request.job_name,
+            options.case_name,
+            len(selection.numerical_columns),
+            len(selection.categorical_columns),
+        )
 
         return PreparedTrainingData(
-            case_name=case_name,
+            job_name=self.request.job_name,
+            case_name=options.case_name,
             input_variables=input_variables,
             output_variable=self.request.target_variable,
             lookback=self.request.lookback,
@@ -104,8 +125,8 @@ class TabularTimeseriesAdapter:
             metadata={
                 "dataset_path": str(source_path),
                 "data_source_kind": self.request.data_source.kind,
+                "case_name": options.case_name,
                 "time_bucket": options.time_bucket,
-                "time_features": options.time_features,
                 "horizon_value": self.request.time_horizon.value,
                 "horizon_unit": self.request.time_horizon.unit,
                 "parsed_rows": len(raw_rows),

@@ -4,14 +4,19 @@
     <option name="sdkName" value="Python 3.12 (picota)" />
   </component>
   <component name="ExternalStorageConfigurationManager" enabled="true" />
+  <component name="JavaScriptSettings">
+    <option name="languageLevel" value="FLOW" />
+  </component>
   <component name="MavenProjectsManager">
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/runtime.trainer/test/pom.xml" />
+        <option value="$PROJECT_DIR$/runtime.evaluator/untitled/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">
       <set>
+        <option value="$PROJECT_DIR$/runtime.evaluator/untitled/pom.xml" />
         <option value="$PROJECT_DIR$/runtime.trainer/test/pom.xml" />
       </set>
     </option>

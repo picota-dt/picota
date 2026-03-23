@@ -1,1 +1,0 @@
-tar -cf ../digital-twin/res/scripts/evaluator.tar ./

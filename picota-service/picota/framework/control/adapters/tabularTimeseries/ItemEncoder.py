@@ -83,6 +83,14 @@ class ItemEncoder:
         return names
 
     @staticmethod
+    def time_features_kind_from_bucket(time_bucket: str) -> str:
+        if time_bucket == "hour":
+            return "hourly"
+        if time_bucket == "day":
+            return "daily"
+        return "none"
+
+    @staticmethod
     def time_feature_names(time_features_kind: str) -> list[str]:
         if time_features_kind == "hourly":
             return list(HOURLY_TIME_FEATURE_NAMES)

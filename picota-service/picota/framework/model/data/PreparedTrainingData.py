@@ -6,6 +6,7 @@ from typing import Any
 
 @dataclass
 class PreparedTrainingData:
+    job_name: str
     case_name: str
     input_variables: list[str]
     output_variable: str

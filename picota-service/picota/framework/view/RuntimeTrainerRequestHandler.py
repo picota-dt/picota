@@ -6,35 +6,55 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse
 
-from picota.framework.view.TrainingApiController import TrainingApiController
+from picota.framework.view.PicotaApiController import PicotaApiController
 
 
 class RuntimeTrainerRequestHandler(BaseHTTPRequestHandler):
-    controller: TrainingApiController | None = None
+    controller: PicotaApiController | None = None
 
     def do_POST(self) -> None:  # pragma: no cover - exercised by integration test through network loop
-        parsed = urlparse(self.path)
-        if parsed.path != "/api/v1/trainings":
-            self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
-            return
+        parts = self._path_parts()
         payload = self._read_json_body()
         if payload is None:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_json"})
             return
-        status, body = self._controller().create_training(payload)
+        if parts == ("api", "v1", "trainings"):
+            status, body = self._controller().create_training(payload)
+        elif parts == ("api", "v1", "inferences"):
+            status, body = self._controller().create_inference(payload)
+        elif parts == ("api", "v1", "cases"):
+            status, body = self._controller().create_case(payload)
+        elif len(parts) == 5 and parts[:3] == ("api", "v1", "cases") and parts[4] == "datasets":
+            status, body = self._controller().create_case_dataset(parts[3], payload)
+        elif len(parts) == 5 and parts[:3] == ("api", "v1", "cases") and parts[4] == "trainings":
+            status, body = self._controller().create_case_training(parts[3], payload)
+        else:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+            return
         self._send_json(status, body)
 
     def do_GET(self) -> None:  # pragma: no cover - exercised by integration test through network loop
-        parsed = urlparse(self.path)
-        prefix = "/api/v1/trainings/"
-        if not parsed.path.startswith(prefix):
+        parts = self._path_parts()
+        if len(parts) == 4 and parts[:3] == ("api", "v1", "trainings"):
+            ticket_id = parts[3].strip()
+            if not ticket_id:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "missing_ticket_id"})
+                return
+            status, body = self._controller().get_training(ticket_id)
+        elif len(parts) == 5 and parts[:3] == ("api", "v1", "cases") and parts[4] == "datasets":
+            status, body = self._controller().list_case_datasets(parts[3])
+        else:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
-        ticket_id = parsed.path[len(prefix):].strip()
-        if not ticket_id:
-            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "missing_ticket_id"})
+        self._send_json(status, body)
+
+    def do_DELETE(self) -> None:  # pragma: no cover - exercised by integration test through network loop
+        parts = self._path_parts()
+        if len(parts) == 4 and parts[:3] == ("api", "v1", "cases"):
+            status, body = self._controller().delete_case(parts[3])
+        else:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
-        status, body = self._controller().get_training(ticket_id)
         self._send_json(status, body)
 
     def log_message(self, format: str, *args) -> None:
@@ -63,7 +83,11 @@ class RuntimeTrainerRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def _controller(self) -> TrainingApiController:
+    def _controller(self) -> PicotaApiController:
         if self.controller is None:
             raise RuntimeError("RuntimeTrainerRequestHandler.controller is not configured")
         return self.controller
+
+    def _path_parts(self) -> tuple[str, ...]:
+        parsed = urlparse(self.path)
+        return tuple(part for part in parsed.path.split("/") if part)
