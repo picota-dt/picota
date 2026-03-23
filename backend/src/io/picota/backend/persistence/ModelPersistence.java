@@ -1,13 +1,13 @@
 package io.picota.backend.persistence;
 
-import io.picota.backend.model.ApplicationModel;
+import io.picota.backend.model.Application;
 
 import java.util.Optional;
 
 public interface ModelPersistence extends AutoCloseable {
-	Optional<ApplicationModel> loadModel();
+	Optional<Application> loadModel();
 
-	void saveModel(ApplicationModel model);
+	void saveModel(Application model);
 
 	@Override
 	void close();

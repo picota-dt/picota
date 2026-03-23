@@ -1,7 +1,7 @@
 package io.picota.backend.control.commands;
 
 public enum UiCommandsMode {
-	MOCK,
+	DEMO,
 	REAL;
 
 	public static UiCommandsMode fromValue(String raw, UiCommandsMode defaultMode) {

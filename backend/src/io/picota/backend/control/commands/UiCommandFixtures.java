@@ -1,22 +1,18 @@
 package io.picota.backend.control.commands;
 
-import io.picota.backend.control.ui.*;
+import io.picota.backend.control.ui.schemas.*;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
-final class UiCommandFixtures {
-	static final String DEFAULT_EMAIL = "alex.laurent@acme.io";
-	static final String DEFAULT_PASSWORD = "password123";
+public final class UiCommandFixtures {
+	public static final String DEFAULT_EMAIL = "alex.laurent@acme.io";
+	public static final String DEFAULT_PASSWORD = "password123";
 
 	private UiCommandFixtures() {
 	}
 
-	static User demoUser() {
+	public static User demoUser() {
 		return new User(
 				"usr_demo_001",
 				"Alex Laurent",
@@ -29,7 +25,7 @@ final class UiCommandFixtures {
 		);
 	}
 
-	static List<DigitalTwin> demoTwins() {
+	public static List<DigitalTwin> demoTwins() {
 		List<DigitalTwin> twins = new ArrayList<>();
 		twins.add(new DigitalTwin(
 				"twin_8f4a1b2c",
@@ -110,7 +106,7 @@ final class UiCommandFixtures {
 		return twins;
 	}
 
-	static User copyUser(User user) {
+	public static User copyUser(User user) {
 		return new User(
 				user.id(),
 				user.name(),
@@ -123,7 +119,7 @@ final class UiCommandFixtures {
 		);
 	}
 
-	static DigitalTwin copyTwin(DigitalTwin twin) {
+	public static DigitalTwin copyTwin(DigitalTwin twin) {
 		return new DigitalTwin(
 				twin.id(),
 				twin.name(),
@@ -141,7 +137,7 @@ final class UiCommandFixtures {
 		);
 	}
 
-	static InferenceEngine copyInferenceEngine(InferenceEngine engine) {
+	public static InferenceEngine copyInferenceEngine(InferenceEngine engine) {
 		return new InferenceEngine(
 				engine.trained(),
 				engine.algorithm(),
@@ -164,7 +160,7 @@ final class UiCommandFixtures {
 		);
 	}
 
-	static DigitalSubject copySubject(DigitalSubject subject) {
+	public static DigitalSubject copySubject(DigitalSubject subject) {
 		return new DigitalSubject(
 				subject.id(),
 				subject.name(),
@@ -172,11 +168,11 @@ final class UiCommandFixtures {
 		);
 	}
 
-	static Variable copyVariable(Variable variable) {
+	public static Variable copyVariable(Variable variable) {
 		return new Variable(variable.id(), variable.name(), variable.unit(), variable.value(), variable.variableType());
 	}
 
-	static SubjectDataset copyDataset(SubjectDataset dataset) {
+	public static SubjectDataset copyDataset(SubjectDataset dataset) {
 		Map<String, VariableStat> copiedStats = new LinkedHashMap<>();
 		if (dataset.stats() != null) {
 			dataset.stats().forEach((k, v) -> copiedStats.put(k, new VariableStat(v.count(), v.mean(), v.std(), v.min(), v.max(), v.median())));
@@ -191,7 +187,7 @@ final class UiCommandFixtures {
 		);
 	}
 
-	static List<VariableTelemetry> telemetryForSubject(DigitalSubject subject, int points, Random random) {
+	public static List<VariableTelemetry> telemetryForSubject(DigitalSubject subject, int points, Random random) {
 		List<VariableTelemetry> telemetry = new ArrayList<>();
 		int safePoints = Math.max(1, Math.min(points, 100));
 		for (Variable variable : subject.variables()) {

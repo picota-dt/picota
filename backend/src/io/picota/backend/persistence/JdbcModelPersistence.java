@@ -1,17 +1,12 @@
 package io.picota.backend.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.picota.backend.model.ApplicationModel;
+import io.picota.backend.model.Application;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -30,7 +25,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 	}
 
 	@Override
-	public Optional<ApplicationModel> loadModel() {
+	public Optional<Application> loadModel() {
 		String sql = "select payload from app_model_state where id = ?";
 		try (Connection connection = openConnection();
 			 PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -38,8 +33,8 @@ public class JdbcModelPersistence implements ModelPersistence {
 			try (ResultSet rs = statement.executeQuery()) {
 				if (!rs.next()) return Optional.empty();
 				String payload = rs.getString("payload");
-				if (payload == null || payload.isBlank()) return Optional.of(ApplicationModel.empty());
-				return Optional.of(mapper.readValue(payload, ApplicationModel.class));
+				if (payload == null || payload.isBlank()) return Optional.of(Application.empty());
+				return Optional.of(mapper.readValue(payload, Application.class));
 			}
 		} catch (SQLException | IOException e) {
 			throw new PersistenceException("Unable to load application model from database", e);
@@ -47,8 +42,8 @@ public class JdbcModelPersistence implements ModelPersistence {
 	}
 
 	@Override
-	public void saveModel(ApplicationModel model) {
-		ApplicationModel safeModel = model == null ? ApplicationModel.empty() : model;
+	public void saveModel(Application model) {
+		Application safeModel = model == null ? Application.empty() : model;
 		String payload;
 		try {
 			payload = mapper.writeValueAsString(safeModel);

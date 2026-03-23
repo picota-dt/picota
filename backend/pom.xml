@@ -52,7 +52,7 @@
 						<manifest>
 							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 							<addClasspath>true</addClasspath>
-							<mainClass>io.picota.backend.control.BackendServerLauncher</mainClass>
+							<mainClass>io.picota.backend.control.Main</mainClass>
 							<packageName>io.picota</packageName>
 							<classpathPrefix>dependency/</classpathPrefix>
 						</manifest>
