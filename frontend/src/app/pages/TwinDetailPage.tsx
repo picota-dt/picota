@@ -1,14 +1,12 @@
-import {useState, useCallback, useEffect} from "react";
-import {useParams, useNavigate} from "react-router";
+import {useEffect, useState} from "react";
+import {useNavigate, useParams} from "react-router";
 import {useApp} from "../context/AppContext";
 import {PropertiesTab} from "../components/twin-detail/PropertiesTab";
 import {MonitoringTab} from "../components/twin-detail/MonitoringTab";
 import {ModelTab} from "../components/twin-detail/ModelTab";
 import {DataTab} from "../components/twin-detail/DataTab";
 import {InferenceTab} from "../components/twin-detail/InferenceTab";
-import {
-    Settings, Activity, Code2, Cpu, Tag, ChevronLeft, AlertTriangle, Database,
-} from "lucide-react";
+import {Activity, AlertTriangle, ChevronLeft, Code2, Cpu, Database, Settings, Tag,} from "lucide-react";
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -129,13 +127,13 @@ export default function TwinDetailPage() {
     };
 
     // Called by ModelTab when it internally resolved the pending change (via save/discard in its own dialog)
-    const handlePendingTabResolved = useCallback(() => {
+    const handlePendingTabResolved = () => {
         if (pendingTab) {
             setActiveTab(pendingTab);
             setPendingTab(null);
         }
         setShowLeaveDialog(false);
-    }, [pendingTab]);
+    };
 
     const handleUpdateModel = (model: string, newVersion: string) => {
         updateTwin(twin.id, {model, version: newVersion, updatedAt: "Just now"});

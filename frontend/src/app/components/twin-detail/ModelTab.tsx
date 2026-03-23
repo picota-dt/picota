@@ -1,6 +1,6 @@
-import {useState, useRef, useEffect} from "react";
+import {useEffect, useState} from "react";
 import Editor from "@monaco-editor/react";
-import {Send, Save, AlertTriangle} from "lucide-react";
+import {AlertTriangle, Save, Send} from "lucide-react";
 import {DigitalTwin} from "../../context/AppContext";
 
 // ─── Semver helpers ────────────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ export function ModelTab({twin, onUpdateModel, onDirtyChange, pendingTabChange, 
     };
 
     return (
-        <div className="flex flex-col h-full gap-0">
+        <div className="flex flex-col h-full min-h-0 gap-0 bg-[#0f1117]">
             {/* Dirty indicator */}
             {isDirty && (
                 <div
@@ -175,55 +175,60 @@ export function ModelTab({twin, onUpdateModel, onDirtyChange, pendingTabChange, 
                 </div>
             )}
 
-            {/* Monaco editor */}
-            <div className="flex-1 min-h-0" style={{height: "calc(100vh - 340px)", minHeight: "320px"}}>
-                <Editor
-                    height="100%"
-                    defaultLanguage="yaml"
-                    value={code}
-                    onChange={handleEditorChange}
-                    theme="vs-dark"
-                    options={{
-                        fontSize: 13,
-                        lineHeight: 20,
-                        fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-                        minimap: {enabled: false},
-                        scrollBeyondLastLine: false,
-                        padding: {top: 16, bottom: 16},
-                        wordWrap: "on",
-                        renderLineHighlight: "gutter",
-                        lineNumbers: "on",
-                        glyphMargin: false,
-                        folding: true,
-                        automaticLayout: true,
-                    }}
-                />
-            </div>
-
-            {/* Prompt bar */}
-            <div className="flex-shrink-0 border-t border-white/8 bg-[#0f1117] px-4 py-3">
-                <div className="flex items-center gap-2">
-                    <div className="flex-1 relative">
-                        <input
-                            type="text"
-                            placeholder="Ask AI to modify the model… (e.g. 'Add a temperature sensor to the motor')"
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && prompt.trim()) setPrompt("");
+            <div className="flex-1 min-h-0 px-4 sm:px-6 lg:px-8 py-4">
+                <div className="h-full min-h-0 max-w-5xl mx-auto flex flex-col gap-4">
+                    {/* Monaco editor */}
+                    <div
+                        className="flex-1 min-h-[320px] bg-[#1a1d27] border border-white/10 rounded-2xl overflow-hidden shadow-xl shadow-black/25">
+                        <Editor
+                            height="100%"
+                            defaultLanguage="yaml"
+                            value={code}
+                            onChange={handleEditorChange}
+                            theme="vs-dark"
+                            options={{
+                                fontSize: 13,
+                                lineHeight: 20,
+                                fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+                                minimap: {enabled: false},
+                                scrollBeyondLastLine: false,
+                                padding: {top: 16, bottom: 16},
+                                wordWrap: "on",
+                                renderLineHighlight: "gutter",
+                                lineNumbers: "on",
+                                glyphMargin: false,
+                                folding: true,
+                                automaticLayout: true,
                             }}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/25 text-sm outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all"
                         />
                     </div>
-                    <button
-                        disabled={!prompt.trim()}
-                        className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-white px-3.5 py-2.5 rounded-xl text-sm transition-all"
-                    >
-                        <Send className="w-4 h-4"/>
-                        <span className="hidden sm:inline">Send</span>
-                    </button>
+
+                    {/* Prompt bar */}
+                    <div className="flex-shrink-0 bg-[#1a1d27] border border-white/10 rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 relative">
+                                <input
+                                    type="text"
+                                    placeholder="Ask AI to modify the model… (e.g. 'Add a temperature sensor to the motor')"
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && prompt.trim()) setPrompt("");
+                                    }}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/25 text-sm outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all"
+                                />
+                            </div>
+                            <button
+                                disabled={!prompt.trim()}
+                                className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-white px-3.5 py-2.5 rounded-xl text-sm transition-all"
+                            >
+                                <Send className="w-4 h-4"/>
+                                <span className="hidden sm:inline">Send</span>
+                            </button>
+                        </div>
+                        <p className="text-white/20 text-xs mt-1.5 pl-1">AI model editing is coming soon</p>
+                    </div>
                 </div>
-                <p className="text-white/20 text-xs mt-1.5 pl-1">AI model editing is coming soon</p>
             </div>
 
             {/* Save dialog */}
