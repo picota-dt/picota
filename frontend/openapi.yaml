@@ -1,0 +1,1576 @@
+openapi: 3.1.0
+
+info:
+  title: Picota API
+  version: 1.0.0
+  description: |
+    REST API that backs the **Picota** digital-twin management platform.
+
+    ## Authentication
+    Every protected endpoint requires a Bearer token obtained from
+    `POST /auth/login` or `POST /auth/register`.
+
+    ## Credits
+    Active twins consume credits while running inference. The balance is
+    attached to the authenticated user and can be topped up via
+    `POST /users/me/credits/purchase`.
+
+    ## Versioning
+    Model changes follow semantic versioning (semver). The bump type
+    (`patch`, `minor`, `major`) must be supplied when saving a model.
+
+servers:
+  - url: https://api.picota.io/v1
+    description: Production
+  - url: https://api-staging.picota.io/v1
+    description: Staging
+
+tags:
+  - name: Auth
+    description: Authentication & session management
+  - name: Twins
+    description: Digital twin catalogue — CRUD & lifecycle
+  - name: Model
+    description: Twin model (YAML/DSL) editor & versioning
+  - name: Subjects
+    description: Digital subjects and their sensor / inferred variables
+  - name: Monitoring
+    description: Real-time variable telemetry
+  - name: Data
+    description: Per-subject initial dataset upload and descriptive statistics
+  - name: Inference Engine
+    description: Engine configuration, training jobs and retraining schedules
+  - name: User
+    description: User profile and credit management
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security
+# ─────────────────────────────────────────────────────────────────────────────
+
+security:
+  - bearerAuth: [ ]
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  # ── Reusable parameters ────────────────────────────────────────────────────
+
+  parameters:
+    twinId:
+      name: twinId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique twin identifier
+      example: "twin_8f4a1b2c"
+
+    subjectId:
+      name: subjectId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Subject identifier within a twin
+      example: "pump_main"
+
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Async training job identifier
+      example: "job_9e3c7d1f"
+
+  # ── Schemas ────────────────────────────────────────────────────────────────
+
+  schemas:
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+
+    LoginRequest:
+      type: object
+      required: [ email, password ]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alex.laurent@acme.io
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: "••••••••"
+
+    RegisterRequest:
+      type: object
+      required: [ name, email, password ]
+      properties:
+        name:
+          type: string
+          example: Alex Laurent
+        email:
+          type: string
+          format: email
+          example: alex.laurent@acme.io
+        password:
+          type: string
+          format: password
+          minLength: 8
+        organization:
+          type: string
+          example: Acme Industries
+
+    AuthResponse:
+      type: object
+      required: [ token, user ]
+      properties:
+        token:
+          type: string
+          description: JWT access token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        expiresIn:
+          type: integer
+          description: Token lifetime in seconds
+          example: 86400
+        user:
+          $ref: "#/components/schemas/User"
+
+    ChangePasswordRequest:
+      type: object
+      required: [ currentPassword, newPassword ]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+
+    # ── User ──────────────────────────────────────────────────────────────────
+
+    User:
+      type: object
+      required: [ id, name, email, role, credits, avatarInitials, joinedAt, organization ]
+      properties:
+        id:
+          type: string
+          example: usr_3f8a9c1d
+        name:
+          type: string
+          example: Alex Laurent
+        email:
+          type: string
+          format: email
+          example: alex.laurent@acme.io
+        role:
+          type: string
+          example: Engineer
+        organization:
+          type: string
+          example: Acme Industries
+        avatarInitials:
+          type: string
+          maxLength: 3
+          example: AL
+        credits:
+          type: integer
+          minimum: 0
+          description: Remaining inference credits
+          example: 1248
+        joinedAt:
+          type: string
+          description: Human-readable membership date
+          example: January 2024
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        organization:
+          type: string
+
+    # ── Credits ───────────────────────────────────────────────────────────────
+
+    CreditPack:
+      type: string
+      enum: [ starter, growth, scale ]
+      description: |
+        - `starter` — 500 credits · $9
+        - `growth`  — 2 000 credits · $29
+        - `scale`   — 10 000 credits · $99
+
+    PurchaseCreditsRequest:
+      type: object
+      required: [ pack ]
+      properties:
+        pack:
+          $ref: "#/components/schemas/CreditPack"
+        paymentMethodId:
+          type: string
+          description: Stripe payment method ID
+          example: pm_1OkJXxEk7bGFQY5zVrV4xN8c
+
+    PurchaseCreditsResponse:
+      type: object
+      required: [ balance, creditsAdded, transactionId ]
+      properties:
+        balance:
+          type: integer
+          description: New credit balance after purchase
+          example: 3248
+        creditsAdded:
+          type: integer
+          example: 2000
+        transactionId:
+          type: string
+          example: txn_7f2e9a4b
+
+    # ── Digital Twin ──────────────────────────────────────────────────────────
+
+    TwinStatus:
+      type: string
+      enum: [ active, draft, offline ]
+      description: |
+        - `active`  — twin is running and consuming credits
+        - `draft`   — twin is being configured; not yet deployed
+        - `offline` — twin was active but has been stopped
+
+    DigitalTwin:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - version
+        - image
+        - type
+        - status
+        - updatedAt
+        - creditsUsed
+        - model
+        - subjects
+        - inferenceEngine
+        - datasets
+      properties:
+        id:
+          type: string
+          example: twin_8f4a1b2c
+        name:
+          type: string
+          example: Pump Station Alpha
+        description:
+          type: string
+          example: >
+            Digital replica of the main water pumping station.
+            Monitors pressure, flow rate, and energy consumption in real time.
+        version:
+          type: string
+          description: Current model version (semver)
+          example: "1.0.0"
+        image:
+          type: string
+          format: uri
+          description: Thumbnail image URL
+          example: https://images.unsplash.com/photo-xyz
+        type:
+          $ref: "#/components/schemas/TwinType"
+        status:
+          $ref: "#/components/schemas/TwinStatus"
+        updatedAt:
+          type: string
+          description: Human-readable relative timestamp
+          example: "2 hours ago"
+        creditsUsed:
+          type: integer
+          minimum: 0
+          description: Total credits consumed by this twin to date
+          example: 142
+        model:
+          type: string
+          description: Full YAML/DSL model definition
+          example: "# Pump Station Alpha\nsubjects:\n  - id: pump_main\n    ..."
+        subjects:
+          type: array
+          items:
+            $ref: "#/components/schemas/DigitalSubject"
+        inferenceEngine:
+          oneOf:
+            - $ref: "#/components/schemas/InferenceEngine"
+            - type: "null"
+        datasets:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubjectDataset"
+
+    TwinType:
+      type: string
+      enum:
+        - Machine
+        - Building
+        - Infrastructure
+        - Energy System
+        - Pipeline
+        - Robot
+        - Sensor Network
+        - Other
+
+    CreateTwinRequest:
+      type: object
+      required: [ name, type ]
+      properties:
+        name:
+          type: string
+          example: Pump Station Beta
+        type:
+          $ref: "#/components/schemas/TwinType"
+        description:
+          type: string
+          example: Secondary pumping station for Zone B
+
+    UpdateTwinRequest:
+      type: object
+      description: All fields are optional; only supplied fields are updated.
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: "#/components/schemas/TwinStatus"
+
+    # ── Subjects & Variables ──────────────────────────────────────────────────
+
+    VariableType:
+      type: string
+      enum: [ sensor, inferred ]
+      description: |
+        - `sensor`   — value comes from a physical measurement
+        - `inferred` — value is predicted by the inference engine
+
+    Variable:
+      type: object
+      required: [ id, name, unit, value, variableType ]
+      properties:
+        id:
+          type: string
+          example: v3
+        name:
+          type: string
+          example: flow_rate
+        unit:
+          type: string
+          example: "m³/h"
+        value:
+          type: number
+          format: double
+          description: Last known value
+          example: 24.5
+        variableType:
+          $ref: "#/components/schemas/VariableType"
+
+    DigitalSubject:
+      type: object
+      required: [ id, name, variables ]
+      properties:
+        id:
+          type: string
+          example: pump_main
+        name:
+          type: string
+          example: Main Pump
+        variables:
+          type: array
+          items:
+            $ref: "#/components/schemas/Variable"
+
+    # ── Real-time Telemetry ───────────────────────────────────────────────────
+
+    TelemetryPoint:
+      type: object
+      required: [ time, value ]
+      properties:
+        time:
+          type: string
+          format: date-time
+          example: "2026-03-22T14:32:01Z"
+        value:
+          type: number
+          format: double
+          example: 24.7
+
+    VariableTelemetry:
+      type: object
+      required: [ variableId, variableName, unit, current, history ]
+      properties:
+        variableId:
+          type: string
+          example: v3
+        variableName:
+          type: string
+          example: flow_rate
+        unit:
+          type: string
+          example: "m³/h"
+        current:
+          type: number
+          format: double
+          example: 24.7
+        history:
+          type: array
+          maxItems: 100
+          description: Ordered list of the latest data points (oldest → newest)
+          items:
+            $ref: "#/components/schemas/TelemetryPoint"
+
+    # ── Model ─────────────────────────────────────────────────────────────────
+
+    ModelContent:
+      type: object
+      required: [ content, version ]
+      properties:
+        content:
+          type: string
+          description: Full YAML/DSL model definition
+        version:
+          type: string
+          description: Current version (semver)
+          example: "1.2.0"
+
+    SaveModelRequest:
+      type: object
+      required: [ content, versionBump ]
+      properties:
+        content:
+          type: string
+          description: Updated YAML/DSL model definition
+        versionBump:
+          type: string
+          enum: [ patch, minor, major ]
+          description: >
+            Semver bump to apply:
+            `patch` for fixes, `minor` for backwards-compatible features,
+            `major` for breaking changes.
+          example: minor
+        commitMessage:
+          type: string
+          description: Optional description of what changed
+          example: Added fatigue_index variable to turbine_t1
+
+    SaveModelResponse:
+      type: object
+      required: [ version, updatedAt ]
+      properties:
+        version:
+          type: string
+          example: "1.3.0"
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── Datasets ──────────────────────────────────────────────────────────────
+
+    VariableStat:
+      type: object
+      required: [ count, mean, std, min, max, median ]
+      description: Descriptive statistics for a single numeric variable column
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          example: 1500
+        mean:
+          type: number
+          format: double
+          example: 24.5
+        std:
+          type: number
+          format: double
+          description: Standard deviation
+          example: 1.0
+        min:
+          type: number
+          format: double
+          example: 23.0
+        max:
+          type: number
+          format: double
+          example: 26.0
+        median:
+          type: number
+          format: double
+          example: 24.5
+
+    SubjectDataset:
+      type: object
+      required: [ subjectId, uploadedRecords, realtimeRecords, stats ]
+      properties:
+        subjectId:
+          type: string
+          example: pump_main
+        fileName:
+          type: string
+          description: Original filename of the uploaded CSV
+          example: pump_main_data.csv
+        uploadedRecords:
+          type: integer
+          minimum: 0
+          description: Number of rows parsed from the uploaded CSV
+          example: 1500
+        realtimeRecords:
+          type: integer
+          minimum: 0
+          description: Number of records received via live ingestion since upload
+          example: 247
+        uploadedAt:
+          type: string
+          format: date-time
+          example: "2024-11-09T08:00:00Z"
+        stats:
+          type: object
+          description: >
+            Map from variable name to its descriptive statistics.
+            Only columns whose headers match a defined variable name are included.
+          additionalProperties:
+            $ref: "#/components/schemas/VariableStat"
+          example:
+            pressure_in:
+              count: 1500
+              mean: 3.2
+              std: 0.1
+              min: 3.0
+              max: 3.5
+              median: 3.2
+
+    # ── Inference Engine ──────────────────────────────────────────────────────
+
+    TrainingAlgorithm:
+      type: string
+      enum: [ LSTM, GRU, Transformer, TCN, MLP ]
+
+    InferredVariableResult:
+      type: object
+      required: [ name, accuracy, mae, violations ]
+      properties:
+        name:
+          type: string
+          example: flow_rate
+        accuracy:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Prediction accuracy in percent
+          example: 94.2
+        mae:
+          type: number
+          format: double
+          description: Mean Absolute Error on the test split
+          example: 0.38
+        violations:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Percentage of predictions that violated model constraints
+          example: 1.2
+
+    RetrainingSchedule:
+      type: string
+      enum: [ daily, weekly, monthly ]
+
+    RetrainingConfig:
+      type: object
+      required: [ enabled, schedule, minNewRecords, timeOfDay ]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether automatic retraining is active
+          example: true
+        schedule:
+          $ref: "#/components/schemas/RetrainingSchedule"
+        minNewRecords:
+          type: integer
+          minimum: 0
+          description: >
+            Minimum number of new records required to trigger a retraining run.
+            The job is skipped if the threshold is not met.
+          example: 500
+        timeOfDay:
+          type: string
+          pattern: "^([01]\\d|2[0-3]):[0-5]\\d$"
+          description: UTC time of day when the job runs (HH:MM)
+          example: "02:00"
+
+    InferenceEngine:
+      type: object
+      required: [ trained, algorithm ]
+      properties:
+        trained:
+          type: boolean
+          example: true
+        algorithm:
+          $ref: "#/components/schemas/TrainingAlgorithm"
+        trainedAt:
+          type: string
+          format: date-time
+          description: Timestamp of the last successful training run
+          example: "2024-11-10T14:32:00Z"
+        epochs:
+          type: integer
+          minimum: 1
+          example: 200
+        learningRate:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 0.001
+        windowSize:
+          type: integer
+          minimum: 1
+          description: Lookback window in time steps
+          example: 60
+        batchSize:
+          type: integer
+          minimum: 1
+          example: 32
+        inferredVariables:
+          type: array
+          description: Per-variable quality metrics from the last training run
+          items:
+            $ref: "#/components/schemas/InferredVariableResult"
+        retrainingConfig:
+          $ref: "#/components/schemas/RetrainingConfig"
+
+    SaveEngineConfigRequest:
+      type: object
+      required: [ algorithm ]
+      properties:
+        algorithm:
+          $ref: "#/components/schemas/TrainingAlgorithm"
+        epochs:
+          type: integer
+          minimum: 1
+          default: 100
+        learningRate:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          default: 0.001
+        windowSize:
+          type: integer
+          minimum: 1
+          default: 60
+        batchSize:
+          type: integer
+          minimum: 1
+          default: 32
+
+    # ── Training Jobs ─────────────────────────────────────────────────────────
+
+    TrainingJobStatus:
+      type: string
+      enum: [ queued, preparing, training, evaluating, done, failed ]
+
+    TrainingJob:
+      type: object
+      required: [ jobId, twinId, status, createdAt ]
+      properties:
+        jobId:
+          type: string
+          example: job_9e3c7d1f
+        twinId:
+          type: string
+          example: twin_8f4a1b2c
+        status:
+          $ref: "#/components/schemas/TrainingJobStatus"
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Overall progress percentage
+          example: 75
+        currentPhase:
+          type: string
+          description: Human-readable description of the current phase
+          example: "Training epoch 112/200"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-03-22T14:00:00Z"
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        errorMessage:
+          type: string
+          description: Populated only when status is `failed`
+        result:
+          description: Populated only when status is `done`
+          $ref: "#/components/schemas/InferenceEngine"
+
+    # ── Common responses ──────────────────────────────────────────────────────
+
+    Error:
+      type: object
+      required: [ code, message ]
+      properties:
+        code:
+          type: string
+          example: TWIN_NOT_FOUND
+        message:
+          type: string
+          example: No twin found with id twin_8f4a1b2c
+        details:
+          type: object
+          additionalProperties: true
+
+  # ── Reusable responses ─────────────────────────────────────────────────────
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: UNAUTHORIZED
+            message: Bearer token is missing or has expired
+
+    Forbidden:
+      description: Authenticated user does not own this resource
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    UnprocessableEntity:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # AUTH
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /auth/register:
+    post:
+      tags: [ Auth ]
+      operationId: register
+      summary: Create a new user account
+      security: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created; returns token and user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: EMAIL_ALREADY_EXISTS
+                message: An account with this email already exists
+
+  /auth/login:
+    post:
+      tags: [ Auth ]
+      operationId: login
+      summary: Sign in and obtain a JWT access token
+      security: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: INVALID_CREDENTIALS
+                message: Email or password is incorrect
+
+  /auth/logout:
+    post:
+      tags: [ Auth ]
+      operationId: logout
+      summary: Invalidate the current session token
+      responses:
+        "204":
+          description: Session invalidated
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/change-password:
+    post:
+      tags: [ Auth ]
+      operationId: changePassword
+      summary: Update the authenticated user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: Password changed successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # USER / PROFILE
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /users/me:
+    get:
+      tags: [ User ]
+      operationId: getMe
+      summary: Get the authenticated user's profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      tags: [ User ]
+      operationId: updateMe
+      summary: Update name, email or organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [ User ]
+      operationId: deleteMe
+      summary: Permanently delete the authenticated user's account
+      responses:
+        "204":
+          description: Account deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me/credits/purchase:
+    post:
+      tags: [ User ]
+      operationId: purchaseCredits
+      summary: Purchase a credit pack
+      description: |
+        Available packs:
+        | Pack | Credits | Price |
+        |------|---------|-------|
+        | `starter` | 500 | $9 |
+        | `growth` | 2 000 | $29 |
+        | `scale` | 10 000 | $99 |
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseCreditsRequest"
+      responses:
+        "200":
+          description: Purchase successful; returns new credit balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseCreditsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Payment failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: PAYMENT_FAILED
+                message: Card was declined
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TWINS — catalogue
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins:
+    get:
+      tags: [ Twins ]
+      operationId: listTwins
+      summary: List all twins owned by the authenticated user
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/TwinStatus"
+          description: Filter by twin status
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/TwinType"
+          description: Filter by asset type
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Full-text search on name and description
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [ updatedAt, name, creditsUsed ]
+            default: updatedAt
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [ asc, desc ]
+            default: desc
+      responses:
+        "200":
+          description: Array of digital twins
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DigitalTwin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [ Twins ]
+      operationId: createTwin
+      summary: Create a new digital twin (always starts as draft)
+      description: |
+        A new twin is created with status `draft` and an empty model scaffold.
+        The UI navigates directly to the twin's detail page after creation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTwinRequest"
+      responses:
+        "201":
+          description: Newly created twin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalTwin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /twins/{twinId}:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    get:
+      tags: [ Twins ]
+      operationId: getTwin
+      summary: Get a single twin by ID
+      responses:
+        "200":
+          description: Digital twin detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalTwin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [ Twins ]
+      operationId: updateTwin
+      summary: Update twin metadata or status (Properties tab)
+      description: |
+        Used by the **Properties** tab to update `name`, `description` and/or
+        `status`. Only supplied fields are modified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTwinRequest"
+      responses:
+        "200":
+          description: Updated twin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalTwin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [ Twins ]
+      operationId: deleteTwin
+      summary: Permanently delete a twin and all associated data
+      responses:
+        "204":
+          description: Twin deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MODEL — DSL editor & versioning
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins/{twinId}/model:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    get:
+      tags: [ Model ]
+      operationId: getModel
+      summary: Get the current model definition and its version
+      responses:
+        "200":
+          description: Model content and current semver version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelContent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [ Model ]
+      operationId: saveModel
+      summary: Save a new model version (Model tab — Save button)
+      description: |
+        Persists the YAML/DSL editor content and bumps the semver version.
+        The bump type (`patch`, `minor`, `major`) is selected in the
+        versioning dialog before confirming the save.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveModelRequest"
+      responses:
+        "200":
+          description: New version number and timestamp
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveModelResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Model YAML failed validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: MODEL_PARSE_ERROR
+                message: "Line 12: unknown key 'variabels'"
+
+  /twins/{twinId}/model/prompt:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    post:
+      tags: [ Model ]
+      operationId: applyModelPrompt
+      summary: Apply a natural-language prompt to the model (Model tab — prompt bar)
+      description: |
+        Sends a free-text instruction to the AI assistant, which rewrites
+        the model YAML/DSL accordingly. The response contains the full
+        updated model content; the user can review it before saving.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ prompt, currentContent ]
+              properties:
+                prompt:
+                  type: string
+                  example: "Add a temperature variable in °C to the motor subject"
+                currentContent:
+                  type: string
+                  description: Current editor content to use as base for the rewrite
+      responses:
+        "200":
+          description: AI-generated updated model content
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ content ]
+                properties:
+                  content:
+                    type: string
+                    description: Full updated YAML/DSL model definition
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SUBJECTS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins/{twinId}/subjects:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    get:
+      tags: [ Subjects ]
+      operationId: listSubjects
+      summary: List all digital subjects for a twin
+      responses:
+        "200":
+          description: Array of subjects with their variable definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DigitalSubject"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /twins/{twinId}/subjects/{subjectId}:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+      - $ref: "#/components/parameters/subjectId"
+
+    get:
+      tags: [ Subjects ]
+      operationId: getSubject
+      summary: Get a single subject and its variables
+      responses:
+        "200":
+          description: Digital subject
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalSubject"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MONITORING — real-time telemetry
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins/{twinId}/subjects/{subjectId}/telemetry:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+      - $ref: "#/components/parameters/subjectId"
+
+    get:
+      tags: [ Monitoring ]
+      operationId: getSubjectTelemetry
+      summary: Get the latest telemetry values for all variables in a subject
+      description: |
+        Returns the current value and recent history for every variable.
+        The UI polls this endpoint every 3 seconds to drive the live
+        sparkline charts in the **Monitoring** tab.
+      parameters:
+        - name: historyPoints
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of historical data points to include per variable
+      responses:
+        "200":
+          description: Telemetry for all subject variables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VariableTelemetry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DATA — per-subject dataset upload & statistics
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins/{twinId}/datasets:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    get:
+      tags: [ Data ]
+      operationId: listDatasets
+      summary: List all uploaded datasets for a twin (one per subject)
+      responses:
+        "200":
+          description: Array of subject datasets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubjectDataset"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /twins/{twinId}/datasets/{subjectId}:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+      - $ref: "#/components/parameters/subjectId"
+
+    get:
+      tags: [ Data ]
+      operationId: getDataset
+      summary: Get the dataset and statistics for a specific subject
+      responses:
+        "200":
+          description: Subject dataset with descriptive statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectDataset"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [ Data ]
+      operationId: uploadDataset
+      summary: Upload or replace the initial dataset for a subject (CSV)
+      description: |
+        Accepts a CSV file. The first row must contain headers that match the
+        subject's variable names. Rows with non-numeric values are skipped.
+        Descriptive statistics are computed server-side and returned.
+
+        **Maximum file size:** 50 MB
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ file ]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with headers matching variable names
+      responses:
+        "200":
+          description: Dataset processed and statistics returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectDataset"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: File exceeds 50 MB limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: File is not valid CSV or has no parseable numeric columns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags: [ Data ]
+      operationId: deleteDataset
+      summary: Remove the uploaded dataset for a subject
+      responses:
+        "204":
+          description: Dataset deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INFERENCE ENGINE
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins/{twinId}/inference-engine:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    get:
+      tags: [ Inference Engine ]
+      operationId: getInferenceEngine
+      summary: Get the current inference engine configuration and last training results
+      responses:
+        "200":
+          description: Inference engine (null if not yet configured)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/InferenceEngine"
+                  - type: "null"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [ Inference Engine ]
+      operationId: saveEngineConfig
+      summary: Save the engine hyperparameter configuration (Inference Engine tab — Save configuration)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveEngineConfigRequest"
+      responses:
+        "200":
+          description: Updated inference engine object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InferenceEngine"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /twins/{twinId}/inference-engine/retraining:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    put:
+      tags: [ Inference Engine ]
+      operationId: saveRetrainingConfig
+      summary: Enable / disable automatic retraining and set its schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetrainingConfig"
+      responses:
+        "200":
+          description: Updated retraining configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrainingConfig"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TRAINING JOBS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /twins/{twinId}/training-jobs:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+
+    post:
+      tags: [ Inference Engine ]
+      operationId: launchTraining
+      summary: Launch a new training job (Inference Engine tab — Start training)
+      description: |
+        Triggers an asynchronous training run using the engine configuration
+        currently saved for this twin. At least one subject must have an
+        uploaded dataset.
+
+        Poll `GET /twins/{twinId}/training-jobs/{jobId}` to track progress.
+        When `status` becomes `done`, the inference engine's `trained` flag
+        is set to `true` and quality metrics are available.
+      responses:
+        "202":
+          description: Training job accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A training job is already running for this twin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: TRAINING_ALREADY_RUNNING
+                message: A training job is already in progress for this twin
+        "422":
+          description: Pre-conditions not met (no engine config or no dataset)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: PRECONDITION_FAILED
+                message: At least one subject must have an uploaded dataset before training
+
+  /twins/{twinId}/training-jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+      - $ref: "#/components/parameters/jobId"
+
+    get:
+      tags: [ Inference Engine ]
+      operationId: getTrainingJob
+      summary: Poll the status and progress of a training job
+      description: |
+        Poll every 2–5 seconds while `status` is `queued`, `preparing`,
+        `training` or `evaluating`. When `status` is `done` or `failed`,
+        stop polling.
+      responses:
+        "200":
+          description: Training job with current status and progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
