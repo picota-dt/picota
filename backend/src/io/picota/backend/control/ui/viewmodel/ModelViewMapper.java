@@ -113,6 +113,7 @@ public final class ModelViewMapper {
 		return new DigitalSubject(
 				model.id(),
 				model.name(),
+				toViewTimeBucket(model.timeBucket()),
 				mapList(model.variables(), ModelViewMapper::toViewVariable)
 		);
 	}
@@ -122,6 +123,7 @@ public final class ModelViewMapper {
 		return new io.picota.backend.model.DigitalSubject(
 				view.id(),
 				view.name(),
+				toDomainTimeBucket(view.timeBucket()),
 				mapList(view.variables(), ModelViewMapper::toDomainVariable)
 		);
 	}
@@ -131,9 +133,12 @@ public final class ModelViewMapper {
 		return new Variable(
 				model.id(),
 				model.name(),
+				model.description(),
 				model.unit(),
-				model.value(),
-				toViewVariableType(model.variableType())
+				toViewVariableDataType(model.dataType()),
+				toViewVariableType(model.variableType()),
+				model.timeHorizon(),
+				model.lookback()
 		);
 	}
 
@@ -142,9 +147,12 @@ public final class ModelViewMapper {
 		return new io.picota.backend.model.Variable(
 				view.id(),
 				view.name(),
+				view.description(),
 				view.unit(),
-				view.value(),
-				toDomainVariableType(view.variableType())
+				toDomainVariableDataType(view.dataType()),
+				toDomainVariableType(view.variableType()),
+				view.timeHorizon(),
+				view.lookback()
 		);
 	}
 
@@ -222,12 +230,34 @@ public final class ModelViewMapper {
 
 	private static InferredVariableResult toViewInferredVariableResult(io.picota.backend.model.InferredVariableResult model) {
 		if (model == null) return null;
-		return new InferredVariableResult(model.name(), model.accuracy(), model.mae(), model.violations());
+		return new InferredVariableResult(
+				model.name(),
+				model.mae(),
+				model.r2(),
+				model.validationSampleCount(),
+				model.validationDurationSeconds(),
+				toViewVariableDataType(model.dataType()),
+				model.accuracy(),
+				model.macroF1(),
+				model.violations(),
+				model.constraintViolations()
+		);
 	}
 
 	private static io.picota.backend.model.InferredVariableResult toDomainInferredVariableResult(InferredVariableResult view) {
 		if (view == null) return null;
-		return new io.picota.backend.model.InferredVariableResult(view.name(), view.accuracy(), view.mae(), view.violations());
+		return new io.picota.backend.model.InferredVariableResult(
+				view.name(),
+				view.mae(),
+				view.r2(),
+				view.validationSampleCount(),
+				view.validationDurationSeconds(),
+				toDomainVariableDataType(view.dataType()),
+				view.accuracy(),
+				view.macroF1(),
+				view.violations(),
+				view.constraintViolations()
+		);
 	}
 
 	private static RetrainingConfig toViewRetrainingConfig(io.picota.backend.model.RetrainingConfig model) {
@@ -272,6 +302,22 @@ public final class ModelViewMapper {
 
 	private static io.picota.backend.model.VariableType toDomainVariableType(VariableType view) {
 		return view == null ? null : io.picota.backend.model.VariableType.valueOf(view.name());
+	}
+
+	private static VariableDataType toViewVariableDataType(io.picota.backend.model.VariableDataType model) {
+		return model == null ? null : VariableDataType.valueOf(model.name());
+	}
+
+	private static io.picota.backend.model.VariableDataType toDomainVariableDataType(VariableDataType view) {
+		return view == null ? null : io.picota.backend.model.VariableDataType.valueOf(view.name());
+	}
+
+	private static TimeBucket toViewTimeBucket(io.picota.backend.model.TimeBucket model) {
+		return model == null ? null : TimeBucket.valueOf(model.name());
+	}
+
+	private static io.picota.backend.model.TimeBucket toDomainTimeBucket(TimeBucket view) {
+		return view == null ? null : io.picota.backend.model.TimeBucket.valueOf(view.name());
 	}
 
 	private static TrainingAlgorithm toViewTrainingAlgorithm(io.picota.backend.model.TrainingAlgorithm model) {

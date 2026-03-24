@@ -7,6 +7,11 @@
       <option name="url" value="https://artifactory.intino.io/artifactory/releases" />
     </remote-repository>
     <remote-repository>
+      <option name="id" value="Quassar" />
+      <option name="name" value="Quassar" />
+      <option name="url" value="https://quassar.io/artifacts/releases" />
+    </remote-repository>
+    <remote-repository>
       <option name="id" value="central" />
       <option name="name" value="Central Repository" />
       <option name="url" value="https://repo.maven.apache.org/maven2" />

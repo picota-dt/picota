@@ -16,6 +16,7 @@
 	</properties>
 
 	<build>
+		<sourceDirectory>src</sourceDirectory>
 		<testSourceDirectory>test</testSourceDirectory>
 		<outputDirectory>../out/production/backend</outputDirectory>
 		<testOutputDirectory>../out/test/backend</testOutputDirectory>
@@ -41,6 +42,8 @@
 				<configuration>
 					<source>${maven.compiler.source}</source>
 					<target>${maven.compiler.target}</target>
+					<proc>none</proc>
+					<generatedSourcesDirectory>${java.io.tmpdir}/picota-backend-apt</generatedSourcesDirectory>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -90,13 +93,12 @@
 				<executions>
 					<execution>
 						<id>add-source</id>
-						<phase>generate-sources</phase>
+						<phase>initialize</phase>
 						<goals>
 							<goal>add-source</goal>
 						</goals>
 						<configuration>
 							<sources>
-								<source>src</source>
 								<source>gen</source>
 
 							</sources>
@@ -104,13 +106,12 @@
 					</execution>
 					<execution>
 						<id>add-test-source</id>
-						<phase>generate-test-sources</phase>
+						<phase>initialize</phase>
 						<goals>
 							<goal>add-test-source</goal>
 						</goals>
 						<configuration>
 							<sources>
-								<source>test</source>
 								<source>test-gen</source>
 
 							</sources>
@@ -122,6 +123,10 @@
 	</build>
 
 	<repositories>
+		<repository>
+			<id>Quassar</id>
+			<url>https://quassar.io/artifacts/releases</url>
+		</repository>
 		<repository>
 			<id>intino-maven</id>
 			<url>https://artifactory.intino.io/artifactory/releases</url>
@@ -180,6 +185,22 @@
 			<artifactId>mysql-connector-j</artifactId>
 			<scope>compile</scope>
 			<version>9.6.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.intino</groupId>
+			<artifactId>language-server</artifactId>
+			<version>1.3.13</version>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse.lsp4j</groupId>
+			<artifactId>org.eclipse.lsp4j</artifactId>
+			<scope>compile</scope>
+			<version>0.23.1</version>
+		</dependency>
+		<dependency>
+			<groupId>io.quassar.monentia.picota</groupId>
+			<artifactId>parser-java</artifactId>
+			<version>1.2.3</version>
 		</dependency>
 	</dependencies>
 </project>

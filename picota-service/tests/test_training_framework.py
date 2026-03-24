@@ -328,7 +328,7 @@ class CaseWorkspaceApiTest(unittest.TestCase):
                     "case_name": "energigran",
                     "timestamp_column": "instant",
                     "target_column": "generation",
-                    "time_bucket": "hour",
+                    "time_bucket": "hours",
                     "entity_key_columns": [],
                     "numerical_input_columns": [
                         "cellTemperature",

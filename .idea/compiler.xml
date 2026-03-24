@@ -21,12 +21,6 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
       </profile>
-      <profile name="Annotation profile for backend" enabled="true">
-        <sourceOutputDir name="../out/build/backend/generated-sources/annotations" />
-        <sourceTestOutputDir name="../out/build/backend/generated-test-sources/test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <module name="backend" />
-      </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="test" target="21" />

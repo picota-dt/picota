@@ -16,7 +16,7 @@ class TimeHorizon:
     def from_dict(cls, data: dict[str, Any], *, default_unit: str, default_value: int) -> "TimeHorizon":
         value = FieldParser.readInt(data.get("value", default_value), fieldName="time_horizon.value", minimum=1)
         unit = str(data.get("unit", default_unit)).strip().lower()
-        if unit not in {"hours", "days", "steps"}:
+        if unit not in {"seconds", "minutes", "hours", "days", "months", "years", "steps"}:
             raise TrainingConfigError(f"Unsupported time_horizon.unit '{unit}'")
         return cls(value=value, unit=unit)
 

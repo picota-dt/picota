@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import logging
 import random
+from collections.abc import Callable
 
 import numpy as np
 import torch
@@ -32,6 +33,7 @@ class KanBaselineTrainer:
             device,
             learning_rate: float,
             seed: int,
+            epoch_progress_listener: Callable[[int, int], None] | None = None,
     ):
         self.name = name
         self.input_variables = list(input_variables)
@@ -46,6 +48,7 @@ class KanBaselineTrainer:
         self.device = device
         self.learning_rate = float(learning_rate)
         self.seed = int(seed)
+        self.epoch_progress_listener = epoch_progress_listener
         self.loss_fn = torch.nn.MSELoss()
         self.last_validation_metrics: dict[str, float | int | str] | None = None
 
@@ -62,6 +65,15 @@ class KanBaselineTrainer:
 
     def _make_loader(self, items: list[dict], shuffle: bool) -> DataLoader:
         return DataLoader(TimeSeriesDataset(items), batch_size=self.batch_size, shuffle=shuffle)
+
+    def _notify_epoch_progress(self, epoch_completed: int) -> None:
+        listener = self.epoch_progress_listener
+        if listener is None:
+            return
+        try:
+            listener(int(epoch_completed), int(self.epochs))
+        except Exception:  # pragma: no cover
+            logger.exception("Epoch progress listener failed (epoch=%s/%s)", epoch_completed, self.epochs)
 
     def _evaluate_loader(self, model: KAN, loader: DataLoader) -> EvalMetrics:
         model.eval()
@@ -166,6 +178,7 @@ class KanBaselineTrainer:
                 val_metrics.mae_model,
                 val_metrics.rmse_model,
             )
+            self._notify_epoch_progress(epoch)
             if val_metrics.mae_model < best_val_mae:
                 best_val_mae = val_metrics.mae_model
                 best_state = copy.deepcopy(model.state_dict())

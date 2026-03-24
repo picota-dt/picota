@@ -8,6 +8,7 @@ import io.picota.backend.control.commands.UiCommandException;
 import io.picota.backend.control.commands.UiCommandSet;
 import io.picota.backend.control.commands.UiCommandsFactory;
 import io.picota.backend.control.commands.UiCommandsMode;
+import io.picota.backend.control.ui.lsp.ModelLspWebSocketEndpoint;
 import io.picota.backend.control.ui.schemas.AuthResponse;
 import io.picota.backend.control.ui.schemas.Error;
 import io.picota.backend.control.ui.schemas.InferenceEngine;
@@ -28,9 +29,11 @@ import static io.javalin.apibuilder.ApiBuilder.*;
 public class BackendWebServer {
 	private static final String FRONTEND_RESOURCES_DIR = "webapp";
 	private static final String FRONTEND_INDEX_RESOURCE = FRONTEND_RESOURCES_DIR + "/index.html";
+	private static final String MODEL_LSP_WS_PATH = "/lsp/model";
 
 	private final Config config;
 	private final UiCommandSet commands;
+	private final ModelLspWebSocketEndpoint modelLspEndpoint;
 	private Javalin app;
 
 	public BackendWebServer(Config config) {
@@ -40,6 +43,7 @@ public class BackendWebServer {
 	public BackendWebServer(Config config, UiCommandSet commands) {
 		this.config = config == null ? Config.defaultConfig() : config;
 		this.commands = commands == null ? UiCommandsFactory.create(UiCommandsMode.REAL) : commands;
+		this.modelLspEndpoint = new ModelLspWebSocketEndpoint(this.commands);
 	}
 
 	public synchronized void start() {
@@ -50,6 +54,7 @@ public class BackendWebServer {
 		app = Javalin.create(javalin -> {
 			javalin.http.defaultContentType = "application/json";
 			javalin.bundledPlugins.enableCors(cors -> cors.addRule(rule -> rule.anyHost()));
+			modelLspEndpoint.register(javalin.routes, MODEL_LSP_WS_PATH);
 			if (frontendAvailable) {
 				javalin.staticFiles.add(files -> {
 					files.hostedPath = "/";
@@ -76,6 +81,7 @@ public class BackendWebServer {
 
 	public synchronized void stop() {
 		if (app == null) return;
+		modelLspEndpoint.closeAll();
 		app.stop();
 		app = null;
 	}

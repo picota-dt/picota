@@ -8,6 +8,12 @@ from picota.framework.view.RuntimeTrainerRequestHandler import RuntimeTrainerReq
 
 class HttpServerFactory:
     @staticmethod
-    def create(host: str, port: int, controller: PicotaApiController) -> ThreadingHTTPServer:
+    def create(
+            host: str,
+            port: int,
+            controller: PicotaApiController,
+            log_api_requests: bool = False,
+    ) -> ThreadingHTTPServer:
         RuntimeTrainerRequestHandler.controller = controller
+        RuntimeTrainerRequestHandler.log_api_requests = bool(log_api_requests)
         return ThreadingHTTPServer((host, int(port)), RuntimeTrainerRequestHandler)

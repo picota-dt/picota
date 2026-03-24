@@ -1,6 +1,7 @@
 import {useState} from "react";
+import {useNavigate} from "react-router";
 import {DigitalTwin, TwinStatus, useApp} from "../../context/AppContext";
-import {Check, Coins, FileText, Hash, Info, Power, Save, Tag} from "lucide-react";
+import {Check, Coins, FileText, Hash, Info, Power, Save, Tag, Trash2} from "lucide-react";
 
 const STATUS_OPTIONS: { value: TwinStatus; label: string; dot: string; text: string }[] = [
     {value: "active", label: "Active", dot: "bg-emerald-400", text: "text-emerald-400"},
@@ -30,11 +31,16 @@ function hasDefinedModel(model: string): boolean {
 }
 
 export function PropertiesTab({twin}: Props) {
-    const {updateTwin} = useApp();
+    const navigate = useNavigate();
+    const {updateTwin, deleteTwin} = useApp();
     const [name, setName] = useState(twin.name);
     const [description, setDescription] = useState(twin.description);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirmName, setDeleteConfirmName] = useState("");
+    const [deleteError, setDeleteError] = useState("");
+    const [deleting, setDeleting] = useState(false);
 
     const currentStatus = STATUS_OPTIONS.find((s) => s.value === twin.status)!;
     const isActive = twin.status === "active";
@@ -53,6 +59,24 @@ export function PropertiesTab({twin}: Props) {
         setSaving(false);
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
+    };
+
+    const handleDeleteTwin = async () => {
+        if (deleteConfirmName.trim() !== twin.name.trim()) {
+            setDeleteError("Type the twin name exactly to confirm deletion.");
+            return;
+        }
+        setDeleting(true);
+        setDeleteError("");
+        try {
+            await deleteTwin(twin.id);
+            setShowDeleteModal(false);
+            navigate("/twins");
+        } catch (error: any) {
+            setDeleteError(String(error?.message ?? "Unable to delete digital twin"));
+        } finally {
+            setDeleting(false);
+        }
     };
 
     return (
@@ -173,6 +197,75 @@ export function PropertiesTab({twin}: Props) {
                     </div>
                 </div>
             </div>
+
+            {/* Danger zone */}
+            <div className="bg-red-500/5 border border-red-500/15 rounded-2xl p-5">
+                <h3 className="text-red-400 text-xs uppercase tracking-wider mb-1" style={{fontWeight: 600}}>
+                    Danger zone
+                </h3>
+                <p className="text-white/35 text-sm mb-4">
+                    Deleting this digital twin is permanent. Model versions, datasets and related training jobs will be
+                    removed.
+                </p>
+                <button
+                    onClick={() => {
+                        setDeleteError("");
+                        setDeleteConfirmName("");
+                        setShowDeleteModal(true);
+                    }}
+                    className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-4 py-2.5 rounded-xl text-sm transition-all"
+                >
+                    <Trash2 className="w-4 h-4"/>
+                    Delete digital twin
+                </button>
+            </div>
+
+            {showDeleteModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    onClick={(event) => {
+                        if (event.target !== event.currentTarget || deleting) return;
+                        setShowDeleteModal(false);
+                    }}
+                >
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"/>
+                    <div
+                        className="relative bg-[#1a1d27] border border-red-500/20 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Trash2 className="w-5 h-5 text-red-400"/>
+                            <h2 className="text-red-300" style={{fontWeight: 600}}>Delete digital twin</h2>
+                        </div>
+                        <p className="text-white/40 text-sm mb-4">
+                            This action cannot be undone. Type <span
+                            className="text-white/70 font-mono">{twin.name}</span> to confirm.
+                        </p>
+                        <input
+                            value={deleteConfirmName}
+                            onChange={(event) => setDeleteConfirmName(event.target.value)}
+                            placeholder={twin.name}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-sm outline-none focus:border-red-500/60 focus:ring-1 focus:ring-red-500/20 transition-all"
+                        />
+                        {deleteError && <p className="text-red-400 text-sm mt-3">{deleteError}</p>}
+                        <div className="flex gap-3 mt-5">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={deleting}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/40 hover:text-white/60 disabled:opacity-50 text-sm transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteTwin}
+                                disabled={deleting}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/25 text-red-300 disabled:opacity-50 text-sm transition-colors"
+                                style={{fontWeight: 500}}
+                            >
+                                {deleting ? "Deleting…" : "Delete permanently"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

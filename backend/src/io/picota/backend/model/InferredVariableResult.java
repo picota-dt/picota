@@ -1,9 +1,20 @@
 package io.picota.backend.model;
 
+import java.util.Map;
+
 public record InferredVariableResult(
 		String name,
-		Double accuracy,
 		Double mae,
-		Double violations
+		Double r2,
+		Integer validationSampleCount,
+		Double validationDurationSeconds,
+		VariableDataType dataType,
+		Double accuracy,
+		Double macroF1,
+		Double violations,
+		Map<String, Double> constraintViolations
 ) {
+	public InferredVariableResult {
+		constraintViolations = constraintViolations == null ? Map.of() : Map.copyOf(constraintViolations);
+	}
 }

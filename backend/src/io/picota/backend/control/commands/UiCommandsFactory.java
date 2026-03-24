@@ -2,22 +2,40 @@ package io.picota.backend.control.commands;
 
 import io.picota.backend.control.commands.demo.*;
 import io.picota.backend.control.commands.real.*;
+import io.picota.backend.control.training.ExternalTrainingClient;
 import io.picota.backend.persistence.ModelPersistence;
+
+import java.nio.file.Path;
 
 public final class UiCommandsFactory {
 	private UiCommandsFactory() {
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode) {
-		return create(mode, null);
+		return create(mode, null, TwinModelTemplate.defaultTemplate(), defaultDatasetsRootDir(), ExternalTrainingClient.disabled());
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence) {
-		return mode == UiCommandsMode.DEMO ? createDemoSet() : createRealSet(persistence);
+		return create(mode, persistence, TwinModelTemplate.defaultTemplate(), defaultDatasetsRootDir(), ExternalTrainingClient.disabled());
 	}
 
-	private static UiCommandSet createRealSet(ModelPersistence persistence) {
-		RealCommandState state = new RealCommandState(persistence);
+	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence, TwinModelTemplate twinModelTemplate) {
+		return create(mode, persistence, twinModelTemplate, defaultDatasetsRootDir(), ExternalTrainingClient.disabled());
+	}
+
+	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir) {
+		return create(mode, persistence, twinModelTemplate, datasetsRootDir, ExternalTrainingClient.disabled());
+	}
+
+	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir, ExternalTrainingClient trainingClient) {
+		TwinModelTemplate template = twinModelTemplate == null ? TwinModelTemplate.defaultTemplate() : twinModelTemplate;
+		Path safeDatasetsRoot = datasetsRootDir == null ? defaultDatasetsRootDir() : datasetsRootDir.toAbsolutePath().normalize();
+		ExternalTrainingClient safeTrainingClient = trainingClient == null ? ExternalTrainingClient.disabled() : trainingClient;
+		return mode == UiCommandsMode.DEMO ? createDemoSet(template) : createRealSet(persistence, template, safeDatasetsRoot, safeTrainingClient);
+	}
+
+	private static UiCommandSet createRealSet(ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir, ExternalTrainingClient trainingClient) {
+		RealCommandState state = new RealCommandState(persistence, twinModelTemplate, datasetsRootDir, trainingClient);
 		return new UiCommandSet(
 				new RealRegisterCommand(state),
 				new RealLoginCommand(state),
@@ -50,8 +68,8 @@ public final class UiCommandsFactory {
 		);
 	}
 
-	private static UiCommandSet createDemoSet() {
-		DemoCommandState state = new DemoCommandState();
+	private static UiCommandSet createDemoSet(TwinModelTemplate twinModelTemplate) {
+		DemoCommandState state = new DemoCommandState(twinModelTemplate);
 		return new UiCommandSet(
 				new DemoRegisterCommand(state),
 				new DemoLoginCommand(state),
@@ -82,5 +100,9 @@ public final class UiCommandsFactory {
 				new DemoLaunchTrainingCommand(state),
 				new DemoGetTrainingJobCommand(state)
 		);
+	}
+
+	private static Path defaultDatasetsRootDir() {
+		return Path.of("./runtime/datasets").toAbsolutePath().normalize();
 	}
 }

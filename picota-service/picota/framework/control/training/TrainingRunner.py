@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 class TrainingRunner:
-    def run(self, request: TrainingRequest, output_root: Path) -> dict[str, Any]:
+    def run(
+            self,
+            request: TrainingRequest,
+            output_root: Path,
+            epoch_progress_listener: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
+        run_start = time.perf_counter()
         logger.info(
             "TrainingRunner started (job_name=%s, family=%s, mode=%s, data_source_kind=%s)",
             request.job_name,
@@ -76,6 +84,7 @@ class TrainingRunner:
                     supervised_weight=request.metamorphic.supervised_weight,
                     relation_constraint_weight=request.metamorphic.relation_constraint_weight,
                     worst_case_over_t_weight=request.metamorphic.worst_case_over_t_weight,
+                    epoch_progress_listener=epoch_progress_listener,
                 )
                 trainer_mode = "metamorphic"
             else:
@@ -93,6 +102,7 @@ class TrainingRunner:
                     device=device,
                     learning_rate=request.architecture.learning_rate,
                     seed=request.architecture.seed,
+                    epoch_progress_listener=epoch_progress_listener,
                 )
                 trainer_mode = "baseline"
         elif request.architecture.family == "tabnet":
@@ -117,6 +127,7 @@ class TrainingRunner:
                     supervised_weight=request.metamorphic.supervised_weight,
                     relation_constraint_weight=request.metamorphic.relation_constraint_weight,
                     worst_case_over_t_weight=request.metamorphic.worst_case_over_t_weight,
+                    epoch_progress_listener=epoch_progress_listener,
                 )
                 trainer_mode = "metamorphic"
             else:
@@ -136,6 +147,7 @@ class TrainingRunner:
                     gamma=request.architecture.tabnet_gamma,
                     dropout=request.architecture.tabnet_dropout,
                     mask_temperature=request.architecture.tabnet_mask_temperature,
+                    epoch_progress_listener=epoch_progress_listener,
                 )
                 trainer_mode = "baseline"
         else:
@@ -149,25 +161,44 @@ class TrainingRunner:
         )
 
         logger.info("Starting model training")
+        training_start = time.perf_counter()
         model, best_val_metrics = trainer.train(prepared.train_items, prepared.val_items)
+        training_elapsed_seconds = time.perf_counter() - training_start
         logger.info("Training completed (best_val_mae=%s)", best_val_metrics.get("mae_model"))
+        validation_elapsed_seconds: float
+        test_elapsed_seconds: float
         if can_use_metamorphic and hasattr(trainer, "evaluate_with_rule_violations"):
             logger.info("Evaluating model with metamorphic violation reports")
+            test_start = time.perf_counter()
             test_metrics, test_violation_report = trainer.evaluate_with_rule_violations(
                 model=model,
                 items=prepared.test_items,
                 atol=request.metamorphic.violation_atol,
                 rtol=request.metamorphic.violation_rtol,
             )
+            test_elapsed_seconds = time.perf_counter() - test_start
+            validation_start = time.perf_counter()
             val_metrics, val_violation_report = trainer.evaluate_with_rule_violations(
                 model=model,
                 items=prepared.val_items,
                 atol=request.metamorphic.violation_atol,
                 rtol=request.metamorphic.violation_rtol,
             )
+            validation_elapsed_seconds = time.perf_counter() - validation_start
         else:
             logger.info("Evaluating model without integrated metamorphic trainer")
+            test_start = time.perf_counter()
             test_metrics = trainer.evaluate(model, prepared.test_items)
+            test_violation_report = self._evaluateRuleViolations(
+                model=model,
+                items=prepared.test_items,
+                rule_specs=rule_specs,
+                batch_size=request.architecture.batch_size,
+                atol=request.metamorphic.violation_atol,
+                rtol=request.metamorphic.violation_rtol,
+            )
+            test_elapsed_seconds = time.perf_counter() - test_start
+            validation_start = time.perf_counter()
             val_metrics = trainer.evaluate(model, prepared.val_items)
             val_violation_report = self._evaluateRuleViolations(
                 model=model,
@@ -177,14 +208,7 @@ class TrainingRunner:
                 atol=request.metamorphic.violation_atol,
                 rtol=request.metamorphic.violation_rtol,
             )
-            test_violation_report = self._evaluateRuleViolations(
-                model=model,
-                items=prepared.test_items,
-                rule_specs=rule_specs,
-                batch_size=request.architecture.batch_size,
-                atol=request.metamorphic.violation_atol,
-                rtol=request.metamorphic.violation_rtol,
-            )
+            validation_elapsed_seconds = time.perf_counter() - validation_start
 
         torch.save(model.state_dict(), model_path)
         logger.info("Model artifact saved (path=%s)", str(model_path))
@@ -206,6 +230,7 @@ class TrainingRunner:
             trainer_mode,
             test_metrics.get("n_samples"),
         )
+        total_elapsed_seconds = time.perf_counter() - run_start
 
         return {
             "trainer_mode": trainer_mode,
@@ -226,6 +251,10 @@ class TrainingRunner:
             "out_max": prepared.out_max,
             "rule_summary": rule_summary,
             "rule_specs_count": len(rule_specs),
+            "training_elapsed_seconds": round(training_elapsed_seconds, 6),
+            "test_elapsed_seconds": round(test_elapsed_seconds, 6),
+            "validation_elapsed_seconds": round(validation_elapsed_seconds, 6),
+            "total_elapsed_seconds": round(total_elapsed_seconds, 6),
             "metadata": prepared.metadata,
             "request": request.to_dict(),
         }

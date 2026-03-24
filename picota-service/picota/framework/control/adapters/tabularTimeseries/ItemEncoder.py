@@ -84,9 +84,9 @@ class ItemEncoder:
 
     @staticmethod
     def time_features_kind_from_bucket(time_bucket: str) -> str:
-        if time_bucket == "hour":
+        if time_bucket in {"hours", "minutes", "seconds", "hour", "minute", "second"}:
             return "hourly"
-        if time_bucket == "day":
+        if time_bucket in {"days", "months", "years", "day", "month", "year"}:
             return "daily"
         return "none"
 

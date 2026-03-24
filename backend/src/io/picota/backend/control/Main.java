@@ -1,9 +1,12 @@
 package io.picota.backend.control;
 
 import io.intino.alexandria.logger4j.Logger;
+import io.picota.backend.control.commands.TwinModelTemplate;
 import io.picota.backend.control.commands.UiCommandSet;
 import io.picota.backend.control.commands.UiCommandsFactory;
 import io.picota.backend.control.commands.UiCommandsMode;
+import io.picota.backend.control.training.ExternalTrainingClient;
+import io.picota.backend.control.training.HttpExternalTrainingClient;
 import io.picota.backend.control.ui.BackendWebServer;
 import io.picota.backend.persistence.ModelPersistence;
 import io.picota.backend.persistence.PersistenceConfig;
@@ -13,9 +16,11 @@ import org.apache.log4j.Level;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -33,8 +38,12 @@ public final class Main {
 				: configPath.getParent();
 		BackendWebServer.Config config = loadConfig(properties, configBaseDir);
 		PersistenceConfig persistenceConfig = loadPersistenceConfig(properties, config.workdir(), jdbcUrlOverride);
+		TwinModelTemplate twinModelTemplate = loadTwinModelTemplate(properties, configBaseDir);
+		Path datasetsRootDir = loadDatasetsRootDir(properties, config.workdir());
+		UiCommandsMode mode = loadCommandsMode(properties);
+		ExternalTrainingClient trainingClient = loadTrainingClient(properties, mode);
 		ModelPersistence persistence = PersistenceFactory.create(persistenceConfig);
-		UiCommandSet commands = UiCommandsFactory.create(loadCommandsMode(properties), persistence);
+		UiCommandSet commands = UiCommandsFactory.create(mode, persistence, twinModelTemplate, datasetsRootDir, trainingClient);
 		BackendWebServer server = new BackendWebServer(config, commands);
 		server.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -83,6 +92,18 @@ public final class Main {
 		return trimmed.startsWith("--") ? "" : trimmed;
 	}
 
+	private static TwinModelTemplate loadTwinModelTemplate(Properties properties, Path baseDir) {
+		String rawTemplatePath = property(properties, "app.twin.model.template.file");
+		if (rawTemplatePath.isBlank()) return TwinModelTemplate.defaultTemplate();
+		Path templatePath = resolvePath(baseDir, rawTemplatePath);
+		if (templatePath == null) return TwinModelTemplate.defaultTemplate();
+		try {
+			return TwinModelTemplate.fromRaw(Files.readString(templatePath));
+		} catch (IOException e) {
+			throw new IllegalStateException("Unable to load model template from: " + templatePath.toAbsolutePath(), e);
+		}
+	}
+
 	private static Properties defaultProperties() {
 		Properties p = new Properties();
 		p.setProperty("app.host", "0.0.0.0");
@@ -90,6 +111,9 @@ public final class Main {
 		p.setProperty("app.workdir", "./runtime");
 		p.setProperty("app.mode", "real");
 		p.setProperty("app.api.prefix", "/v1");
+		p.setProperty("app.datasets.dir", "datasets");
+		p.setProperty("app.training.api.base-url", "");
+		p.setProperty("app.training.api.timeout.seconds", "30");
 		p.setProperty("app.db.engine", "sqlite");
 		p.setProperty("app.db.sqlite.file", "picota.db");
 		p.setProperty("app.db.mysql.host", "127.0.0.1");
@@ -97,6 +121,7 @@ public final class Main {
 		p.setProperty("app.db.mysql.database", "picota");
 		p.setProperty("app.db.mysql.user", "picota");
 		p.setProperty("app.db.mysql.password", "picota");
+		p.setProperty("app.twin.model.template.file", "");
 		return p;
 	}
 
@@ -112,6 +137,61 @@ public final class Main {
 				workdir,
 				apiPrefix
 		);
+	}
+
+	private static Path loadDatasetsRootDir(Properties properties, Path appWorkdir) {
+		String rawDatasetsDir = property(properties, "app.datasets.dir");
+		if (rawDatasetsDir.isBlank()) {
+			return appWorkdir.resolve("datasets").toAbsolutePath().normalize();
+		}
+		Path datasetsPath = Paths.get(rawDatasetsDir.trim());
+		if (datasetsPath.isAbsolute()) {
+			return datasetsPath.normalize();
+		}
+		return appWorkdir.resolve(datasetsPath).toAbsolutePath().normalize();
+	}
+
+	private static ExternalTrainingClient loadTrainingClient(Properties properties, UiCommandsMode mode) {
+		String baseUrl = property(properties, "app.training.api.base-url");
+		if (baseUrl.isBlank()) {
+			if (mode == UiCommandsMode.REAL) {
+				throw new IllegalArgumentException(
+						"Missing required property 'app.training.api.base-url' for real mode. " +
+								"Set a valid http(s) URL to the training API."
+				);
+			}
+			return ExternalTrainingClient.disabled();
+		}
+		String normalizedBaseUrl = validateTrainingApiBaseUrl(baseUrl);
+		int timeoutSeconds = Math.max(1, intProperty(properties, "app.training.api.timeout.seconds", 30));
+		return new HttpExternalTrainingClient(normalizedBaseUrl, Duration.ofSeconds(timeoutSeconds));
+	}
+
+	private static String validateTrainingApiBaseUrl(String rawBaseUrl) {
+		String value = rawBaseUrl == null ? "" : rawBaseUrl.trim();
+		URI uri;
+		try {
+			uri = URI.create(value);
+		} catch (IllegalArgumentException e) {
+			throw new IllegalArgumentException("Invalid 'app.training.api.base-url': " + rawBaseUrl, e);
+		}
+		if (!uri.isAbsolute()) {
+			throw new IllegalArgumentException(
+					"Invalid 'app.training.api.base-url': must be an absolute URL (http/https), got '" + rawBaseUrl + "'"
+			);
+		}
+		String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+		if (!"http".equals(scheme) && !"https".equals(scheme)) {
+			throw new IllegalArgumentException(
+					"Invalid 'app.training.api.base-url': only http/https schemes are supported, got '" + rawBaseUrl + "'"
+			);
+		}
+		if (uri.getHost() == null || uri.getHost().isBlank()) {
+			throw new IllegalArgumentException(
+					"Invalid 'app.training.api.base-url': host is missing in '" + rawBaseUrl + "'"
+			);
+		}
+		return value;
 	}
 
 	private static PersistenceConfig loadPersistenceConfig(Properties properties, Path appWorkdir, String jdbcUrlOverride) {

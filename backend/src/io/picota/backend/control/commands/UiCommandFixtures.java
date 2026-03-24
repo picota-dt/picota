@@ -41,18 +41,18 @@ public final class UiCommandFixtures {
 								"pump_main",
 								"Main Pump",
 								List.of(
-										new Variable("v1", "pressure_in", "bar", 3.2, VariableType.SENSOR),
-										new Variable("v2", "pressure_out", "bar", 5.8, VariableType.SENSOR),
-										new Variable("v3", "flow_rate", "m³/h", 24.5, VariableType.INFERRED)
+										new Variable("v1", "pressure_in", "Pump inlet pressure", "bar", VariableDataType.NUMERIC, VariableType.SENSOR),
+										new Variable("v2", "pressure_out", "Pump outlet pressure", "bar", VariableDataType.NUMERIC, VariableType.SENSOR),
+										new Variable("v3", "flow_rate", "Estimated flow rate", "m³/h", VariableDataType.NUMERIC, VariableType.INFERRED)
 								)
 						),
 						new DigitalSubject(
 								"motor",
 								"Electric Motor",
 								List.of(
-										new Variable("v4", "temperature", "°C", 62.1, VariableType.SENSOR),
-										new Variable("v5", "rpm", "rpm", 1480.0, VariableType.SENSOR),
-										new Variable("v6", "vibration", "mm/s", 3.7, VariableType.INFERRED)
+										new Variable("v4", "temperature", "Motor temperature", "°C", VariableDataType.NUMERIC, VariableType.SENSOR),
+										new Variable("v5", "rpm", "Motor speed", "rpm", VariableDataType.NUMERIC, VariableType.SENSOR),
+										new Variable("v6", "vibration", "Estimated vibration level", "mm/s", VariableDataType.NUMERIC, VariableType.INFERRED)
 								)
 						)
 				),
@@ -65,8 +65,8 @@ public final class UiCommandFixtures {
 						60,
 						32,
 						List.of(
-								new InferredVariableResult("flow_rate", 94.2, 0.38, 1.2),
-								new InferredVariableResult("vibration", 91.7, 0.21, 2.8)
+								new InferredVariableResult("flow_rate", 0.38, 0.942, 320, 1.8, VariableDataType.NUMERIC, null, null, 1.2, Map.of()),
+								new InferredVariableResult("vibration", 0.21, 0.917, 320, 1.8, VariableDataType.NUMERIC, null, null, 2.8, Map.of())
 						),
 						new RetrainingConfig(true, RetrainingSchedule.WEEKLY, 500, "02:00")
 				),
@@ -143,7 +143,18 @@ public final class UiCommandFixtures {
 				engine.windowSize(),
 				engine.batchSize(),
 				engine.inferredVariables() == null ? List.of() : engine.inferredVariables().stream()
-						.map(v -> new InferredVariableResult(v.name(), v.accuracy(), v.mae(), v.violations()))
+						.map(v -> new InferredVariableResult(
+								v.name(),
+								v.mae(),
+								v.r2(),
+								v.validationSampleCount(),
+								v.validationDurationSeconds(),
+								v.dataType(),
+								v.accuracy(),
+								v.macroF1(),
+								v.violations(),
+								v.constraintViolations()
+						))
 						.toList(),
 				engine.retrainingConfig() == null
 						? null
@@ -160,12 +171,22 @@ public final class UiCommandFixtures {
 		return new DigitalSubject(
 				subject.id(),
 				subject.name(),
+				subject.timeBucket(),
 				subject.variables() == null ? List.of() : subject.variables().stream().map(UiCommandFixtures::copyVariable).toList()
 		);
 	}
 
 	public static Variable copyVariable(Variable variable) {
-		return new Variable(variable.id(), variable.name(), variable.unit(), variable.value(), variable.variableType());
+		return new Variable(
+				variable.id(),
+				variable.name(),
+				variable.description(),
+				variable.unit(),
+				variable.dataType(),
+				variable.variableType(),
+				variable.timeHorizon(),
+				variable.lookback()
+		);
 	}
 
 	public static SubjectDataset copyDataset(SubjectDataset dataset) {
@@ -188,7 +209,7 @@ public final class UiCommandFixtures {
 		int safePoints = Math.max(1, Math.min(points, 100));
 		for (Variable variable : subject.variables()) {
 			List<TelemetryPoint> history = new ArrayList<>();
-			double base = variable.value() == null ? 0.0 : variable.value();
+			double base = telemetryBase(variable);
 			for (int i = safePoints - 1; i >= 0; i--) {
 				double jitter = base + (base * 0.03 * (random.nextDouble() - 0.5));
 				history.add(new TelemetryPoint(Instant.now().minusSeconds(i * 3L), round3(jitter)));
@@ -201,5 +222,11 @@ public final class UiCommandFixtures {
 
 	private static double round3(double value) {
 		return Math.round(value * 1000.0) / 1000.0;
+	}
+
+	private static double telemetryBase(Variable variable) {
+		int hash = Math.abs(Objects.hash(variable.id(), variable.name(), variable.unit(), variable.variableType()));
+		double base = 5.0 + (hash % 9_500) / 100.0;
+		return variable.dataType() == VariableDataType.CATEGORICAL ? Math.rint(base % 2.0) : base;
 	}
 }

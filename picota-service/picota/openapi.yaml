@@ -35,7 +35,7 @@ paths:
                   case_name: generic_case
                   timestamp_column: instant
                   target_column: target
-                  time_bucket: hour
+                  time_bucket: hours
                   entity_key_columns: [ ]
                   numerical_input_columns:
                     - feature_1
@@ -321,7 +321,7 @@ paths:
                   case_name: case_a
                   timestamp_column: instant
                   target_column: target
-                  time_bucket: hour
+                  time_bucket: hours
                   entity_key_columns: [ ]
                   numerical_input_columns:
                     - feature_1
@@ -436,7 +436,7 @@ components:
           type: string
         time_bucket:
           type: string
-          enum: [ none, hour, day ]
+          enum: [ years, months, days, hours, minutes, seconds ]
           description: Timestamp bucketing granularity used for row aggregation, horizon alignment and time-feature encoding.
         entity_key_columns:
           type: array
@@ -468,7 +468,7 @@ components:
           minimum: 1
         unit:
           type: string
-          enum: [ hours, days, steps ]
+          enum: [ seconds, minutes, hours, days, months, years, steps ]
       required:
         - value
         - unit
@@ -799,6 +799,22 @@ components:
           $ref: '#/components/schemas/RuleSummary'
         rule_specs_count:
           type: integer
+        training_elapsed_seconds:
+          type: number
+          format: float
+          description: Wall-clock training time in seconds.
+        test_elapsed_seconds:
+          type: number
+          format: float
+          description: Wall-clock test evaluation time in seconds.
+        validation_elapsed_seconds:
+          type: number
+          format: float
+          description: Wall-clock validation evaluation time in seconds.
+        total_elapsed_seconds:
+          type: number
+          format: float
+          description: End-to-end runtime in seconds.
         metadata:
           type: object
           additionalProperties: true
@@ -858,6 +874,14 @@ components:
         r2:
           type: number
           format: float
+        accuracy:
+          type: number
+          format: float
+          description: Classification accuracy (optional for categorical targets).
+        macro_f1:
+          type: number
+          format: float
+          description: Classification macro F1 (optional for categorical targets).
         mae_raw:
           type: number
           format: float

@@ -50,13 +50,22 @@ class TabularTimeseriesAdapter:
         if len(aggregated_rows) < 10:
             raise ValueError(f"Need >=10 aggregated rows, got {len(aggregated_rows)}")
 
-        horizon_delta = dataset_builder.resolve_horizon_delta(
+        horizon_timestamp_resolver = dataset_builder.resolve_horizon_delta(
             value=self.request.time_horizon.value,
             unit=self.request.time_horizon.unit,
             time_bucket=options.time_bucket,
         )
-        horizon_rows = dataset_builder.build_horizon_examples(aggregated_rows, horizon_delta=horizon_delta)
-        logger.info("Rows after horizon pairing: %s (horizon_delta=%s)", len(horizon_rows), horizon_delta)
+        horizon_rows = dataset_builder.build_horizon_examples(
+            aggregated_rows,
+            horizon_timestamp_resolver=horizon_timestamp_resolver
+        )
+        logger.info(
+            "Rows after horizon pairing: %s (horizon_value=%s, horizon_unit=%s, time_bucket=%s)",
+            len(horizon_rows),
+            self.request.time_horizon.value,
+            self.request.time_horizon.unit,
+            options.time_bucket,
+        )
         if len(horizon_rows) < 10:
             raise ValueError(f"Need >=10 rows after horizon pairing, got {len(horizon_rows)}")
 

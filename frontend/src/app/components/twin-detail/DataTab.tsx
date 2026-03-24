@@ -1,48 +1,18 @@
-import {useRef, useState, useEffect} from "react";
+import {useEffect, useRef, useState} from "react";
+import {DigitalSubject, DigitalTwin, SubjectDataset, useApp, VariableStat,} from "../../context/AppContext";
 import {
-    DigitalTwin, DigitalSubject, SubjectDataset, VariableStat, useApp,
-} from "../../context/AppContext";
-import {
-    Upload, Database, Activity, Trash2, FileText,
-    TrendingUp, TrendingDown, Minus, Info, AlertCircle,
+    Activity,
+    AlertCircle,
+    Database,
+    Download,
+    FileText,
+    Info,
+    Minus,
+    Trash2,
+    TrendingDown,
+    TrendingUp,
+    Upload,
 } from "lucide-react";
-
-// ─── CSV parser & stats ───────────────────────────────────────────────────────
-
-function parseCSV(text: string): { headers: string[]; rows: number[][] } {
-    const lines = text.trim().split(/\r?\n/);
-    if (lines.length < 2) return {headers: [], rows: []};
-    const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-    const rows: number[][] = [];
-    for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].split(",").map((c) => parseFloat(c.trim()));
-        if (cells.some(isNaN)) continue;
-        rows.push(cells);
-    }
-    return {headers, rows};
-}
-
-function computeStats(values: number[]): VariableStat {
-    const sorted = [...values].sort((a, b) => a - b);
-    const count = values.length;
-    const mean = values.reduce((s, v) => s + v, 0) / count;
-    const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / count;
-    const std = Math.sqrt(variance);
-    const min = sorted[0];
-    const max = sorted[sorted.length - 1];
-    const mid = Math.floor(sorted.length / 2);
-    const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-    return {count, mean, std, min, max, median};
-}
-
-function buildStats(headers: string[], rows: number[][]): Record<string, VariableStat> {
-    const result: Record<string, VariableStat> = {};
-    headers.forEach((h, i) => {
-        const vals = rows.map((r) => r[i]).filter((v) => !isNaN(v));
-        if (vals.length > 0) result[h] = computeStats(vals);
-    });
-    return result;
-}
 
 // ─── Simulated real-time record growth ────────────────────────────────────────
 
@@ -144,14 +114,21 @@ interface SubjectCardProps {
     subject: DigitalSubject;
     dataset: SubjectDataset | undefined;
     twinStatus: "active" | "draft" | "offline";
-    onUpload: (subjectId: string, file: File) => void;
-    onRemove: (subjectId: string) => void;
+    onUpload: (
+        subjectId: string,
+        file: File,
+        onProgress?: (progressPercent: number | null) => void
+    ) => Promise<void>;
+    onRemove: (subjectId: string) => Promise<void>;
+    onDownloadTemplate: (subject: DigitalSubject) => void;
 }
 
-function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: SubjectCardProps) {
+function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove, onDownloadTemplate}: SubjectCardProps) {
     const fileRef = useRef<HTMLInputElement>(null);
     const [dragOver, setDragOver] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+    const [uploadError, setUploadError] = useState("");
 
     const isLive = twinStatus === "active";
     const realtimeCount = useRealtimeCounter(dataset?.realtimeRecords ?? 0, isLive && !!dataset);
@@ -159,21 +136,30 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
 
     const handleFile = async (file: File) => {
         setUploading(true);
-        await new Promise((r) => setTimeout(r, 600));
-        onUpload(subject.id, file);
-        setUploading(false);
+        setUploadProgress(0);
+        setUploadError("");
+        try {
+            await onUpload(subject.id, file, setUploadProgress);
+        } catch (error: any) {
+            setUploadError(String(error?.message ?? "Dataset upload failed"));
+        } finally {
+            setUploading(false);
+            setUploadProgress(null);
+        }
     };
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
+        if (uploading) return;
         setDragOver(false);
         const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith(".csv")) handleFile(file);
+        if (file && file.name.endsWith(".csv")) void handleFile(file);
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (uploading) return;
         const file = e.target.files?.[0];
-        if (file) handleFile(file);
+        if (file) void handleFile(file);
         e.target.value = "";
     };
 
@@ -194,6 +180,15 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
 
                 {/* Record count pill */}
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => onDownloadTemplate(subject)}
+                        disabled={uploading}
+                        className="h-7 px-2.5 flex items-center gap-1.5 rounded-lg border border-white/10 hover:border-cyan-400/30 hover:bg-cyan-500/10 text-white/40 hover:text-cyan-300 transition-colors"
+                        title="Download CSV template"
+                    >
+                        <Download className="w-3.5 h-3.5"/>
+                        <span className="text-xs">Template</span>
+                    </button>
                     {dataset && (
                         <div className="flex items-center gap-3 text-xs">
                             <div className="flex items-center gap-1.5 text-white/40">
@@ -223,7 +218,8 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
 
                     {dataset && (
                         <button
-                            onClick={() => onRemove(subject.id)}
+                            onClick={() => void onRemove(subject.id)}
+                            disabled={uploading}
                             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/15 text-white/25 hover:text-red-400 transition-colors"
                             title="Remove dataset"
                         >
@@ -249,7 +245,10 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
                                 ? "border-cyan-400/60 bg-cyan-500/8"
                                 : "border-white/12 hover:border-cyan-500/40 hover:bg-white/3"
                         }`}
-                        onClick={() => fileRef.current?.click()}
+                        onClick={() => {
+                            if (uploading) return;
+                            fileRef.current?.click();
+                        }}
                     >
                         <input
                             ref={fileRef}
@@ -262,7 +261,15 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
                             <div className="flex flex-col items-center gap-3">
                                 <div
                                     className="w-10 h-10 rounded-xl border-2 border-cyan-400 border-t-transparent animate-spin"/>
-                                <p className="text-cyan-400 text-sm">Parsing dataset…</p>
+                                <p className="text-cyan-400 text-sm">
+                                    Uploading dataset{uploadProgress != null ? `… ${uploadProgress}%` : "…"}
+                                </p>
+                                <div className="w-52 h-2 rounded-full bg-white/10 overflow-hidden">
+                                    <div
+                                        className="h-full bg-cyan-400 transition-all"
+                                        style={{width: uploadProgress == null ? "100%" : `${uploadProgress}%`}}
+                                    />
+                                </div>
                             </div>
                         ) : (
                             <>
@@ -282,6 +289,23 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
                 ) : (
                     // Stats view
                     <div className="flex flex-col gap-4">
+                        {uploading && (
+                            <div
+                                className="flex flex-col gap-2 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/8 text-cyan-300">
+                                <div className="flex items-center justify-between text-xs">
+                                    <span>Uploading replacement dataset…</span>
+                                    <span
+                                        className="font-mono">{uploadProgress == null ? "…" : `${uploadProgress}%`}</span>
+                                </div>
+                                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                                    <div
+                                        className="h-full bg-cyan-400 transition-all"
+                                        style={{width: uploadProgress == null ? "100%" : `${uploadProgress}%`}}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* File info row */}
                         <div className="flex items-center gap-2 text-xs text-white/30">
                             <FileText className="w-3.5 h-3.5 text-cyan-400/50"/>
@@ -312,10 +336,11 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
                         <div className="flex items-center gap-2 pt-1">
                             <button
                                 onClick={() => fileRef.current?.click()}
+                                disabled={uploading}
                                 className="flex items-center gap-1.5 text-xs text-white/25 hover:text-cyan-400 transition-colors"
                             >
                                 <Upload className="w-3 h-3"/>
-                                Replace dataset
+                                {uploading ? "Uploading…" : "Replace dataset"}
                             </button>
                             <input
                                 ref={fileRef}
@@ -325,6 +350,12 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove}: Subject
                                 onChange={handleInputChange}
                             />
                         </div>
+                    </div>
+                )}
+                {uploadError && (
+                    <div
+                        className="mt-3 px-3 py-2 rounded-lg border border-red-500/25 bg-red-500/10 text-red-300 text-xs">
+                        {uploadError}
                     </div>
                 )}
             </div>
@@ -356,86 +387,46 @@ interface Props {
 }
 
 export function DataTab({twin}: Props) {
-    const {updateTwin} = useApp();
+    const {uploadDataset, deleteDataset} = useApp();
     const [localDatasets, setLocalDatasets] = useState<SubjectDataset[]>(twin.datasets ?? []);
+
+    useEffect(() => {
+        setLocalDatasets(twin.datasets ?? []);
+    }, [twin.id, twin.datasets]);
 
     const getDataset = (subjectId: string) => localDatasets.find((d) => d.subjectId === subjectId);
 
-    const handleUpload = (subjectId: string, file: File) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const text = e.target?.result as string;
-            let stats: Record<string, VariableStat> = {};
-            let recordCount = 0;
-            try {
-                const parsed = parseCSV(text);
-                recordCount = parsed.rows.length;
-                stats = buildStats(parsed.headers, parsed.rows);
-            } catch {
-                // Fallback: generate stats from variable values for demo
-                const subject = twin.subjects.find((s) => s.id === subjectId);
-                if (subject) {
-                    subject.variables.forEach((v) => {
-                        const base = v.value;
-                        const std = base * 0.05;
-                        stats[v.name] = {
-                            count: 500,
-                            mean: +base.toFixed(3),
-                            std: +std.toFixed(3),
-                            min: +(base - std * 2).toFixed(3),
-                            max: +(base + std * 2).toFixed(3),
-                            median: +(base * 0.998).toFixed(3),
-                        };
-                    });
-                    recordCount = 500;
-                }
-            }
-
-            // If no stats found (CSV columns didn't match), generate from variables
-            if (Object.keys(stats).length === 0) {
-                const subject = twin.subjects.find((s) => s.id === subjectId);
-                if (subject) {
-                    subject.variables.forEach((v) => {
-                        const base = v.value;
-                        const std = Math.abs(base) * 0.05 || 0.1;
-                        stats[v.name] = {
-                            count: recordCount || 500,
-                            mean: +base.toFixed(4),
-                            std: +std.toFixed(4),
-                            min: +(base - std * 2).toFixed(4),
-                            max: +(base + std * 2).toFixed(4),
-                            median: +(base * 0.999).toFixed(4),
-                        };
-                    });
-                }
-                if (recordCount === 0) recordCount = 500;
-            }
-
-            const newDataset: SubjectDataset = {
-                subjectId,
-                fileName: file.name,
-                uploadedRecords: recordCount > 0 ? recordCount : 500,
-                realtimeRecords: 0,
-                uploadedAt: new Date().toISOString(),
-                stats,
-            };
-
-            setLocalDatasets((prev) => {
-                const without = prev.filter((d) => d.subjectId !== subjectId);
-                const updated = [...without, newDataset];
-                updateTwin(twin.id, {datasets: updated});
-                return updated;
-            });
-        };
-        reader.readAsText(file);
+    const handleUpload = async (
+        subjectId: string,
+        file: File,
+        onProgress?: (progressPercent: number | null) => void
+    ) => {
+        const uploaded = await uploadDataset(twin.id, subjectId, file, onProgress);
+        setLocalDatasets((prev) => {
+            const without = prev.filter((d) => d.subjectId !== subjectId);
+            return [...without, uploaded];
+        });
     };
 
-    const handleRemove = (subjectId: string) => {
+    const handleRemove = async (subjectId: string) => {
+        await deleteDataset(twin.id, subjectId);
         setLocalDatasets((prev) => {
-            const updated = prev.filter((d) => d.subjectId !== subjectId);
-            updateTwin(twin.id, {datasets: updated});
-            return updated;
+            return prev.filter((d) => d.subjectId !== subjectId);
         });
+    };
+
+    const handleDownloadTemplate = (subject: DigitalSubject) => {
+        const headers = ["instant", ...subject.variables.map((variable) => escapeCsvCell(variable.name))];
+        const csv = `${headers.join(",")}\n`;
+        const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${subjectFileStem(subject.name)}-template.csv`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
     };
 
     if (twin.subjects.length === 0) return <NoSubjectsState/>;
@@ -484,10 +475,11 @@ export function DataTab({twin}: Props) {
                 className="flex items-start gap-2 bg-cyan-500/5 border border-cyan-500/15 rounded-xl px-4 py-3 text-xs text-cyan-400/70">
                 <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>
                 <p>
-                    Upload CSV files with the first row as headers matching variable names
+                    Upload CSV files with the first row as headers matching variable names and an initial
+                    <span className="font-mono bg-white/5 px-1 rounded mx-1">instant</span>
+                    column
                     (e.g. <span
-                    className="font-mono bg-white/5 px-1 rounded">pressure_in, pressure_out, flow_rate</span>).
-                    Rows with non-numeric values are automatically skipped.
+                    className="font-mono bg-white/5 px-1 rounded">instant, pressure_in, pressure_out, flow_rate</span>).
                 </p>
             </div>
 
@@ -500,8 +492,19 @@ export function DataTab({twin}: Props) {
                     twinStatus={twin.status}
                     onUpload={handleUpload}
                     onRemove={handleRemove}
+                    onDownloadTemplate={handleDownloadTemplate}
                 />
             ))}
         </div>
     );
+}
+
+function escapeCsvCell(value: string): string {
+    if (!value.includes(",") && !value.includes("\"") && !value.includes("\n")) return value;
+    return `"${value.replaceAll("\"", "\"\"")}"`;
+}
+
+function subjectFileStem(subjectName: string): string {
+    const normalized = subjectName.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, "");
+    return normalized.length > 0 ? normalized : "subject";
 }

@@ -1,64 +1,37 @@
-import {useEffect, useState} from "react";
-import {DigitalTwin, DigitalSubject, Variable} from "../../context/AppContext";
-import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
+import {useEffect, useMemo, useState} from "react";
+import {DigitalTwin, useApp, Variable, VariableTelemetry} from "../../context/AppContext";
+import {Line, LineChart, ResponsiveContainer, XAxis, YAxis,} from "recharts";
 import {Activity, Cpu, Sparkles} from "lucide-react";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function jitter(value: number, pct = 0.05) {
-    return +(value + value * (Math.random() - 0.5) * pct).toFixed(3);
-}
-
-function generateHistory(base: number, points = 20) {
-    const history: { time: string; value: number }[] = [];
-    let v = base;
-    for (let i = points; i >= 0; i--) {
-        const now = new Date(Date.now() - i * 3000);
-        v = jitter(base, 0.08);
-        history.push({
-            time: now.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
-            value: v
-        });
-    }
-    return history;
-}
 
 // ─── Variable Card ────────────────────────────────────────────────────────────
 
-function VariableCard({variable}: { variable: Variable }) {
-    const [history, setHistory] = useState(() => generateHistory(variable.value));
-    const current = history[history.length - 1]?.value ?? variable.value;
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setHistory((prev) => {
-                const now = new Date();
-                const newPoint = {
-                    time: now.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
-                    value: jitter(variable.value, 0.06),
-                };
-                return [...prev.slice(-19), newPoint];
-            });
-        }, 3000);
-        return () => clearInterval(interval);
-    }, [variable.value]);
-
+function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: VariableTelemetry }) {
+    const inferred = isInferredVariable(variable);
+    const history = useMemo(() => {
+        if (!telemetry?.history?.length) return fallbackHistory(variable.value);
+        const normalized = telemetry.history
+            .map((point) => ({
+                time: formatTelemetryTime(point.time),
+                value: Number(point.value),
+            }))
+            .filter((point) => Number.isFinite(point.value));
+        return normalized.length > 0 ? normalized : fallbackHistory(variable.value);
+    }, [telemetry, variable.value]);
+    const current = Number.isFinite(telemetry?.current) ? Number(telemetry?.current) : (history[history.length - 1]?.value ?? variable.value);
     const min = Math.min(...history.map((h) => h.value));
     const max = Math.max(...history.map((h) => h.value));
-    const color = variable.inferred ? "#a78bfa" : "#22d3ee";
+    const color = inferred ? "#a78bfa" : "#22d3ee";
 
     return (
         <div className="bg-[#0f1117] border border-white/8 rounded-xl p-4 hover:border-white/15 transition-colors">
             <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
-                    {variable.inferred && <Sparkles className="w-3 h-3 text-violet-400"/>}
+                    {inferred && <Sparkles className="w-3 h-3 text-violet-400"/>}
                     <span className="text-white/60 text-xs font-mono">{variable.name}</span>
                 </div>
                 <span
-                    className={`text-xs px-1.5 py-0.5 rounded-md ${variable.inferred ? "bg-violet-500/15 text-violet-400" : "bg-cyan-500/15 text-cyan-400"}`}>
-          {variable.inferred ? "inferred" : "sensor"}
+                    className={`text-xs px-1.5 py-0.5 rounded-md ${inferred ? "bg-violet-500/15 text-violet-400" : "bg-cyan-500/15 text-cyan-400"}`}>
+          {inferred ? "inferred" : "sensor"}
         </span>
             </div>
 
@@ -95,28 +68,6 @@ function VariableCard({variable}: { variable: Variable }) {
     );
 }
 
-// ─── Subject Panel ────────────────────────────────────────────────────────────
-
-function SubjectPanel({subject}: { subject: DigitalSubject }) {
-    return (
-        <div>
-            <div className="flex items-center gap-2 mb-3">
-                <div
-                    className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
-                    <Cpu className="w-3 h-3 text-cyan-400"/>
-                </div>
-                <h3 className="text-white text-sm" style={{fontWeight: 600}}>{subject.name}</h3>
-                <span className="text-white/30 text-xs">{subject.variables.length} variables</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {subject.variables.map((v) => (
-                    <VariableCard key={v.id} variable={v}/>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function MonitoringEmpty() {
@@ -141,6 +92,38 @@ interface Props {
 }
 
 export function MonitoringTab({twin}: Props) {
+    const {getSubjectTelemetry} = useApp();
+    const [telemetryBySubject, setTelemetryBySubject] = useState<Record<string, Record<string, VariableTelemetry>>>({});
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const refreshTelemetry = async () => {
+            const entries = await Promise.all(
+                twin.subjects.map(async (subject) => {
+                    try {
+                        const telemetry = await getSubjectTelemetry(twin.id, subject.id, 20);
+                        const byVariable = Object.fromEntries(
+                            telemetry.map((item) => [item.variableId, item])
+                        );
+                        return [subject.id, byVariable] as const;
+                    } catch {
+                        return [subject.id, {} as Record<string, VariableTelemetry>] as const;
+                    }
+                })
+            );
+            if (cancelled) return;
+            setTelemetryBySubject(Object.fromEntries(entries));
+        };
+
+        refreshTelemetry();
+        const interval = window.setInterval(refreshTelemetry, 3000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+        };
+    }, [twin.id, twin.subjects]);
+
     if (twin.subjects.length === 0) return <MonitoringEmpty/>;
 
     return (
@@ -150,8 +133,50 @@ export function MonitoringTab({twin}: Props) {
                 <span className="text-emerald-400 text-sm" style={{fontWeight: 500}}>Live · updating every 3s</span>
             </div>
             {twin.subjects.map((s) => (
-                <SubjectPanel key={s.id} subject={s}/>
+                <div key={s.id}>
+                    <div className="flex items-center gap-2 mb-3">
+                        <div
+                            className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
+                            <Cpu className="w-3 h-3 text-cyan-400"/>
+                        </div>
+                        <h3 className="text-white text-sm" style={{fontWeight: 600}}>{s.name}</h3>
+                        <span className="text-white/30 text-xs">{s.variables.length} variables</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {s.variables.map((v) => (
+                            <VariableCard
+                                key={v.id}
+                                variable={v}
+                                telemetry={telemetryBySubject[s.id]?.[v.id]}
+                            />
+                        ))}
+                    </div>
+                </div>
             ))}
         </div>
     );
+}
+
+function isInferredVariable(variable: Variable): boolean {
+    if (typeof variable.inferred === "boolean") return variable.inferred;
+    return variable.variableType === "inferred";
+}
+
+function formatTelemetryTime(value: string): string {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+}
+
+function fallbackHistory(base: number, points = 20) {
+    const safeBase = Number.isFinite(base) ? base : 0;
+    const history: { time: string; value: number }[] = [];
+    for (let i = points; i >= 0; i--) {
+        const now = new Date(Date.now() - i * 3000);
+        history.push({
+            time: now.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
+            value: safeBase,
+        });
+    }
+    return history;
 }

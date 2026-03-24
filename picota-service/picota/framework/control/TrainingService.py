@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from picota.framework.control.CaseWorkspaceManager import CaseWorkspaceManager
@@ -7,6 +8,8 @@ from picota.framework.control.TrainingCommander import TrainingCommander
 from picota.framework.model.TrainingCommandConfig import TrainingCommandConfig
 from picota.framework.view.HttpServerFactory import HttpServerFactory
 from picota.framework.view.PicotaApiController import PicotaApiController
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingService:
@@ -72,12 +75,24 @@ class TrainingService:
             port: int = 8080,
             workspace_dir: Path | None = None,
             ticket_dir: Path | None = None,
+            log_api_requests: bool = False,
     ) -> None:
         controller = TrainingService.createController(
             workspace_dir=workspace_dir,
             ticket_dir=ticket_dir,
         )
-        server = HttpServerFactory.create(host=host, port=port, controller=controller)
+        server = HttpServerFactory.create(
+            host=host,
+            port=port,
+            controller=controller,
+            log_api_requests=log_api_requests,
+        )
+        logger.info(
+            "Picota training service started (host=%s, port=%s, log_api_requests=%s)",
+            host,
+            int(port),
+            bool(log_api_requests),
+        )
         server.serve_forever()
 
     @staticmethod

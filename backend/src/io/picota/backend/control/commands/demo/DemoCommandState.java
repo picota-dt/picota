@@ -1,5 +1,6 @@
 package io.picota.backend.control.commands.demo;
 
+import io.picota.backend.control.commands.TwinModelTemplate;
 import io.picota.backend.control.commands.UiCommandFixtures;
 import io.picota.backend.control.commands.real.RealCommandState;
 import io.picota.backend.control.ui.schemas.*;
@@ -8,6 +9,7 @@ import io.picota.backend.control.ui.viewmodel.ModelViewMapper;
 import io.picota.backend.model.Application;
 import io.picota.backend.model.TwinAggregate;
 import io.picota.backend.model.UserAccount;
+import io.picota.backend.persistence.DatasetStorage;
 import io.picota.backend.persistence.ModelPersistence;
 
 import java.util.List;
@@ -19,7 +21,11 @@ public class DemoCommandState {
 	private final String demoToken;
 
 	public DemoCommandState() {
-		this.delegate = new RealCommandState(new InMemoryModelPersistence(createDemoModel()));
+		this(TwinModelTemplate.defaultTemplate());
+	}
+
+	public DemoCommandState(TwinModelTemplate twinModelTemplate) {
+		this.delegate = new RealCommandState(new InMemoryModelPersistence(createDemoModel()), twinModelTemplate, DatasetStorage.noOp());
 		this.demoToken = delegate.login(new LoginRequest(UiCommandFixtures.DEFAULT_EMAIL, UiCommandFixtures.DEFAULT_PASSWORD)).token();
 	}
 

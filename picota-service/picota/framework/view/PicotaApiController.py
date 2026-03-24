@@ -8,6 +8,7 @@ from picota.framework.control.CaseWorkspaceManager import CaseWorkspaceManager
 from picota.framework.control.ModelInferenceCommander import ModelInferenceCommander
 from picota.framework.control.ModelInferenceRunner import ModelInferenceRunner
 from picota.framework.control.TrainingCommander import TrainingCommander
+from picota.framework.control.adapters.tabularTimeseries.RequestOptionsParser import RequestOptionsParser
 from picota.framework.model.InferenceRequest import InferenceRequest
 from picota.framework.model.TrainingCommandConfig import TrainingCommandConfig
 from picota.framework.model.TrainingConfigError import TrainingConfigError
@@ -29,8 +30,11 @@ class PicotaApiController:
     def create_training(self, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         try:
             request = TrainingRequest.from_dict(payload)
+            RequestOptionsParser().parse(request)
             created = self.commander.execute(request)
         except TrainingConfigError as exc:
+            return HTTPStatus.BAD_REQUEST, {"error": "invalid_request", "message": str(exc)}
+        except ValueError as exc:
             return HTTPStatus.BAD_REQUEST, {"error": "invalid_request", "message": str(exc)}
         return HTTPStatus.ACCEPTED, {
             "ticket_id": created["ticket_id"],
@@ -191,6 +195,7 @@ class PicotaApiController:
 
         try:
             request = TrainingRequest.from_dict(mutable_payload)
+            RequestOptionsParser().parse(request)
             commander = self._commanderForCase(case_id)
             created = commander.execute(request, request_payload=mutable_payload)
         except TrainingConfigError as exc:

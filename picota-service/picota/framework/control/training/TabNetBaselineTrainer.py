@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections.abc import Callable
 
 import torch
 
@@ -30,6 +31,7 @@ class TabNetBaselineTrainer(KanBaselineTrainer):
             gamma: float = 1.3,
             dropout: float = 0.05,
             mask_temperature: float = 1.0,
+            epoch_progress_listener: Callable[[int, int], None] | None = None,
     ):
         super().__init__(
             name=name,
@@ -45,6 +47,7 @@ class TabNetBaselineTrainer(KanBaselineTrainer):
             device=device,
             learning_rate=learning_rate,
             seed=seed,
+            epoch_progress_listener=epoch_progress_listener,
         )
         self.input_dim = int(input_dim)
         self.n_d = int(n_d)
@@ -108,6 +111,7 @@ class TabNetBaselineTrainer(KanBaselineTrainer):
                 val_metrics.mae_model,
                 val_metrics.rmse_model,
             )
+            self._notify_epoch_progress(epoch)
             if val_metrics.mae_model < best_val_mae:
                 best_val_mae = val_metrics.mae_model
                 best_state = copy.deepcopy(model.state_dict())

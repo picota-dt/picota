@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections.abc import Callable
 from typing import Iterable
 
 import torch
@@ -37,6 +38,7 @@ class TabNetMetamorphicTrainer(TabNetBaselineTrainer):
             supervised_weight: float = 1.0,
             relation_constraint_weight: float = 0.25,
             worst_case_over_t_weight: float = 0.0,
+            epoch_progress_listener: Callable[[int, int], None] | None = None,
     ):
         super().__init__(
             name=name,
@@ -54,6 +56,7 @@ class TabNetMetamorphicTrainer(TabNetBaselineTrainer):
             gamma=gamma,
             dropout=dropout,
             mask_temperature=mask_temperature,
+            epoch_progress_listener=epoch_progress_listener,
         )
         self.loss_fn = CompositeMetamorphicLoss.from_rule_specs(
             rule_specs=rule_specs,
@@ -122,6 +125,7 @@ class TabNetMetamorphicTrainer(TabNetBaselineTrainer):
                 val_metrics.mae_model,
                 val_metrics.rmse_model,
             )
+            self._notify_epoch_progress(epoch)
             if val_metrics.mae_model < best_val_mae:
                 best_val_mae = val_metrics.mae_model
                 best_state = copy.deepcopy(model.state_dict())

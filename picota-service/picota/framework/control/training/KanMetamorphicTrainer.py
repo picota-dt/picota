@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections.abc import Callable
 from typing import Iterable
 
 import torch
@@ -35,6 +36,7 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
             supervised_weight: float,
             relation_constraint_weight: float,
             worst_case_over_t_weight: float,
+            epoch_progress_listener: Callable[[int, int], None] | None = None,
     ):
         super().__init__(
             name=name,
@@ -50,6 +52,7 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
             device=device,
             learning_rate=learning_rate,
             seed=seed,
+            epoch_progress_listener=epoch_progress_listener,
         )
         self.loss_fn = CompositeMetamorphicLoss.from_rule_specs(
             rule_specs=rule_specs,
@@ -111,6 +114,7 @@ class KanMetamorphicTrainer(KanBaselineTrainer):
                 val_metrics.mae_model,
                 val_metrics.rmse_model,
             )
+            self._notify_epoch_progress(epoch)
             if val_metrics.mae_model < best_val_mae:
                 best_val_mae = val_metrics.mae_model
                 best_state = copy.deepcopy(model.state_dict())

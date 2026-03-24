@@ -26,6 +26,16 @@ const STATUS_CONFIG = {
     offline: {dot: "bg-white/25", text: "text-white/40", label: "Offline"},
 };
 
+function isTabId(value: string | undefined | null): value is TabId {
+    if (!value) return false;
+    return TABS.some((tab) => tab.id === value);
+}
+
+function tabFromHash(hash: string): TabId | null {
+    const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    return isTabId(cleanHash) ? cleanHash : null;
+}
+
 // ─── Leave-tab confirmation dialog ────────────────────────────────────────────
 
 function UnsavedDialog({
@@ -82,10 +92,25 @@ export default function TwinDetailPage() {
         window.scrollTo({top: 0, behavior: "instant"});
     }, [id]);
 
-    const [activeTab, setActiveTab] = useState<TabId>("properties");
+    const [activeTab, setActiveTab] = useState<TabId>(() => tabFromHash(window.location.hash) ?? "properties");
     const [modelDirty, setModelDirty] = useState(false);
     const [pendingTab, setPendingTab] = useState<TabId | null>(null);
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+
+    useEffect(() => {
+        const initialTab = tabFromHash(window.location.hash) ?? "properties";
+        setActiveTab(initialTab);
+        setPendingTab(null);
+        setModelDirty(false);
+        setShowLeaveDialog(false);
+    }, [id]);
+
+    useEffect(() => {
+        const nextHash = `#${activeTab}`;
+        if (window.location.hash === nextHash) return;
+        const {pathname, search} = window.location;
+        window.history.replaceState(window.history.state, "", `${pathname}${search}${nextHash}`);
+    }, [activeTab]);
 
     if (!twin) {
         return (
@@ -132,6 +157,11 @@ export default function TwinDetailPage() {
             setActiveTab(pendingTab);
             setPendingTab(null);
         }
+        setShowLeaveDialog(false);
+    };
+
+    const handlePendingTabCancelled = () => {
+        setPendingTab(null);
         setShowLeaveDialog(false);
     };
 
@@ -227,6 +257,7 @@ export default function TwinDetailPage() {
                         onDirtyChange={setModelDirty}
                         pendingTabChange={pendingTab}
                         onPendingTabResolved={handlePendingTabResolved}
+                        onPendingTabCancelled={handlePendingTabCancelled}
                     />
                 )}
 

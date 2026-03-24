@@ -7,6 +7,16 @@ from picota.framework.model.TrainingRequest import TrainingRequest
 
 
 class RequestOptionsParser:
+    _SUPPORTED_TIME_BUCKETS = {"years", "months", "days", "hours", "minutes", "seconds"}
+    _TIME_BUCKET_ALIASES = {
+        "year": "years",
+        "month": "months",
+        "day": "days",
+        "hour": "hours",
+        "minute": "minutes",
+        "second": "seconds",
+    }
+
     def parse(self, request: TrainingRequest) -> AdapterOptions:
         raw = request.data_source.options or {}
         if not isinstance(raw, dict):
@@ -23,13 +33,36 @@ class RequestOptionsParser:
         if delimiter is not None:
             delimiter = str(delimiter)
 
-        inferred_bucket = "none"
+        inferred_bucket = None
+        if request.time_horizon.unit == "seconds":
+            inferred_bucket = "seconds"
+        elif request.time_horizon.unit == "minutes":
+            inferred_bucket = "minutes"
         if request.time_horizon.unit == "hours":
-            inferred_bucket = "hour"
+            inferred_bucket = "hours"
         elif request.time_horizon.unit == "days":
-            inferred_bucket = "day"
-        time_bucket = str(raw.get("time_bucket") or inferred_bucket).strip().lower()
-        if time_bucket not in {"none", "hour", "day"}:
+            inferred_bucket = "days"
+        elif request.time_horizon.unit == "months":
+            inferred_bucket = "months"
+        elif request.time_horizon.unit == "years":
+            inferred_bucket = "years"
+
+        raw_time_bucket = raw.get("time_bucket")
+        time_bucket = self._normalize_time_bucket(raw_time_bucket)
+        if (
+                raw_time_bucket is not None
+                and time_bucket is None
+                and str(raw_time_bucket).strip().lower() not in {"", "none"}
+        ):
+            raise ValueError(f"Unsupported data_source.options.time_bucket '{raw_time_bucket}'")
+        if time_bucket is None:
+            time_bucket = inferred_bucket
+        if request.time_horizon.unit == "steps" and time_bucket is None:
+            raise ValueError(
+                "time_horizon.unit='steps' requires data_source.options.time_bucket in "
+                "{years, months, days, hours, minutes, seconds}"
+            )
+        if time_bucket not in self._SUPPORTED_TIME_BUCKETS:
             raise ValueError(f"Unsupported data_source.options.time_bucket '{time_bucket}'")
         if raw.get("time_features") is not None:
             raise ValueError(
@@ -75,6 +108,16 @@ class RequestOptionsParser:
             numerical_scaler=numerical_scaler,
             categorical_encoding=categorical_encoding,
         )
+
+    def _normalize_time_bucket(self, raw_value: Any) -> str | None:
+        if raw_value is None:
+            return None
+        value = str(raw_value).strip().lower()
+        if not value or value == "none":
+            return None
+        if value in self._SUPPORTED_TIME_BUCKETS:
+            return value
+        return self._TIME_BUCKET_ALIASES.get(value)
 
     @staticmethod
     def _read_str_list(value: Any, *, field_name: str) -> list[str]:
