@@ -422,27 +422,45 @@ public class TwinOperationsDelegate {
 			int historyPoints
 	) {
 		int safeHistoryPoints = Math.max(1, historyPoints);
-		NavigableMap<Instant, Double> mergedByInstant = new TreeMap<>();
-		if (datasetHistory != null) {
-			for (TelemetryPoint point : datasetHistory) {
-				if (point == null || point.time() == null || point.value() == null || !Double.isFinite(point.value()))
-					continue;
-				mergedByInstant.put(point.time(), point.value());
-			}
+		List<TelemetryPoint> ingested = normalizeTelemetryHistory(ingestedHistory);
+		if (ingested.size() > safeHistoryPoints) {
+			ingested = List.copyOf(ingested.subList(ingested.size() - safeHistoryPoints, ingested.size()));
 		}
-		if (ingestedHistory != null) {
-			for (TelemetryPoint point : ingestedHistory) {
-				if (point == null || point.time() == null || point.value() == null || !Double.isFinite(point.value()))
-					continue;
-				mergedByInstant.put(point.time(), point.value());
-			}
+		if (ingested.size() == safeHistoryPoints) return ingested;
+
+		int missing = safeHistoryPoints - ingested.size();
+		Set<Instant> ingestedInstants = ingested.stream()
+				.map(TelemetryPoint::time)
+				.filter(Objects::nonNull)
+				.collect(LinkedHashSet::new, Set::add, Set::addAll);
+		List<TelemetryPoint> dataset = normalizeTelemetryHistory(datasetHistory).stream()
+				.filter(point -> point.time() != null && !ingestedInstants.contains(point.time()))
+				.toList();
+		if (dataset.size() > missing) {
+			dataset = List.copyOf(dataset.subList(dataset.size() - missing, dataset.size()));
 		}
-		if (mergedByInstant.isEmpty()) return List.of();
-		List<TelemetryPoint> merged = mergedByInstant.entrySet().stream()
+
+		List<TelemetryPoint> merged = new ArrayList<>(dataset.size() + ingested.size());
+		merged.addAll(dataset);
+		merged.addAll(ingested);
+		merged.sort(Comparator.comparing(TelemetryPoint::time));
+		if (merged.size() <= safeHistoryPoints) return List.copyOf(merged);
+		return List.copyOf(merged.subList(merged.size() - safeHistoryPoints, merged.size()));
+	}
+
+	private static List<TelemetryPoint> normalizeTelemetryHistory(List<TelemetryPoint> history) {
+		if (history == null || history.isEmpty()) return List.of();
+		NavigableMap<Instant, Double> byInstant = new TreeMap<>();
+		for (TelemetryPoint point : history) {
+			if (point == null || point.time() == null || point.value() == null || !Double.isFinite(point.value())) {
+				continue;
+			}
+			byInstant.put(point.time(), point.value());
+		}
+		if (byInstant.isEmpty()) return List.of();
+		return byInstant.entrySet().stream()
 				.map(entry -> new TelemetryPoint(entry.getKey(), entry.getValue()))
 				.toList();
-		if (merged.size() <= safeHistoryPoints) return merged;
-		return List.copyOf(merged.subList(merged.size() - safeHistoryPoints, merged.size()));
 	}
 
 	private static String sensorActualTelemetryId(Variable variable) {

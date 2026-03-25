@@ -97,7 +97,7 @@ export interface VariableTelemetry {
     variableId: string;
     variableName: string;
     unit: string;
-    current: number;
+    current: number | null;
     history: TelemetryPoint[];
 }
 

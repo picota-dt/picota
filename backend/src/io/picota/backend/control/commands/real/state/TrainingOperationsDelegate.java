@@ -28,6 +28,7 @@ public class TrainingOperationsDelegate {
 	private final ConcurrentMap<String, String> trainingJobOwnerById;
 	private final DatasetStorage datasetStorage;
 	private final ExternalTrainingClient trainingClient;
+	private final TrainingDatasetPreparer trainingDatasetPreparer;
 	private final Runnable persistAction;
 
 	public TrainingOperationsDelegate(
@@ -43,6 +44,7 @@ public class TrainingOperationsDelegate {
 		this.trainingJobOwnerById = trainingJobOwnerById;
 		this.datasetStorage = datasetStorage == null ? DatasetStorage.noOp() : datasetStorage;
 		this.trainingClient = trainingClient == null ? ExternalTrainingClient.disabled() : trainingClient;
+		this.trainingDatasetPreparer = new TrainingDatasetPreparer(this.datasetStorage);
 		this.persistAction = persistAction;
 	}
 
@@ -720,10 +722,19 @@ public class TrainingOperationsDelegate {
 					output.lookback(),
 					nonNegativeOrDefault(twin.inferenceEngine() == null ? null : twin.inferenceEngine().windowSize(), DEFAULT_WINDOW_SIZE)
 			);
+			Path preparedDatasetPath = trainingDatasetPreparer.prepareSubjectTrainingDataset(
+					twin.id(),
+					twin.version(),
+					subject,
+					outputColumn,
+					mergeInputColumns(numericalInputs, categoricalInputs),
+					datasetPath.get(),
+					timeBucket
+			);
 			return new TrainingLaunchContext(
 					subject,
 					outputColumn,
-					datasetPath.get(),
+					preparedDatasetPath,
 					numericalInputs,
 					categoricalInputs,
 					timeBucket,
@@ -996,6 +1007,13 @@ public class TrainingOperationsDelegate {
 	private static String sanitizeVersion(String version) {
 		if (version == null || version.isBlank()) return "0_0_0";
 		return version.replaceAll("[^a-zA-Z0-9._-]", "_");
+	}
+
+	private static List<String> mergeInputColumns(List<String> numerical, List<String> categorical) {
+		LinkedHashSet<String> columns = new LinkedHashSet<>();
+		if (numerical != null) columns.addAll(numerical);
+		if (categorical != null) columns.addAll(categorical);
+		return List.copyOf(columns);
 	}
 
 	private static Double resolveTrainingDurationSeconds(Instant startedAt, Instant finishedAt, Double fallback) {

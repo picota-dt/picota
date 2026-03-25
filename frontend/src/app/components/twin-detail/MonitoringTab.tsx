@@ -5,12 +5,15 @@ import {Activity, Cpu, Sparkles} from "lucide-react";
 
 // ─── Variable Card ────────────────────────────────────────────────────────────
 
-function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: VariableTelemetry }) {
+function VariableCard({variable, telemetry, loading}: {
+    variable: Variable;
+    telemetry?: VariableTelemetry;
+    loading?: boolean
+}) {
     const inferred = isInferredVariable(variable);
     const lastValueAt = useMemo(() => resolveTelemetryLastTimestampLabel(telemetry), [telemetry]);
     const history = useMemo(() => {
-        const fallbackBase = Number.isFinite(telemetry?.current) ? Number(telemetry?.current) : 0;
-        if (!telemetry?.history?.length) return fallbackHistory(fallbackBase);
+        if (!telemetry?.history?.length) return [];
         const normalized = telemetry.history
             .map((point) => ({
                 time: formatTelemetryTime(point.time),
@@ -18,11 +21,24 @@ function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: V
                 atMillis: parseTelemetryMillis(point.time) ?? Date.now(),
             }))
             .filter((point) => Number.isFinite(point.value));
-        return normalized.length > 0 ? normalized : fallbackHistory(fallbackBase);
+        return normalized;
     }, [telemetry]);
-    const current = Number.isFinite(telemetry?.current) ? Number(telemetry?.current) : (history[history.length - 1]?.value ?? variable.value);
-    const min = Math.min(...history.map((h) => h.value));
-    const max = Math.max(...history.map((h) => h.value));
+    const current = useMemo(() => {
+        if (Number.isFinite(telemetry?.current)) return Number(telemetry?.current);
+        if (history.length === 0) return null;
+        return history[history.length - 1]?.value ?? null;
+    }, [history, telemetry]);
+    const hasCurrent = current !== null && Number.isFinite(current);
+    const min = history.length === 0 ? null : Math.min(...history.map((h) => h.value));
+    const max = history.length === 0 ? null : Math.max(...history.map((h) => h.value));
+    const yDomain = useMemo(() => {
+        if (min === null || max === null) return [0, 1] as const;
+        if (Math.abs(max - min) < 1e-9) {
+            const delta = Math.abs(max) < 1 ? 1 : Math.abs(max) * 0.05;
+            return [min - delta, max + delta] as const;
+        }
+        return [min * 0.95, max * 1.05] as const;
+    }, [max, min]);
     const color = inferred ? "#a78bfa" : "#22d3ee";
 
     return (
@@ -40,9 +56,9 @@ function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: V
 
             <div className="flex items-end gap-1 mb-3">
         <span className="text-white" style={{fontWeight: 700, fontSize: "1.4rem"}}>
-          {current.toFixed(1)}
+          {hasCurrent ? Number(current).toFixed(1) : ""}
         </span>
-                <span className="text-white/35 text-xs mb-1">{variable.unit}</span>
+                {hasCurrent && <span className="text-white/35 text-xs mb-1">{variable.unit}</span>}
             </div>
             {lastValueAt && (
                 <div className="text-white/30 text-[11px] font-mono mb-2">
@@ -52,26 +68,43 @@ function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: V
 
             {/* Sparkline */}
             <div className="h-14">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={history} margin={{top: 2, right: 2, left: -40, bottom: 0}}>
-                        <Line
-                            type="monotone"
-                            dataKey="value"
-                            stroke={color}
-                            strokeWidth={1.5}
-                            dot={false}
-                            isAnimationActive={false}
+                {loading ? (
+                    <div
+                        className="h-full rounded-md border border-white/10 bg-black/20 flex items-center justify-center">
+                        <span
+                            className="w-4 h-4 rounded-full border-2 border-white/20 animate-spin"
+                            style={{borderTopColor: color}}
                         />
-                        <YAxis domain={[min * 0.95, max * 1.05]} tick={false} axisLine={false} tickLine={false}/>
-                        <XAxis dataKey="time" hide/>
-                    </LineChart>
-                </ResponsiveContainer>
+                    </div>
+                ) : history.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={history} margin={{top: 2, right: 2, left: -40, bottom: 0}}>
+                            <Line
+                                type="monotone"
+                                dataKey="value"
+                                stroke={color}
+                                strokeWidth={1.5}
+                                dot={false}
+                                isAnimationActive={false}
+                            />
+                            <YAxis domain={yDomain} tick={false} axisLine={false} tickLine={false}/>
+                            <XAxis dataKey="time" hide/>
+                        </LineChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div
+                        className="h-full rounded-md border border-white/10 bg-black/20 flex items-center justify-center text-[11px] text-white/30 font-mono">
+                        No data
+                    </div>
+                )}
             </div>
 
-            <div className="flex justify-between text-white/20 text-xs mt-1 font-mono">
-                <span>min {min.toFixed(1)}</span>
-                <span>max {max.toFixed(1)}</span>
-            </div>
+            {min !== null && max !== null && (
+                <div className="flex justify-between text-white/20 text-xs mt-1 font-mono">
+                    <span>min {min.toFixed(1)}</span>
+                    <span>max {max.toFixed(1)}</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -102,9 +135,12 @@ interface Props {
 export function MonitoringTab({twin}: Props) {
     const {getSubjectTelemetry} = useApp();
     const [telemetryBySubject, setTelemetryBySubject] = useState<Record<string, Record<string, VariableTelemetry>>>({});
+    const [loadedSubjects, setLoadedSubjects] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         let cancelled = false;
+        setTelemetryBySubject({});
+        setLoadedSubjects({});
 
         const refreshTelemetry = async () => {
             const entries = await Promise.all(
@@ -122,6 +158,11 @@ export function MonitoringTab({twin}: Props) {
             );
             if (cancelled) return;
             setTelemetryBySubject(Object.fromEntries(entries));
+            setLoadedSubjects((current) => {
+                const next = {...current};
+                for (const subject of twin.subjects) next[subject.id] = true;
+                return next;
+            });
         };
 
         refreshTelemetry();
@@ -156,6 +197,7 @@ export function MonitoringTab({twin}: Props) {
                                 key={v.id}
                                 variable={v}
                                 telemetry={telemetryBySubject[s.id]?.[v.id]}
+                                loading={!loadedSubjects[s.id]}
                             />
                         ))}
                     </div>
@@ -288,19 +330,4 @@ function resolveTelemetryLastTimestampLabel(telemetry?: VariableTelemetry): stri
     if (latestMillis === null) return null;
     const formatted = formatLastValueTimestamp(latestMillis);
     return formatted.length > 0 ? formatted : null;
-}
-
-function fallbackHistory(base: number, points = 20) {
-    const safeBase = Number.isFinite(base) ? base : 0;
-    const history: { time: string; value: number; atMillis: number }[] = [];
-    for (let i = points; i >= 0; i--) {
-        const atMillis = Date.now() - i * 3000;
-        const now = new Date(atMillis);
-        history.push({
-            time: now.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
-            value: safeBase,
-            atMillis,
-        });
-    }
-    return history;
 }
