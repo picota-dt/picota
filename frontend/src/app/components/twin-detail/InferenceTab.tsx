@@ -159,6 +159,7 @@ function LaunchPanel({twin, onTrainingComplete, launchTrainingJob, getTrainingJo
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
     const logRef = useRef<HTMLDivElement>(null);
     const latestStatus = useRef<TrainingJob["status"] | null>(null);
+    const latestPhaseMessage = useRef<string | null>(null);
     const engine = twin.inferenceEngine;
 
     const hasData = (twin.datasets ?? []).some((d) => d.uploadedRecords > 0);
@@ -174,13 +175,14 @@ function LaunchPanel({twin, onTrainingComplete, launchTrainingJob, getTrainingJo
         setProgress(0);
         setPhase("preparing");
         latestStatus.current = null;
+        latestPhaseMessage.current = null;
         setActiveJobId(null);
 
         try {
             addLog("Submitting training request…");
             const started = await launchTrainingJob(twin.id);
             setActiveJobId(started.jobId);
-            syncFromJob(started, addLog, setPhase, setProgress, latestStatus);
+            syncFromJob(started, addLog, setPhase, setProgress, latestStatus, latestPhaseMessage);
 
             if (started.status === "done") {
                 if (started.result) onTrainingComplete(started.result);
@@ -199,7 +201,7 @@ function LaunchPanel({twin, onTrainingComplete, launchTrainingJob, getTrainingJo
             for (let poll = 0; poll < 400; poll++) {
                 await sleep(1500);
                 const current = await getTrainingJob(twin.id, started.jobId);
-                syncFromJob(current, addLog, setPhase, setProgress, latestStatus);
+                syncFromJob(current, addLog, setPhase, setProgress, latestStatus, latestPhaseMessage);
                 if (current.status === "done") {
                     if (current.result) onTrainingComplete(current.result);
                     addLog("✓ Training complete. Model saved.");
@@ -317,54 +319,56 @@ function LaunchPanel({twin, onTrainingComplete, launchTrainingJob, getTrainingJo
                             <div className="text-white/20 animate-pulse">▌</div>
                         )}
                     </div>
-                    {phase === "done" && (
-                        <button
-                            onClick={onJumpToResults}
-                            className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 text-xs hover:bg-cyan-500/20 transition-all"
-                            style={{fontWeight: 500}}
-                        >
-                            <BarChart3 className="w-3.5 h-3.5"/>
-                            View last training results
-                        </button>
-                    )}
                 </div>
             )}
 
             {/* Launch button */}
-            <button
-                onClick={runTraining}
-                disabled={isRunning || !hasConfig || !hasData}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${
-                    phase === "done"
-                        ? "bg-white/8 border border-white/15 text-white/50 hover:text-white/70 hover:bg-white/12"
-                        : phase === "error"
-                            ? "bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25"
-                            : "bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                }`}
-                style={{fontWeight: 500}}
-            >
-                {isRunning ? (
-                    <>
-                        <RefreshCw className="w-4 h-4 animate-spin"/>
-                        Training in progress…
-                    </>
-                ) : phase === "done" ? (
-                    <>
-                        <RefreshCw className="w-4 h-4"/>
-                        Retrain
-                    </>
-                ) : phase === "error" ? (
-                    <>
-                        <RefreshCw className="w-4 h-4"/>
-                        Retry training
-                    </>
-                ) : (
-                    <>
-                        <Play className="w-4 h-4"/>
-                        Start training
-                    </>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={runTraining}
+                    disabled={isRunning || !hasConfig || !hasData}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${
+                        phase === "done"
+                            ? "bg-white/8 border border-white/15 text-white/50 hover:text-white/70 hover:bg-white/12"
+                            : phase === "error"
+                                ? "bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25"
+                                : "bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                    }`}
+                    style={{fontWeight: 500}}
+                >
+                    {isRunning ? (
+                        <>
+                            <RefreshCw className="w-4 h-4 animate-spin"/>
+                            Training in progress…
+                        </>
+                    ) : phase === "done" ? (
+                        <>
+                            <RefreshCw className="w-4 h-4"/>
+                            Retrain
+                        </>
+                    ) : phase === "error" ? (
+                        <>
+                            <RefreshCw className="w-4 h-4"/>
+                            Retry training
+                        </>
+                    ) : (
+                        <>
+                            <Play className="w-4 h-4"/>
+                            Start training
+                        </>
+                    )}
+                </button>
+                {phase === "done" && (
+                    <button
+                        onClick={onJumpToResults}
+                        className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 text-sm hover:bg-cyan-500/20 transition-all"
+                        style={{fontWeight: 500}}
+                    >
+                        <BarChart3 className="w-4 h-4"/>
+                        Go to results
+                    </button>
                 )}
-            </button>
+            </div>
 
             {!hasData && phase === "idle" && (
                 <p className="text-white/25 text-xs mt-2 flex items-center gap-1.5">
@@ -386,16 +390,18 @@ function syncFromJob(
     addLog: (message: string) => void,
     setPhase: (phase: TrainingPhase) => void,
     setProgress: (progress: number) => void,
-    latestStatus: { current: TrainingJob["status"] | null }
+    latestStatus: { current: TrainingJob["status"] | null },
+    latestPhaseMessage: { current: string | null }
 ) {
     const nextPhase = phaseFromStatus(job.status);
     setPhase(nextPhase);
     setProgress(resolveJobProgress(job));
-
-    if (latestStatus.current !== job.status) {
-        latestStatus.current = job.status;
-        addLog(job.currentPhase ?? defaultPhaseLabel(job.status));
-    }
+    const message = job.currentPhase ?? defaultPhaseLabel(job.status);
+    const shouldLog = latestStatus.current !== job.status || latestPhaseMessage.current !== message;
+    latestStatus.current = job.status;
+    if (!shouldLog) return;
+    latestPhaseMessage.current = message;
+    addLog(message);
 }
 
 function phaseFromStatus(status: TrainingJob["status"]): TrainingPhase {
@@ -604,9 +610,15 @@ function formatValidationCount(value: number | null | undefined): string {
     return Math.max(0, Math.trunc(value)).toLocaleString();
 }
 
-function formatValidationDuration(value: number | null | undefined): string {
+function formatDuration(value: number | null | undefined): string {
     if (value === null || value === undefined || Number.isNaN(value)) return "—";
     if (value < 1) return `${Math.round(value * 1000)} ms`;
+    const roundedSeconds = Math.round(value);
+    const hours = Math.floor(roundedSeconds / 3600);
+    const minutes = Math.floor((roundedSeconds % 3600) / 60);
+    const seconds = roundedSeconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
     return `${value.toFixed(2)} s`;
 }
 
@@ -642,11 +654,12 @@ function parseDateLike(value: unknown): Date | null {
     return null;
 }
 
-function TrainingResults({engine}: { engine: InferenceEngine }) {
-    const parsedTrainedAt = parseDateLike(engine.trainedAt);
-    const trainedDate = parsedTrainedAt
-        ? parsedTrainedAt.toLocaleDateString("en-US", {year: "numeric", month: "long", day: "numeric"})
+function TrainingResults({engine, twin}: { engine: InferenceEngine; twin: DigitalTwin }) {
+    const parsedLaunchedAt = parseDateLike(engine.launchedAt);
+    const launchedDate = parsedLaunchedAt
+        ? parsedLaunchedAt.toLocaleDateString("en-US", {year: "numeric", month: "long", day: "numeric"})
         : "—";
+    const totalTrainingTime = formatDuration(engine.trainingDurationSeconds);
 
     return (
         <div className="flex flex-col gap-4">
@@ -654,7 +667,8 @@ function TrainingResults({engine}: { engine: InferenceEngine }) {
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0"/>
                 <div>
                     <p className="text-emerald-400 text-sm" style={{fontWeight: 600}}>Engine trained</p>
-                    <p className="text-white/30 text-xs">Trained on {trainedDate} · Algorithm: {engine.algorithm}</p>
+                    <p className="text-white/30 text-xs">Launched on {launchedDate} · Total training
+                        time: {totalTrainingTime}</p>
                 </div>
             </div>
 
@@ -663,9 +677,9 @@ function TrainingResults({engine}: { engine: InferenceEngine }) {
                     <Zap className="w-4 h-4 text-white/40"/>
                     <h3 className="text-white" style={{fontWeight: 600}}>Training configuration used</h3>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                     {[
-                        {label: "Algorithm", value: engine.algorithm},
+                        {label: "Algorithm", value: engine.algorithm ?? "—"},
                         {label: "Epochs", value: engine.epochs?.toLocaleString() ?? "—"},
                         {label: "Learning rate", value: engine.learningRate ?? "—"},
                         {
@@ -691,8 +705,8 @@ function TrainingResults({engine}: { engine: InferenceEngine }) {
                     <div className="flex flex-col gap-4">
                         {engine.inferredVariables.map((v) => {
                             const isCategorical = v.dataType === "categorical"
-                                || v.accuracy !== undefined
-                                || v.macroF1 !== undefined;
+                                || (v.dataType === undefined && (v.accuracy !== undefined || v.macroF1 !== undefined));
+                            const timeHorizon = resolveInferredTimeHorizon(twin, v.name);
                             const totalViolationPercent = normalizePercentage(v.violations);
                             const constraintViolations = Object.entries(v.constraintViolations ?? {})
                                 .map(([constraint, rate]) => ({constraint, rate: normalizePercentage(rate)}))
@@ -700,7 +714,6 @@ function TrainingResults({engine}: { engine: InferenceEngine }) {
                             const hasViolationMetrics = totalViolationPercent !== null || constraintViolations.length > 0;
                             const orderedMetrics = [
                                 {label: "Test n", value: formatValidationCount(v.validationSampleCount)},
-                                {label: "Test time", value: formatValidationDuration(v.validationDurationSeconds)},
                                 {label: "MAE", value: formatMetric(v.mae)},
                                 {label: "R2", value: formatMetric(v.r2)},
                                 ...(isCategorical ? [
@@ -714,7 +727,10 @@ function TrainingResults({engine}: { engine: InferenceEngine }) {
                                         <div className="flex items-center gap-2">
                                             <span className="w-2 h-2 rounded-full bg-violet-400"/>
                                             <span className="text-white text-sm font-mono"
-                                                  style={{fontWeight: 600}}>{v.name}</span>
+                                                  style={{fontWeight: 600}}>
+                                                {v.name}
+                                                {timeHorizon > 0 ? ` · t+${timeHorizon}` : ""}
+                                            </span>
                                         </div>
                                         <span
                                             className="text-xs px-2 py-0.5 rounded-full border bg-white/4 border-white/10 text-white/45">
@@ -833,7 +849,7 @@ export function InferenceTab({twin}: Props) {
 
             {/* 5 — Results or not-trained */}
             {twin.inferenceEngine?.trained ? (
-                <TrainingResults engine={twin.inferenceEngine}/>
+                <TrainingResults engine={twin.inferenceEngine} twin={twin}/>
             ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                     <div
@@ -848,4 +864,21 @@ export function InferenceTab({twin}: Props) {
             )}
         </div>
     );
+}
+
+function resolveInferredTimeHorizon(twin: DigitalTwin, inferredVariableName: string): number {
+    const normalizedName = inferredVariableName.trim().toLowerCase();
+    if (!normalizedName) return 0;
+    for (const subject of twin.subjects ?? []) {
+        for (const variable of subject.variables ?? []) {
+            if (variable.variableType !== "inferred") continue;
+            const byName = variable.name?.trim().toLowerCase() === normalizedName;
+            const byId = variable.id?.trim().toLowerCase() === normalizedName;
+            if (!byName && !byId) continue;
+            return typeof variable.timeHorizon === "number" && Number.isFinite(variable.timeHorizon)
+                ? Math.max(0, Math.trunc(variable.timeHorizon))
+                : 0;
+        }
+    }
+    return 0;
 }

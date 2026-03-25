@@ -1,5 +1,7 @@
 package io.picota.backend.control.commands;
 
+import io.picota.backend.control.ingestion.IngestMetricsRequest;
+import io.picota.backend.control.ingestion.IngestSensorMetricsCommand;
 import io.picota.backend.control.ui.schemas.*;
 import io.picota.backend.control.ui.schemas.requests.*;
 
@@ -27,6 +29,9 @@ public record UiCommandSet(
 		ListSubjectsCommand listSubjectsCommand,
 		GetSubjectCommand getSubjectCommand,
 		GetSubjectTelemetryCommand getSubjectTelemetryCommand,
+		GetTwinIngestionTokenCommand getTwinIngestionTokenCommand,
+		RotateTwinIngestionTokenCommand rotateTwinIngestionTokenCommand,
+		IngestSensorMetricsCommand ingestSubjectSensorMetricsCommand,
 		ListDatasetsCommand listDatasetsCommand,
 		GetDatasetCommand getDatasetCommand,
 		UploadDatasetCommand uploadDatasetCommand,
@@ -57,6 +62,9 @@ public record UiCommandSet(
 		listSubjectsCommand = Objects.requireNonNull(listSubjectsCommand, "listSubjectsCommand");
 		getSubjectCommand = Objects.requireNonNull(getSubjectCommand, "getSubjectCommand");
 		getSubjectTelemetryCommand = Objects.requireNonNull(getSubjectTelemetryCommand, "getSubjectTelemetryCommand");
+		getTwinIngestionTokenCommand = Objects.requireNonNull(getTwinIngestionTokenCommand, "getTwinIngestionTokenCommand");
+		rotateTwinIngestionTokenCommand = Objects.requireNonNull(rotateTwinIngestionTokenCommand, "rotateTwinIngestionTokenCommand");
+		ingestSubjectSensorMetricsCommand = Objects.requireNonNull(ingestSubjectSensorMetricsCommand, "ingestSubjectSensorMetricsCommand");
 		listDatasetsCommand = Objects.requireNonNull(listDatasetsCommand, "listDatasetsCommand");
 		getDatasetCommand = Objects.requireNonNull(getDatasetCommand, "getDatasetCommand");
 		uploadDatasetCommand = Objects.requireNonNull(uploadDatasetCommand, "uploadDatasetCommand");
@@ -142,6 +150,18 @@ public record UiCommandSet(
 
 	public List<VariableTelemetry> getSubjectTelemetry(String authToken, String twinId, String subjectId, int historyPoints) {
 		return getSubjectTelemetryCommand.getSubjectTelemetry(authToken, twinId, subjectId, historyPoints);
+	}
+
+	public IngestionToken getTwinIngestionToken(String authToken, String twinId) {
+		return getTwinIngestionTokenCommand.getTwinIngestionToken(authToken, twinId);
+	}
+
+	public IngestionToken rotateTwinIngestionToken(String authToken, String twinId) {
+		return rotateTwinIngestionTokenCommand.rotateTwinIngestionToken(authToken, twinId);
+	}
+
+	public void ingestSubjectSensorMetrics(String authToken, String twinId, String subjectId, IngestMetricsRequest request) {
+		ingestSubjectSensorMetricsCommand.ingestSubjectSensorMetrics(authToken, twinId, subjectId, request);
 	}
 
 	public List<SubjectDataset> listDatasets(String authToken, String twinId) {

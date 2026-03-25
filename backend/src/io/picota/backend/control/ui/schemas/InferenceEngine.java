@@ -7,6 +7,8 @@ public record InferenceEngine(
 		Boolean trained,
 		TrainingAlgorithm algorithm,
 		Instant trainedAt,
+		Instant launchedAt,
+		Double trainingDurationSeconds,
 		Integer epochs,
 		Double learningRate,
 		Integer windowSize,

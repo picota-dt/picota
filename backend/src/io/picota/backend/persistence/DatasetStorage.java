@@ -1,6 +1,8 @@
 package io.picota.backend.persistence;
 
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface DatasetStorage {
@@ -11,6 +13,32 @@ public interface DatasetStorage {
 	void deleteTwinDatasets(String twinId);
 
 	Optional<Path> resolveDatasetPath(String twinId, String subjectId, String subjectName);
+
+	default void appendMetric(
+			String twinId,
+			String twinVersion,
+			String subjectId,
+			String subjectName,
+			String variableId,
+			String variableName,
+			MetricKind kind,
+			Instant instant,
+			Double value
+	) {
+	}
+
+	default MetricSeries readMetricSeries(
+			String twinId,
+			String twinVersion,
+			String subjectId,
+			String subjectName,
+			String variableId,
+			String variableName,
+			MetricKind kind,
+			int historyPoints
+	) {
+		return MetricSeries.empty();
+	}
 
 	static DatasetStorage noOp() {
 		return new DatasetStorage() {
@@ -31,5 +59,33 @@ public interface DatasetStorage {
 				return Optional.empty();
 			}
 		};
+	}
+
+	enum MetricKind {
+		SENSORS("sensors"),
+		INFERRED("inferred");
+
+		private final String folderName;
+
+		MetricKind(String folderName) {
+			this.folderName = folderName;
+		}
+
+		public String folderName() {
+			return folderName;
+		}
+	}
+
+	record MetricSample(Instant instant, Double value) {
+	}
+
+	record MetricSeries(MetricSample latest, List<MetricSample> history) {
+		public MetricSeries {
+			history = history == null ? List.of() : List.copyOf(history);
+		}
+
+		public static MetricSeries empty() {
+			return new MetricSeries(null, List.of());
+		}
 	}
 }

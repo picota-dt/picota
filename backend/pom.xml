@@ -17,7 +17,7 @@
 
 	<build>
 		<sourceDirectory>src</sourceDirectory>
-		<testSourceDirectory>test</testSourceDirectory>
+		<testSourceDirectory>${java.io.tmpdir}/picota-backend-no-tests</testSourceDirectory>
 		<outputDirectory>../out/production/backend</outputDirectory>
 		<testOutputDirectory>../out/test/backend</testOutputDirectory>
 		<directory>../out/build/backend</directory>
@@ -44,6 +44,16 @@
 					<target>${maven.compiler.target}</target>
 					<proc>none</proc>
 					<generatedSourcesDirectory>${java.io.tmpdir}/picota-backend-apt</generatedSourcesDirectory>
+					<generatedTestSourcesDirectory>${java.io.tmpdir}/picota-backend-test-apt
+					</generatedTestSourcesDirectory>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.2.5</version>
+				<configuration>
+					<useModulePath>false</useModulePath>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -100,19 +110,6 @@
 						<configuration>
 							<sources>
 								<source>gen</source>
-
-							</sources>
-						</configuration>
-					</execution>
-					<execution>
-						<id>add-test-source</id>
-						<phase>initialize</phase>
-						<goals>
-							<goal>add-test-source</goal>
-						</goals>
-						<configuration>
-							<sources>
-								<source>test-gen</source>
 
 							</sources>
 						</configuration>
@@ -201,6 +198,12 @@
 			<groupId>io.quassar.monentia.picota</groupId>
 			<artifactId>parser-java</artifactId>
 			<version>1.2.3</version>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+			<version>5.11.4</version>
 		</dependency>
 	</dependencies>
 </project>

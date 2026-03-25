@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from "react";
-import {DigitalSubject, DigitalTwin, SubjectDataset, useApp, VariableStat,} from "../../context/AppContext";
+import {DigitalSubject, DigitalTwin, SubjectDataset, useApp, Variable, VariableStat,} from "../../context/AppContext";
 import {
     Activity,
     AlertCircle,
@@ -129,10 +129,12 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove, onDownlo
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [uploadError, setUploadError] = useState("");
+    const subjectSensorVariables = sensorVariables(subject);
 
     const isLive = twinStatus === "active";
     const realtimeCount = useRealtimeCounter(dataset?.realtimeRecords ?? 0, isLive && !!dataset);
     const totalRecords = (dataset?.uploadedRecords ?? 0) + realtimeCount;
+    const uploadedDate = formatUploadedDate(dataset?.uploadedAt);
 
     const handleFile = async (file: File) => {
         setUploading(true);
@@ -174,7 +176,7 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove, onDownlo
                     </div>
                     <div>
                         <h3 className="text-white text-sm" style={{fontWeight: 600}}>{subject.name}</h3>
-                        <p className="text-white/30 text-xs">{subject.variables.length} variables</p>
+                        <p className="text-white/30 text-xs">{subjectSensorVariables.length} variables</p>
                     </div>
                 </div>
 
@@ -310,13 +312,11 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove, onDownlo
                         <div className="flex items-center gap-2 text-xs text-white/30">
                             <FileText className="w-3.5 h-3.5 text-cyan-400/50"/>
                             <span className="text-white/50">{dataset.fileName}</span>
-                            {dataset.uploadedAt && (
+                            {uploadedDate && (
                                 <>
                                     <span>·</span>
                                     <span>
-                    Uploaded {new Date(dataset.uploadedAt).toLocaleDateString("en-US", {
-                                        month: "short", day: "numeric", year: "numeric",
-                                    })}
+                    Uploaded {uploadedDate}
                   </span>
                                 </>
                             )}
@@ -324,7 +324,7 @@ function SubjectCard({subject, dataset, twinStatus, onUpload, onRemove, onDownlo
 
                         {/* Stats table */}
                         {Object.keys(dataset.stats).length > 0 ? (
-                            <StatsTable stats={dataset.stats} variables={subject.variables}/>
+                            <StatsTable stats={dataset.stats} variables={subjectSensorVariables}/>
                         ) : (
                             <div className="flex items-center gap-2 text-white/30 text-sm py-4">
                                 <Info className="w-4 h-4"/>
@@ -416,7 +416,7 @@ export function DataTab({twin}: Props) {
     };
 
     const handleDownloadTemplate = (subject: DigitalSubject) => {
-        const headers = ["instant", ...subject.variables.map((variable) => escapeCsvCell(variable.name))];
+        const headers = ["instant", ...sensorVariables(subject).map((variable) => escapeCsvCell(variable.name))];
         const csv = `${headers.join(",")}\n`;
         const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
         const url = URL.createObjectURL(blob);
@@ -504,7 +504,36 @@ function escapeCsvCell(value: string): string {
     return `"${value.replaceAll("\"", "\"\"")}"`;
 }
 
+function sensorVariables(subject: DigitalSubject): Variable[] {
+    const variables = Array.isArray(subject.variables) ? subject.variables : [];
+    return variables.filter((variable) => variable && variable.variableType !== "inferred");
+}
+
 function subjectFileStem(subjectName: string): string {
     const normalized = subjectName.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, "");
     return normalized.length > 0 ? normalized : "subject";
+}
+
+function formatUploadedDate(value: unknown): string | null {
+    const parsed = parseDateLike(value);
+    if (!parsed) return null;
+    return parsed.toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"});
+}
+
+function parseDateLike(value: unknown): Date | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && Number.isFinite(value)) {
+        const millis = Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value;
+        const parsed = new Date(millis);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed.length === 0) return null;
+        const numeric = Number(trimmed);
+        if (Number.isFinite(numeric)) return parseDateLike(numeric);
+        const parsed = new Date(trimmed);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
 }

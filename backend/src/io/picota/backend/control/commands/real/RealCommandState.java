@@ -7,6 +7,7 @@ import io.picota.backend.control.commands.real.state.DatasetStatisticsDelegate;
 import io.picota.backend.control.commands.real.state.ModelProjectionDelegate;
 import io.picota.backend.control.commands.real.state.TrainingOperationsDelegate;
 import io.picota.backend.control.commands.real.state.TwinOperationsDelegate;
+import io.picota.backend.control.ingestion.IngestMetricsRequest;
 import io.picota.backend.control.training.ExternalTrainingClient;
 import io.picota.backend.control.ui.schemas.*;
 import io.picota.backend.control.ui.schemas.DigitalSubject;
@@ -86,13 +87,11 @@ public class RealCommandState {
 		ExternalTrainingClient safeTrainingClient = trainingClient == null ? ExternalTrainingClient.disabled() : trainingClient;
 		ModelProjectionDelegate modelProjectionDelegate = new ModelProjectionDelegate(template);
 		DatasetStatisticsDelegate datasetStatisticsDelegate = new DatasetStatisticsDelegate();
-		Random sharedRandom = new Random();
 		this.twinOperationsDelegate = new TwinOperationsDelegate(
 				twinsByUser,
 				trainingJobs,
 				trainingJobOwnerById,
 				new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules(),
-				sharedRandom,
 				modelProjectionDelegate,
 				datasetStatisticsDelegate,
 				safeDatasetStorage,
@@ -247,7 +246,10 @@ public class RealCommandState {
 	}
 
 	public DigitalTwin createTwin(String authToken, CreateTwinRequest request) {
-		return twinOperationsDelegate.createTwin(requireUserId(authToken), request);
+		String userId = requireUserId(authToken);
+		DigitalTwin created = twinOperationsDelegate.createTwin(userId, request);
+		ensureTwinIngestionToken(userId, created.id());
+		return UiCommandFixtures.copyTwin(requireTwin(userId, created.id()));
 	}
 
 	public DigitalTwin getTwin(String authToken, String twinId) {
@@ -293,6 +295,22 @@ public class RealCommandState {
 	public List<VariableTelemetry> getSubjectTelemetry(String authToken, String twinId, String subjectId, int historyPoints) {
 		String userId = requireUserId(authToken);
 		return twinOperationsDelegate.getSubjectTelemetry(requireTwin(userId, twinId), subjectId, historyPoints);
+	}
+
+	public IngestionToken getTwinIngestionToken(String authToken, String twinId) {
+		String userId = requireUserId(authToken);
+		return new IngestionToken(ensureTwinIngestionToken(userId, twinId));
+	}
+
+	public IngestionToken rotateTwinIngestionToken(String authToken, String twinId) {
+		String userId = requireUserId(authToken);
+		return new IngestionToken(rotateTwinIngestionTokenInternal(userId, twinId));
+	}
+
+	public void ingestSubjectSensorMetrics(String authToken, String twinId, String subjectId, IngestMetricsRequest request) {
+		TwinOwnerAndTwin ownerAndTwin = requireTwinById(twinId);
+		requireMatchingTwinIngestionToken(ownerAndTwin.twin(), authToken);
+		twinOperationsDelegate.ingestSubjectSensorMetrics(ownerAndTwin.twin(), subjectId, request);
 	}
 
 	public List<SubjectDataset> listDatasets(String authToken, String twinId) {
@@ -368,6 +386,67 @@ public class RealCommandState {
 		DigitalTwin twin = twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).get(twinId);
 		if (twin == null) throw new UiCommandException(404, "TWIN_NOT_FOUND", "No twin found with id " + twinId);
 		return twin;
+	}
+
+	private TwinOwnerAndTwin requireTwinById(String twinId) {
+		if (twinId == null || twinId.isBlank()) {
+			throw new UiCommandException(404, "TWIN_NOT_FOUND", "No twin found with id " + twinId);
+		}
+		for (Map.Entry<String, ConcurrentMap<String, DigitalTwin>> entry : twinsByUser.entrySet()) {
+			DigitalTwin twin = entry.getValue() == null ? null : entry.getValue().get(twinId);
+			if (twin != null) return new TwinOwnerAndTwin(entry.getKey(), twin);
+		}
+		throw new UiCommandException(404, "TWIN_NOT_FOUND", "No twin found with id " + twinId);
+	}
+
+	private String ensureTwinIngestionToken(String userId, String twinId) {
+		DigitalTwin twin = requireTwin(userId, twinId);
+		String current = trimToNull(twin.ingestionToken());
+		if (current != null) return current;
+		String generated = newTwinIngestionToken();
+		upsertTwinIngestionToken(userId, twin, generated);
+		persistState();
+		return generated;
+	}
+
+	private String rotateTwinIngestionTokenInternal(String userId, String twinId) {
+		DigitalTwin twin = requireTwin(userId, twinId);
+		String generated = newTwinIngestionToken();
+		upsertTwinIngestionToken(userId, twin, generated);
+		persistState();
+		return generated;
+	}
+
+	private void requireMatchingTwinIngestionToken(DigitalTwin twin, String providedToken) {
+		String expected = trimToNull(twin == null ? null : twin.ingestionToken());
+		String provided = trimToNull(providedToken);
+		if (expected == null || provided == null || !expected.equals(provided)) {
+			throw new UiCommandException(401, "UNAUTHORIZED", "Ingestion token is missing or invalid");
+		}
+	}
+
+	private void upsertTwinIngestionToken(String userId, DigitalTwin twin, String token) {
+		DigitalTwin updated = withIngestionToken(twin, token);
+		twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).put(updated.id(), updated);
+	}
+
+	private static DigitalTwin withIngestionToken(DigitalTwin twin, String token) {
+		return new DigitalTwin(
+				twin.id(),
+				twin.name(),
+				twin.description(),
+				twin.version(),
+				twin.image(),
+				twin.type(),
+				twin.status(),
+				twin.updatedAt(),
+				twin.creditsUsed(),
+				twin.model(),
+				twin.subjects(),
+				twin.inferenceEngine(),
+				twin.datasets(),
+				token
+		);
 	}
 
 	private boolean loadPersistedState() {
@@ -475,6 +554,19 @@ public class RealCommandState {
 		if (!condition) throw new UiCommandException(status, code, message);
 	}
 
+	private static String trimToNull(String value) {
+		if (value == null) return null;
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	private static String newTwinIngestionToken() {
+		return "itok_" + UUID.randomUUID().toString().replace("-", "");
+	}
+
 	private record StoredUser(User user, String password) {
+	}
+
+	private record TwinOwnerAndTwin(String ownerUserId, DigitalTwin twin) {
 	}
 }

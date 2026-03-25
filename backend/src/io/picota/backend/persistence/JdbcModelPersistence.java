@@ -95,6 +95,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 			for (String sql : statements) {
 				statement.execute(sql);
 			}
+			ensureIngestionTokenColumn(connection);
 		} catch (SQLException e) {
 			throw new PersistenceException("Unable to initialize persistence schema", e);
 		}
@@ -141,7 +142,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 
 	private List<TwinAggregate> loadTwins(Connection connection) throws SQLException {
 		Map<String, LoadedTwinRow> loaded = new LinkedHashMap<>();
-		String twinsSql = "select id, owner_user_id, name, description, version, image, type, status, updated_at, credits_used, model_content, subjects_json, inference_engine_json " +
+		String twinsSql = "select id, owner_user_id, name, description, version, image, type, status, updated_at, credits_used, model_content, subjects_json, inference_engine_json, ingestion_token " +
 				"from twins order by id";
 		try (PreparedStatement statement = connection.prepareStatement(twinsSql);
 			 ResultSet rs = statement.executeQuery()) {
@@ -162,7 +163,8 @@ public class JdbcModelPersistence implements ModelPersistence {
 						rs.getString("model_content"),
 						subjects,
 						inferenceEngine,
-						List.of()
+						List.of(),
+						rs.getString("ingestion_token")
 				);
 				loaded.put(twinId, new LoadedTwinRow(rs.getString("owner_user_id"), twin));
 			}
@@ -223,8 +225,8 @@ public class JdbcModelPersistence implements ModelPersistence {
 	}
 
 	private void insertTwins(Connection connection, List<TwinAggregate> twins) throws SQLException {
-		String sql = "insert into twins (id, owner_user_id, name, description, version, image, type, status, updated_at, credits_used, model_content, subjects_json, inference_engine_json) " +
-				"values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+		String sql = "insert into twins (id, owner_user_id, name, description, version, image, type, status, updated_at, credits_used, model_content, subjects_json, inference_engine_json, ingestion_token) " +
+				"values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 		try (PreparedStatement statement = connection.prepareStatement(sql)) {
 			for (TwinAggregate aggregate : twins) {
 				if (aggregate == null || aggregate.ownerUserId() == null || aggregate.ownerUserId().isBlank() || aggregate.twin() == null) {
@@ -246,6 +248,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 				statement.setString(12, writeJson(twin.subjects()));
 				if (twin.inferenceEngine() == null) statement.setNull(13, Types.VARCHAR);
 				else statement.setString(13, writeJson(twin.inferenceEngine()));
+				statement.setString(14, twin.ingestionToken());
 				statement.addBatch();
 			}
 			statement.executeBatch();
@@ -309,6 +312,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 						"model_content text, " +
 						"subjects_json text not null, " +
 						"inference_engine_json text, " +
+						"ingestion_token text, " +
 						"foreign key(owner_user_id) references users(id) on delete cascade" +
 						")",
 				"create index if not exists idx_twins_owner_user on twins(owner_user_id)",
@@ -353,6 +357,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 						"model_content longtext, " +
 						"subjects_json longtext not null, " +
 						"inference_engine_json longtext, " +
+						"ingestion_token varchar(255), " +
 						"constraint fk_twins_owner foreign key (owner_user_id) references users(id) on delete cascade" +
 						") engine=InnoDB default charset=utf8mb4",
 				"create index if not exists idx_twins_owner_user on twins(owner_user_id)",
@@ -369,6 +374,27 @@ public class JdbcModelPersistence implements ModelPersistence {
 						") engine=InnoDB default charset=utf8mb4",
 				"create index if not exists idx_datasets_twin on datasets(twin_id)"
 		);
+	}
+
+	private void ensureIngestionTokenColumn(Connection connection) throws SQLException {
+		String ddl = config.engine() == PersistenceEngine.SQLITE
+				? "alter table twins add column ingestion_token text"
+				: "alter table twins add column ingestion_token varchar(255)";
+		try (Statement statement = connection.createStatement()) {
+			statement.execute(ddl);
+		} catch (SQLException e) {
+			if (!isDuplicateColumnError(e)) throw e;
+		}
+	}
+
+	private static boolean isDuplicateColumnError(SQLException error) {
+		if (error == null) return false;
+		String message = error.getMessage();
+		if (message == null) return false;
+		String normalized = message.toLowerCase(Locale.ROOT);
+		return normalized.contains("duplicate column")
+				|| normalized.contains("already exists")
+				|| normalized.contains("duplicate name");
 	}
 
 	private void enableSqliteForeignKeys(Connection connection) throws SQLException {
@@ -451,7 +477,8 @@ public class JdbcModelPersistence implements ModelPersistence {
 				twin.model(),
 				twin.subjects(),
 				twin.inferenceEngine(),
-				datasets
+				datasets,
+				twin.ingestionToken()
 		);
 	}
 

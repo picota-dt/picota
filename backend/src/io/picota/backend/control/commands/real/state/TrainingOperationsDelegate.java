@@ -7,6 +7,7 @@ import io.picota.backend.control.ui.schemas.*;
 import io.picota.backend.persistence.DatasetStorage;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,6 +57,12 @@ public class TrainingOperationsDelegate {
 						? request.algorithm()
 						: current != null && current.algorithm() != null ? current.algorithm() : TrainingAlgorithm.KAN,
 				request != null ? request.trainedAt() : current == null ? null : current.trainedAt(),
+				request != null && request.launchedAt() != null
+						? request.launchedAt()
+						: current == null ? null : current.launchedAt(),
+				request != null && request.trainingDurationSeconds() != null
+						? request.trainingDurationSeconds()
+						: current == null ? null : current.trainingDurationSeconds(),
 				request != null && request.epochs() != null
 						? request.epochs()
 						: current == null ? DEFAULT_EPOCHS : current.epochs(),
@@ -88,7 +95,8 @@ public class TrainingOperationsDelegate {
 				twin.model(),
 				twin.subjects(),
 				next,
-				twin.datasets()
+				twin.datasets(),
+				twin.ingestionToken()
 		);
 		twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).put(twin.id(), updatedTwin);
 		persistAction.run();
@@ -100,6 +108,8 @@ public class TrainingOperationsDelegate {
 				? new InferenceEngine(
 				false,
 				TrainingAlgorithm.KAN,
+				null,
+				null,
 				null,
 				DEFAULT_EPOCHS,
 				DEFAULT_LEARNING_RATE,
@@ -116,6 +126,8 @@ public class TrainingOperationsDelegate {
 				current.trained(),
 				current.algorithm(),
 				current.trainedAt(),
+				current.launchedAt(),
+				current.trainingDurationSeconds(),
 				current.epochs(),
 				current.learningRate(),
 				current.windowSize(),
@@ -136,7 +148,8 @@ public class TrainingOperationsDelegate {
 				twin.model(),
 				twin.subjects(),
 				updatedEngine,
-				twin.datasets()
+				twin.datasets(),
+				twin.ingestionToken()
 		);
 		twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).put(twin.id(), updatedTwin);
 		persistAction.run();
@@ -223,13 +236,20 @@ public class TrainingOperationsDelegate {
 		InferenceEngine engine = twin.inferenceEngine();
 		if (engine == null) return null;
 		List<InferredVariableResult> inferred = buildInferredVariables(twin, engine, snapshot.outcome());
+		Instant launchedAt = firstNonNull(snapshot.createdAt(), snapshot.startedAt(), engine.launchedAt());
+		Instant finishedAt = firstNonNull(snapshot.finishedAt(), snapshot.updatedAt(), Instant.now());
+		Double trainingDurationSeconds = resolveTrainingDurationSeconds(
+				firstNonNull(snapshot.startedAt(), launchedAt),
+				finishedAt,
+				engine.trainingDurationSeconds()
+		);
 
 		InferenceEngine trained = new InferenceEngine(
 				true,
 				engine.algorithm() == null ? TrainingAlgorithm.KAN : engine.algorithm(),
-				snapshot.finishedAt() == null
-						? snapshot.updatedAt() == null ? Instant.now() : snapshot.updatedAt()
-						: snapshot.finishedAt(),
+				finishedAt,
+				launchedAt,
+				trainingDurationSeconds,
 				positiveOrDefault(engine.epochs(), DEFAULT_EPOCHS),
 				positiveOrDefault(engine.learningRate(), DEFAULT_LEARNING_RATE),
 				nonNegativeOrDefault(engine.windowSize(), DEFAULT_WINDOW_SIZE),
@@ -251,7 +271,8 @@ public class TrainingOperationsDelegate {
 				twin.model(),
 				twin.subjects(),
 				trained,
-				twin.datasets()
+				twin.datasets(),
+				twin.ingestionToken()
 		);
 		twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).put(twin.id(), updatedTwin);
 		return UiCommandFixtures.copyInferenceEngine(trained);
@@ -299,7 +320,7 @@ public class TrainingOperationsDelegate {
 			List<String> numericalInputs = new ArrayList<>();
 			List<String> categoricalInputs = new ArrayList<>();
 			for (Variable variable : subject.variables()) {
-				if (variable == null) continue;
+				if (variable == null || variable.variableType() != VariableType.SENSOR) continue;
 				String candidateColumn = columnName(variable);
 				if (candidateColumn.equalsIgnoreCase(outputColumn)) continue;
 				if (variable.dataType() == VariableDataType.CATEGORICAL) {
@@ -591,6 +612,22 @@ public class TrainingOperationsDelegate {
 		return version.replaceAll("[^a-zA-Z0-9._-]", "_");
 	}
 
+	private static Double resolveTrainingDurationSeconds(Instant startedAt, Instant finishedAt, Double fallback) {
+		if (startedAt == null || finishedAt == null) return fallback;
+		if (finishedAt.isBefore(startedAt)) return fallback;
+		double seconds = Duration.between(startedAt, finishedAt).toMillis() / 1000.0;
+		return round(seconds, 3);
+	}
+
+	@SafeVarargs
+	private static <T> T firstNonNull(T... values) {
+		if (values == null) return null;
+		for (T value : values) {
+			if (value != null) return value;
+		}
+		return null;
+	}
+
 	private static String columnName(Variable variable) {
 		if (variable == null) return "variable";
 		if (variable.name() != null && !variable.name().isBlank()) return variable.name().trim();
@@ -606,19 +643,23 @@ public class TrainingOperationsDelegate {
 
 	private static VariableDataType resolveOutcomeDataType(DigitalTwin twin, TrainingTicketOutcome outcome) {
 		if (outcome == null) return VariableDataType.NUMERIC;
+		String output = outcome.outputVariable();
+		if (output != null && !output.isBlank()) {
+			Optional<VariableDataType> configuredType = twin.subjects().stream()
+					.filter(subject -> subject != null && subject.variables() != null)
+					.flatMap(subject -> subject.variables().stream())
+					.filter(variable -> variable != null && matchesOutputVariable(variable, output))
+					.map(Variable::dataType)
+					.filter(Objects::nonNull)
+					.findFirst();
+			if (configuredType.isPresent()) {
+				return configuredType.get();
+			}
+		}
 		if (outcome.accuracy() != null || outcome.macroF1() != null) {
 			return VariableDataType.CATEGORICAL;
 		}
-		String output = outcome.outputVariable();
-		if (output == null || output.isBlank()) return VariableDataType.NUMERIC;
-		return twin.subjects().stream()
-				.filter(subject -> subject != null && subject.variables() != null)
-				.flatMap(subject -> subject.variables().stream())
-				.filter(variable -> variable != null && matchesOutputVariable(variable, output))
-				.map(Variable::dataType)
-				.filter(type -> type != null)
-				.findFirst()
-				.orElse(VariableDataType.NUMERIC);
+		return VariableDataType.NUMERIC;
 	}
 
 	private static boolean matchesOutputVariable(Variable variable, String output) {

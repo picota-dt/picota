@@ -11,6 +11,8 @@ export interface Variable {
     inferred?: boolean;
     variableType?: "sensor" | "inferred";
     dataType?: "numeric" | "categorical";
+    timeHorizon?: number;
+    lookback?: number;
 }
 
 export interface DigitalSubject {
@@ -43,6 +45,8 @@ export interface InferenceEngine {
     trained: boolean;
     algorithm: string;
     trainedAt?: string | number;
+    launchedAt?: string | number;
+    trainingDurationSeconds?: number;
     epochs?: number;
     learningRate?: number;
     windowSize?: number;
@@ -80,7 +84,7 @@ export interface SubjectDataset {
     fileName?: string;
     uploadedRecords: number;
     realtimeRecords: number;
-    uploadedAt?: string;
+    uploadedAt?: string | number;
     stats: Record<string, VariableStat>;
 }
 
@@ -111,6 +115,7 @@ export interface DigitalTwin {
     subjects: DigitalSubject[];
     inferenceEngine: InferenceEngine | null;
     datasets: SubjectDataset[];
+    ingestionToken?: string;
 }
 
 interface RawVariable {
@@ -122,6 +127,8 @@ interface RawVariable {
     inferred?: boolean;
     variableType?: string;
     dataType?: string;
+    timeHorizon?: number;
+    lookback?: number;
 }
 
 interface RawDigitalSubject {
@@ -150,6 +157,10 @@ interface AuthResponse {
     user: User;
 }
 
+interface IngestionTokenResponse {
+    token: string;
+}
+
 interface AppContextValue {
     user: User;
     twins: DigitalTwin[];
@@ -169,6 +180,8 @@ interface AppContextValue {
     ) => Promise<SubjectDataset>;
     deleteDataset: (twinId: string, subjectId: string) => Promise<void>;
     getSubjectTelemetry: (twinId: string, subjectId: string, historyPoints?: number) => Promise<VariableTelemetry[]>;
+    getTwinIngestionToken: (twinId: string) => Promise<string>;
+    rotateTwinIngestionToken: (twinId: string) => Promise<string>;
     launchTrainingJob: (twinId: string) => Promise<TrainingJob>;
     getTrainingJob: (twinId: string, jobId: string) => Promise<TrainingJob>;
     isLoggedIn: boolean;
@@ -400,6 +413,32 @@ export function AppProvider({children}: { children: ReactNode }) {
         );
     };
 
+    const getTwinIngestionToken = async (twinId: string): Promise<string> => {
+        const activeToken = token;
+        if (!activeToken) throw new Error("No authenticated session");
+        const response = await apiRequest<IngestionTokenResponse>(
+            `/twins/${encodeURIComponent(twinId)}/ingestion-token`,
+            {token: activeToken}
+        );
+        const resolved = String(response?.token ?? "").trim();
+        if (!resolved) throw new Error("Ingestion token is empty");
+        setTwins((prev) => prev.map((twin) => twin.id === twinId ? {...twin, ingestionToken: resolved} : twin));
+        return resolved;
+    };
+
+    const rotateTwinIngestionToken = async (twinId: string): Promise<string> => {
+        const activeToken = token;
+        if (!activeToken) throw new Error("No authenticated session");
+        const response = await apiRequest<IngestionTokenResponse>(
+            `/twins/${encodeURIComponent(twinId)}/ingestion-token`,
+            {method: "POST", token: activeToken}
+        );
+        const resolved = String(response?.token ?? "").trim();
+        if (!resolved) throw new Error("Ingestion token is empty");
+        setTwins((prev) => prev.map((twin) => twin.id === twinId ? {...twin, ingestionToken: resolved} : twin));
+        return resolved;
+    };
+
     const launchTrainingJob = async (twinId: string): Promise<TrainingJob> => {
         const activeToken = token;
         if (!activeToken) throw new Error("No authenticated session");
@@ -426,6 +465,16 @@ export function AppProvider({children}: { children: ReactNode }) {
                     normalized.completedAt ??
                     normalized.startedAt ??
                     normalized.createdAt,
+                launchedAt:
+                    normalized.result.launchedAt ??
+                    normalized.createdAt ??
+                    normalized.startedAt,
+                trainingDurationSeconds:
+                    normalized.result.trainingDurationSeconds ??
+                    resolveDurationSeconds(
+                        normalized.startedAt ?? normalized.createdAt,
+                        normalized.completedAt ?? normalized.result.trainedAt
+                    ),
             }
             : normalized.result;
         const resolved = normalizedResult === normalized.result
@@ -458,6 +507,8 @@ export function AppProvider({children}: { children: ReactNode }) {
                 uploadDataset,
                 deleteDataset,
                 getSubjectTelemetry,
+                getTwinIngestionToken,
+                rotateTwinIngestionToken,
                 launchTrainingJob,
                 getTrainingJob,
                 isLoggedIn,
@@ -602,6 +653,9 @@ function normalizeTwin(raw: RawDigitalTwin): DigitalTwin {
         status: normalizeTwinStatus(raw.status),
         subjects: Array.isArray(raw.subjects) ? raw.subjects.map(normalizeSubject) : [],
         datasets: Array.isArray(raw.datasets) ? raw.datasets : [],
+        ingestionToken: typeof raw.ingestionToken === "string" && raw.ingestionToken.trim().length > 0
+            ? raw.ingestionToken.trim()
+            : undefined,
     };
 }
 
@@ -635,6 +689,8 @@ function normalizeVariable(raw: RawVariable): Variable {
         inferred,
         variableType,
         dataType: normalizeDataType(raw.dataType),
+        timeHorizon: normalizeOptionalInteger(raw.timeHorizon),
+        lookback: normalizeOptionalInteger(raw.lookback),
     };
 }
 
@@ -654,6 +710,11 @@ function normalizeNumericValue(value: unknown, id?: string, name?: string): numb
     if (typeof value === "number" && Number.isFinite(value)) return value;
     const seed = `${id ?? ""}|${name ?? ""}`;
     return syntheticValue(seed);
+}
+
+function normalizeOptionalInteger(value: unknown): number | undefined {
+    if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+    return Math.trunc(value);
 }
 
 function syntheticValue(seed: string): number {
@@ -684,4 +745,27 @@ function normalizeTrainingJobStatus(status: unknown): TrainingJobStatus {
         return normalized;
     }
     return "queued";
+}
+
+function resolveDurationSeconds(start: unknown, end: unknown): number | undefined {
+    const startMs = toEpochMillis(start);
+    const endMs = toEpochMillis(end);
+    if (startMs === null || endMs === null || endMs < startMs) return undefined;
+    return Math.round(((endMs - startMs) / 1000) * 1000) / 1000;
+}
+
+function toEpochMillis(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value;
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const numeric = Number(trimmed);
+        if (Number.isFinite(numeric)) return toEpochMillis(numeric);
+        const parsed = Date.parse(trimmed);
+        return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
 }

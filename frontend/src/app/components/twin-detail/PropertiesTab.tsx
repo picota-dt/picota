@@ -1,7 +1,22 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {useNavigate} from "react-router";
 import {DigitalTwin, TwinStatus, useApp} from "../../context/AppContext";
-import {Check, Coins, FileText, Hash, Info, Power, Save, Tag, Trash2} from "lucide-react";
+import {
+    Check,
+    Coins,
+    Copy,
+    Eye,
+    EyeOff,
+    FileText,
+    Hash,
+    Info,
+    KeyRound,
+    Power,
+    RefreshCcw,
+    Save,
+    Tag,
+    Trash2
+} from "lucide-react";
 
 const STATUS_OPTIONS: { value: TwinStatus; label: string; dot: string; text: string }[] = [
     {value: "active", label: "Active", dot: "bg-emerald-400", text: "text-emerald-400"},
@@ -32,7 +47,7 @@ function hasDefinedModel(model: string): boolean {
 
 export function PropertiesTab({twin}: Props) {
     const navigate = useNavigate();
-    const {updateTwin, deleteTwin} = useApp();
+    const {updateTwin, deleteTwin, getTwinIngestionToken, rotateTwinIngestionToken} = useApp();
     const [name, setName] = useState(twin.name);
     const [description, setDescription] = useState(twin.description);
     const [saving, setSaving] = useState(false);
@@ -41,10 +56,37 @@ export function PropertiesTab({twin}: Props) {
     const [deleteConfirmName, setDeleteConfirmName] = useState("");
     const [deleteError, setDeleteError] = useState("");
     const [deleting, setDeleting] = useState(false);
+    const [ingestionToken, setIngestionToken] = useState<string>(twin.ingestionToken ?? "");
+    const [loadingIngestionToken, setLoadingIngestionToken] = useState(false);
+    const [rotatingIngestionToken, setRotatingIngestionToken] = useState(false);
+    const [ingestionTokenError, setIngestionTokenError] = useState("");
+    const [copiedToken, setCopiedToken] = useState(false);
+    const [tokenVisible, setTokenVisible] = useState(false);
 
     const currentStatus = STATUS_OPTIONS.find((s) => s.value === twin.status)!;
     const isActive = twin.status === "active";
     const canActivate = hasDefinedModel(twin.model);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoadingIngestionToken(true);
+        setIngestionTokenError("");
+        getTwinIngestionToken(twin.id)
+            .then((token) => {
+                if (!cancelled) setIngestionToken(token);
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                setIngestionToken("");
+                setIngestionTokenError(error instanceof Error ? error.message : "Unable to load ingestion token.");
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingIngestionToken(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [twin.id]);
 
     const handleToggleActive = () => {
         if (!isActive && !canActivate) return;
@@ -76,6 +118,31 @@ export function PropertiesTab({twin}: Props) {
             setDeleteError(String(error?.message ?? "Unable to delete digital twin"));
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const handleRotateIngestionToken = async () => {
+        setRotatingIngestionToken(true);
+        setIngestionTokenError("");
+        try {
+            const rotated = await rotateTwinIngestionToken(twin.id);
+            setIngestionToken(rotated);
+        } catch (error) {
+            setIngestionTokenError(error instanceof Error ? error.message : "Unable to regenerate ingestion token.");
+        } finally {
+            setRotatingIngestionToken(false);
+        }
+    };
+
+    const handleCopyIngestionToken = async () => {
+        const safeToken = ingestionToken.trim();
+        if (!safeToken) return;
+        try {
+            await navigator.clipboard.writeText(safeToken);
+            setCopiedToken(true);
+            setTimeout(() => setCopiedToken(false), 1800);
+        } catch {
+            setIngestionTokenError("Unable to copy token to clipboard.");
         }
     };
 
@@ -177,6 +244,60 @@ export function PropertiesTab({twin}: Props) {
                     {saved ? <><Check className="w-4 h-4"/>Saved</> : saving ? "Saving…" : <><Save className="w-4 h-4"/>Save
                         changes</>}
                 </button>
+            </div>
+
+            {/* Credits */}
+            <div className="bg-[#1a1d27] border border-white/8 rounded-2xl p-5 flex flex-col gap-4">
+                <h3 className="text-white/70 text-xs uppercase tracking-wider" style={{fontWeight: 600}}>
+                    Ingestion API
+                </h3>
+                <div>
+                    <label className="text-white/40 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <KeyRound className="w-3.5 h-3.5"/> Twin token
+                    </label>
+                    <div className="relative">
+                        <input
+                            type={tokenVisible ? "text" : "password"}
+                            readOnly
+                            value={loadingIngestionToken ? "" : ingestionToken}
+                            placeholder={loadingIngestionToken ? "Loading token…" : "No token available"}
+                            className="w-full bg-white/3 border border-white/6 rounded-xl px-3.5 py-2.5 pr-11 font-mono text-xs text-white/70 outline-none"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setTokenVisible((value) => !value)}
+                            disabled={loadingIngestionToken || !ingestionToken}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md border border-white/10 bg-white/5 text-white/50 hover:text-white/70 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                            aria-label={tokenVisible ? "Hide token" : "Show token"}
+                        >
+                            {tokenVisible ? <EyeOff className="w-3.5 h-3.5"/> : <Eye className="w-3.5 h-3.5"/>}
+                        </button>
+                    </div>
+                    {ingestionTokenError && (
+                        <p className="text-red-400 text-xs mt-2">{ingestionTokenError}</p>
+                    )}
+                    <p className="text-white/35 text-xs mt-2">
+                        Use this token as Bearer for `/ingestion/v1/twins/{twin.id}/subjects/...`.
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleCopyIngestionToken}
+                        disabled={loadingIngestionToken || !ingestionToken}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-white/55 hover:text-white/75 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+                    >
+                        {copiedToken ? <Check className="w-4 h-4"/> : <Copy className="w-4 h-4"/>}
+                        {copiedToken ? "Copied" : "Copy token"}
+                    </button>
+                    <button
+                        onClick={handleRotateIngestionToken}
+                        disabled={loadingIngestionToken || rotatingIngestionToken}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-300 disabled:opacity-45 disabled:cursor-not-allowed text-sm transition-colors"
+                    >
+                        <RefreshCcw className="w-4 h-4"/>
+                        {rotatingIngestionToken ? "Regenerating…" : "Regenerate"}
+                    </button>
+                </div>
             </div>
 
             {/* Credits */}

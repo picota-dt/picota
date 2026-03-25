@@ -143,7 +143,7 @@ export function MonitoringTab({twin}: Props) {
                         <span className="text-white/30 text-xs">{s.variables.length} variables</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {s.variables.map((v) => (
+                        {monitoringTilesForSubject(s.variables).map((v) => (
                             <VariableCard
                                 key={v.id}
                                 variable={v}
@@ -155,6 +155,74 @@ export function MonitoringTab({twin}: Props) {
             ))}
         </div>
     );
+}
+
+function monitoringTilesForSubject(variables: Variable[]): Variable[] {
+    const safeVariables = Array.isArray(variables) ? variables.filter((value): value is Variable => !!value) : [];
+    const tiles: Variable[] = [];
+    for (const variable of safeVariables) {
+        if (isInferredVariable(variable) && !hasSensorCounterpart(safeVariables, variable)) {
+            const sensorTileId = sensorActualTileId(variable);
+            tiles.push({
+                ...variable,
+                id: sensorTileId,
+                name: `${variable.name} (actual)`,
+                inferred: false,
+                variableType: "sensor",
+            });
+        }
+        if (isInferredVariable(variable)) {
+            tiles.push({
+                ...variable,
+                id: inferredTileId(variable),
+                name: inferredTileDisplayName(variable),
+            });
+            continue;
+        }
+        tiles.push(variable);
+    }
+    return tiles;
+}
+
+function hasSensorCounterpart(variables: Variable[], inferredVariable: Variable): boolean {
+    const inferredId = normalizeTelemetryKey(inferredVariable.id);
+    const inferredName = normalizeTelemetryKey(inferredVariable.name);
+    return variables.some((candidate) => {
+        if (!candidate || isInferredVariable(candidate)) return false;
+        const candidateId = normalizeTelemetryKey(candidate.id);
+        const candidateName = normalizeTelemetryKey(candidate.name);
+        if (inferredId && candidateId && inferredId === candidateId) return true;
+        if (inferredName && candidateName && inferredName === candidateName) return true;
+        return false;
+    });
+}
+
+function sensorActualTileId(variable: Variable): string {
+    const base = telemetryIdentityBase(variable);
+    return `${base}__sensor_actual`;
+}
+
+function inferredTileId(variable: Variable): string {
+    const base = telemetryIdentityBase(variable);
+    return `${base}__inferred`;
+}
+
+function inferredTileDisplayName(variable: Variable): string {
+    const horizon = typeof variable.timeHorizon === "number" && Number.isFinite(variable.timeHorizon)
+        ? Math.max(0, Math.trunc(variable.timeHorizon))
+        : 0;
+    return horizon > 0 ? `${variable.name} · t+${horizon}` : variable.name;
+}
+
+function normalizeTelemetryKey(value: string | undefined): string {
+    return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function telemetryIdentityBase(variable: Variable): string {
+    const byId = typeof variable.id === "string" ? variable.id.trim() : "";
+    if (byId.length > 0) return byId;
+    const byName = typeof variable.name === "string" ? variable.name.trim() : "";
+    return byName.length > 0 ? byName : "variable";
 }
 
 function isInferredVariable(variable: Variable): boolean {

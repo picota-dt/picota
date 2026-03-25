@@ -58,19 +58,14 @@ public class ModelProjectionDelegate {
 							? List.of()
 							: graph.reality().variableList();
 			List<DigitalSubject> parsedSubjects = new ArrayList<>();
-			Set<String> usedSubjectIds = new HashSet<>();
 			for (io.quassar.monentia.picota.DigitalTwin.DigitalSubject parsedSubject : graph.digitalTwin().digitalSubjectList()) {
 				if (parsedSubject == null || parsedSubject.subject() == null) continue;
-				String subjectName = resolveSubjectName(parsedSubject);
-				if (subjectName == null || subjectName.isBlank()) continue;
-				String subjectId = parsedSubject.core$() == null ? null : parsedSubject.core$().id();
-				if (subjectId == null || subjectId.isBlank() || !usedSubjectIds.add(subjectId)) {
-					subjectId = subjectIdFromName(subjectName, usedSubjectIds);
-				}
+				String subjectId = resolveSubjectName(parsedSubject);
+				if (subjectId == null || subjectId.isBlank()) continue;
 				TimeBucket timeBucket = resolveTimeBucket(parsedSubject);
 				Map<String, InferenceModelSettings> inferredByVariableName = inferenceSettingsByVariableName(parsedSubject);
 				List<Variable> variables = mergeVariables(globalVariables, parsedSubject.subject().variableList(), inferredByVariableName);
-				parsedSubjects.add(new DigitalSubject(subjectId, subjectName, timeBucket, variables));
+				parsedSubjects.add(new DigitalSubject(subjectId, subjectId, timeBucket, variables));
 			}
 			if (parsedSubjects.isEmpty()) return safeFallback;
 			return List.copyOf(parsedSubjects);
@@ -90,7 +85,7 @@ public class ModelProjectionDelegate {
 			if (variableName == null) continue;
 			Integer timeHorizon = inferenceModel.timeHorizon() <= 0 ? null : inferenceModel.timeHorizon();
 			Integer lookback = resolveLookback(inferenceModel.lookback());
-			settings.put(variableName, new InferenceModelSettings(timeHorizon, lookback));
+			settings.put(normalizeVariableKey(variableName), new InferenceModelSettings(timeHorizon, lookback));
 		}
 		return settings;
 	}
@@ -128,9 +123,16 @@ public class ModelProjectionDelegate {
 		Map<String, io.quassar.monentia.picota.Variable> byName = new LinkedHashMap<>();
 		appendVariables(byName, globalVariables);
 		appendVariables(byName, subjectVariables);
-		return byName.values().stream()
-				.map(v -> toVariable(v, inferredByVariableName.get(v.name$())))
-				.toList();
+		List<Variable> projected = new ArrayList<>();
+		for (io.quassar.monentia.picota.Variable variable : byName.values()) {
+			if (variable == null) continue;
+			InferenceModelSettings inferredSettings = inferredByVariableName.get(normalizeVariableKey(variable.name$()));
+			projected.add(toSensorVariable(variable));
+			if (inferredSettings != null) {
+				projected.add(toInferredVariable(variable, inferredSettings));
+			}
+		}
+		return List.copyOf(projected);
 	}
 
 	private void appendVariables(Map<String, io.quassar.monentia.picota.Variable> byName, List<io.quassar.monentia.picota.Variable> variables) {
@@ -141,7 +143,19 @@ public class ModelProjectionDelegate {
 		}
 	}
 
-	private Variable toVariable(io.quassar.monentia.picota.Variable variable, InferenceModelSettings inferredSettings) {
+	private Variable toSensorVariable(io.quassar.monentia.picota.Variable variable) {
+		return toVariable(variable, VariableType.SENSOR, null);
+	}
+
+	private Variable toInferredVariable(io.quassar.monentia.picota.Variable variable, InferenceModelSettings inferredSettings) {
+		return toVariable(variable, VariableType.INFERRED, inferredSettings);
+	}
+
+	private Variable toVariable(
+			io.quassar.monentia.picota.Variable variable,
+			VariableType variableType,
+			InferenceModelSettings inferredSettings
+	) {
 		String name = variable.name$();
 		String description = firstNonBlank(
 				variable.label(),
@@ -149,7 +163,6 @@ public class ModelProjectionDelegate {
 		);
 		String unit = variable.isNumeric() ? blankToNull(variable.asNumeric().unit()) : null;
 		VariableDataType dataType = variable.isNumeric() ? VariableDataType.NUMERIC : VariableDataType.CATEGORICAL;
-		VariableType variableType = inferredSettings != null ? VariableType.INFERRED : VariableType.SENSOR;
 		return new Variable(
 				name,
 				name,
@@ -160,6 +173,11 @@ public class ModelProjectionDelegate {
 				inferredSettings == null ? null : inferredSettings.timeHorizon(),
 				inferredSettings == null ? null : inferredSettings.lookback()
 		);
+	}
+
+	private String normalizeVariableKey(String value) {
+		String candidate = blankToNull(value);
+		return candidate == null ? "" : candidate.trim().toLowerCase(Locale.ROOT);
 	}
 
 	private String resolveSubjectName(io.quassar.monentia.picota.DigitalTwin.DigitalSubject parsedSubject) {

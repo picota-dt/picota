@@ -2,6 +2,8 @@ package io.picota.backend.control.commands;
 
 import io.picota.backend.control.commands.demo.*;
 import io.picota.backend.control.commands.real.*;
+import io.picota.backend.control.ingestion.DemoIngestSensorMetricsCommand;
+import io.picota.backend.control.ingestion.RealIngestSensorMetricsCommand;
 import io.picota.backend.control.training.ExternalTrainingClient;
 import io.picota.backend.persistence.ModelPersistence;
 
@@ -56,6 +58,9 @@ public final class UiCommandsFactory {
 				new RealListSubjectsCommand(state),
 				new RealGetSubjectCommand(state),
 				new RealGetSubjectTelemetryCommand(state),
+				new RealGetTwinIngestionTokenCommand(state),
+				new RealRotateTwinIngestionTokenCommand(state),
+				new RealIngestSensorMetricsCommand(state),
 				new RealListDatasetsCommand(state),
 				new RealGetDatasetCommand(state),
 				new RealUploadDatasetCommand(state),
@@ -90,6 +95,9 @@ public final class UiCommandsFactory {
 				new DemoListSubjectsCommand(state),
 				new DemoGetSubjectCommand(state),
 				new DemoGetSubjectTelemetryCommand(state),
+				new DemoGetTwinIngestionTokenCommand(state),
+				new DemoRotateTwinIngestionTokenCommand(state),
+				new DemoIngestSensorMetricsCommand(state),
 				new DemoListDatasetsCommand(state),
 				new DemoGetDatasetCommand(state),
 				new DemoUploadDatasetCommand(state),

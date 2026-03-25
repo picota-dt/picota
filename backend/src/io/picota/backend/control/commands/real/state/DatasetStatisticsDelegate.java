@@ -1,9 +1,6 @@
 package io.picota.backend.control.commands.real.state;
 
-import io.picota.backend.control.ui.schemas.DigitalSubject;
-import io.picota.backend.control.ui.schemas.Variable;
-import io.picota.backend.control.ui.schemas.VariableDataType;
-import io.picota.backend.control.ui.schemas.VariableStat;
+import io.picota.backend.control.ui.schemas.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -53,6 +50,7 @@ public class DatasetStatisticsDelegate {
 	private Map<String, VariableStat> generateVariableStatsFromSubject(DigitalSubject subject, int count) {
 		Map<String, VariableStat> generated = new LinkedHashMap<>();
 		for (Variable variable : subject.variables()) {
+			if (variable == null || variable.variableType() == VariableType.INFERRED) continue;
 			if (variable.dataType() == VariableDataType.CATEGORICAL) continue;
 			double base = syntheticBase(variable);
 			double std = Math.max(Math.abs(base) * 0.05, 0.1);

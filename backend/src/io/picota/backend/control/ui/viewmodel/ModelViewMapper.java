@@ -53,7 +53,8 @@ public final class ModelViewMapper {
 				model.model(),
 				mapList(model.subjects(), ModelViewMapper::toViewSubject),
 				toViewInferenceEngine(model.inferenceEngine()),
-				mapList(model.datasets(), ModelViewMapper::toViewDataset)
+				mapList(model.datasets(), ModelViewMapper::toViewDataset),
+				model.ingestionToken()
 		);
 	}
 
@@ -72,7 +73,8 @@ public final class ModelViewMapper {
 				view.model(),
 				mapList(view.subjects(), ModelViewMapper::toDomainSubject),
 				toDomainInferenceEngine(view.inferenceEngine()),
-				mapList(view.datasets(), ModelViewMapper::toDomainDataset)
+				mapList(view.datasets(), ModelViewMapper::toDomainDataset),
+				view.ingestionToken()
 		);
 	}
 
@@ -204,6 +206,8 @@ public final class ModelViewMapper {
 				model.trained(),
 				toViewTrainingAlgorithm(model.algorithm()),
 				model.trainedAt(),
+				model.launchedAt(),
+				model.trainingDurationSeconds(),
 				model.epochs(),
 				model.learningRate(),
 				model.windowSize(),
@@ -219,6 +223,8 @@ public final class ModelViewMapper {
 				view.trained(),
 				toDomainTrainingAlgorithm(view.algorithm()),
 				view.trainedAt(),
+				view.launchedAt(),
+				view.trainingDurationSeconds(),
 				view.epochs(),
 				view.learningRate(),
 				view.windowSize(),

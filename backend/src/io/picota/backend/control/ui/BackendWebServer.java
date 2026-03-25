@@ -8,6 +8,7 @@ import io.picota.backend.control.commands.UiCommandException;
 import io.picota.backend.control.commands.UiCommandSet;
 import io.picota.backend.control.commands.UiCommandsFactory;
 import io.picota.backend.control.commands.UiCommandsMode;
+import io.picota.backend.control.ingestion.IngestionApiRoutes;
 import io.picota.backend.control.ui.lsp.ModelLspWebSocketEndpoint;
 import io.picota.backend.control.ui.schemas.AuthResponse;
 import io.picota.backend.control.ui.schemas.Error;
@@ -34,6 +35,7 @@ public class BackendWebServer {
 	private final Config config;
 	private final UiCommandSet commands;
 	private final ModelLspWebSocketEndpoint modelLspEndpoint;
+	private final IngestionApiRoutes ingestionApiRoutes;
 	private Javalin app;
 
 	public BackendWebServer(Config config) {
@@ -44,6 +46,7 @@ public class BackendWebServer {
 		this.config = config == null ? Config.defaultConfig() : config;
 		this.commands = commands == null ? UiCommandsFactory.create(UiCommandsMode.REAL) : commands;
 		this.modelLspEndpoint = new ModelLspWebSocketEndpoint(this.commands);
+		this.ingestionApiRoutes = new IngestionApiRoutes(this.commands);
 	}
 
 	public synchronized void start() {
@@ -68,6 +71,7 @@ public class BackendWebServer {
 			javalin.routes.apiBuilder(() -> {
 				registerSystemRoutes(frontendAssets);
 				registerApiAtConfiguredPrefix();
+				ingestionApiRoutes.register();
 			});
 			if (frontendAvailable) {
 				javalin.routes.error(404, "text/html", ctx -> {
@@ -211,6 +215,11 @@ public class BackendWebServer {
 					path("retraining", () ->
 							put(ctx -> ctx.json(commands.saveRetrainingConfig(authToken(ctx), ctx.pathParam("twinId"), ctx.bodyAsClass(RetrainingConfig.class))))
 					);
+				});
+
+				path("ingestion-token", () -> {
+					get(ctx -> ctx.json(commands.getTwinIngestionToken(authToken(ctx), ctx.pathParam("twinId"))));
+					post(ctx -> ctx.json(commands.rotateTwinIngestionToken(authToken(ctx), ctx.pathParam("twinId"))));
 				});
 
 				path("training-jobs", () -> {

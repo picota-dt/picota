@@ -60,6 +60,8 @@ public final class UiCommandFixtures {
 						true,
 						TrainingAlgorithm.KAN,
 						Instant.parse("2024-11-10T14:32:00Z"),
+						Instant.parse("2024-11-10T14:00:00Z"),
+						1920.0,
 						200,
 						0.001,
 						60,
@@ -83,7 +85,8 @@ public final class UiCommandFixtures {
 										"flow_rate", new VariableStat(1500, 24.5, 1.0, 23.0, 26.0, 24.5)
 								)
 						)
-				)
+				),
+				"itok_demo_8f4a1b2c"
 		));
 
 		twins.add(new DigitalTwin(
@@ -99,7 +102,8 @@ public final class UiCommandFixtures {
 				"# HQ Building HVAC\nsubjects: []\n",
 				List.of(),
 				null,
-				List.of()
+				List.of(),
+				"itok_demo_2d3e4f5g"
 		));
 		return twins;
 	}
@@ -129,7 +133,8 @@ public final class UiCommandFixtures {
 				twin.model(),
 				twin.subjects() == null ? List.of() : twin.subjects().stream().map(UiCommandFixtures::copySubject).toList(),
 				twin.inferenceEngine() == null ? null : copyInferenceEngine(twin.inferenceEngine()),
-				twin.datasets() == null ? List.of() : twin.datasets().stream().map(UiCommandFixtures::copyDataset).toList()
+				twin.datasets() == null ? List.of() : twin.datasets().stream().map(UiCommandFixtures::copyDataset).toList(),
+				twin.ingestionToken()
 		);
 	}
 
@@ -138,6 +143,8 @@ public final class UiCommandFixtures {
 				engine.trained(),
 				engine.algorithm(),
 				engine.trainedAt(),
+				engine.launchedAt(),
+				engine.trainingDurationSeconds(),
 				engine.epochs(),
 				engine.learningRate(),
 				engine.windowSize(),

@@ -15,7 +15,8 @@ public record DigitalTwin(
 		String model,
 		List<DigitalSubject> subjects,
 		InferenceEngine inferenceEngine,
-		List<SubjectDataset> datasets
+		List<SubjectDataset> datasets,
+		String ingestionToken
 ) {
 	public DigitalTwin {
 		subjects = subjects == null ? List.of() : List.copyOf(subjects);

@@ -3,6 +3,7 @@ package io.picota.backend.control.commands.demo;
 import io.picota.backend.control.commands.TwinModelTemplate;
 import io.picota.backend.control.commands.UiCommandFixtures;
 import io.picota.backend.control.commands.real.RealCommandState;
+import io.picota.backend.control.ingestion.IngestMetricsRequest;
 import io.picota.backend.control.ui.schemas.*;
 import io.picota.backend.control.ui.schemas.requests.*;
 import io.picota.backend.control.ui.viewmodel.ModelViewMapper;
@@ -100,6 +101,18 @@ public class DemoCommandState {
 
 	public List<VariableTelemetry> getSubjectTelemetry(String authToken, String twinId, String subjectId, int historyPoints) {
 		return delegate.getSubjectTelemetry(demoToken, twinId, subjectId, historyPoints);
+	}
+
+	public IngestionToken getTwinIngestionToken(String authToken, String twinId) {
+		return delegate.getTwinIngestionToken(demoToken, twinId);
+	}
+
+	public IngestionToken rotateTwinIngestionToken(String authToken, String twinId) {
+		return delegate.rotateTwinIngestionToken(demoToken, twinId);
+	}
+
+	public void ingestSubjectSensorMetrics(String authToken, String twinId, String subjectId, IngestMetricsRequest request) {
+		delegate.ingestSubjectSensorMetrics(authToken, twinId, subjectId, request);
 	}
 
 	public List<SubjectDataset> listDatasets(String authToken, String twinId) {

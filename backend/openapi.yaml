@@ -1,0 +1,161 @@
+openapi: 3.1.0
+
+info:
+  title: Picota Ingestion API
+  version: 1.0.0
+  description: |
+    API dedicada para ingesta de métricas de sujetos de digital twins.
+    Esta API está separada del path de la UI:
+
+    - UI API: `/v1/...`
+    - Ingestion API: `/ingestion/v1/...`
+
+servers:
+  - url: http://localhost:8080/ingestion/v1
+    description: Local
+  - url: https://api.picota.io/ingestion/v1
+    description: Production
+
+tags:
+  - name: Metrics Ingestion
+    description: Recepción de medidas sensorizadas
+
+security:
+  - bearerAuth: [ ]
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API_TOKEN
+
+  parameters:
+    twinId:
+      name: twinId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Identificador del twin
+      example: twin_8f4a1b2c
+    subjectId:
+      name: subjectId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Identificador del subject
+      example: pump_main
+
+  schemas:
+    IngestMetricRequest:
+      type: object
+      required: [ value ]
+      description: Muestra individual de una variable.
+      properties:
+        variableId:
+          type: string
+          description: Identificador de variable. Requerido si no se envía `variableName`.
+          example: pressure_in
+        variableName:
+          type: string
+          description: Nombre de variable. Requerido si no se envía `variableId`.
+          example: pressure_in
+        instant:
+          type: string
+          format: date-time
+          description: Timestamp de la muestra. Si no se envía, se usa hora de servidor.
+          example: "2026-03-24T22:10:00Z"
+        value:
+          type: number
+          format: double
+          description: Valor numérico de la medida
+          example: 3.24
+      anyOf:
+        - required: [ variableId ]
+        - required: [ variableName ]
+
+    IngestMetricsRequest:
+      type: object
+      required: [ metrics ]
+      properties:
+        metrics:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/IngestMetricRequest"
+
+    Error:
+      type: object
+      required: [ code, message ]
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: At least one metric sample is required
+        details:
+          type: object
+          additionalProperties: true
+
+  responses:
+    Unauthorized:
+      description: Token de ingesta ausente o inválido (token por digital twin)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Recurso no pertenece al usuario autenticado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Twin, subject o variable no encontrada
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnprocessableEntity:
+      description: Error de validación del payload
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+paths:
+  /twins/{twinId}/subjects/{subjectId}/metrics/sensors:
+    parameters:
+      - $ref: "#/components/parameters/twinId"
+      - $ref: "#/components/parameters/subjectId"
+    post:
+      tags: [ Metrics Ingestion ]
+      operationId: ingestSubjectSensorMetrics
+      summary: Ingesta de métricas sensorizadas
+      description: |
+        Persiste muestras en:
+        `datasets/<twin>/<version>/<subject>/sensors/<variable>.csv`
+        y mantiene `datasets/<twin>/<version>/<subject>/sensors/index.csv`
+        con la última muestra por variable.
+        El Bearer token se obtiene desde la UI API para ese twin
+        (`GET /v1/twins/{twinId}/ingestion-token`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestMetricsRequest"
+      responses:
+        "202":
+          description: Muestras aceptadas y persistidas
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
