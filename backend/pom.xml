@@ -17,7 +17,7 @@
 
 	<build>
 		<sourceDirectory>src</sourceDirectory>
-		<testSourceDirectory>${java.io.tmpdir}/picota-backend-no-tests</testSourceDirectory>
+		<testSourceDirectory>test</testSourceDirectory>
 		<outputDirectory>../out/production/backend</outputDirectory>
 		<testOutputDirectory>../out/test/backend</testOutputDirectory>
 		<directory>../out/build/backend</directory>
@@ -43,9 +43,6 @@
 					<source>${maven.compiler.source}</source>
 					<target>${maven.compiler.target}</target>
 					<proc>none</proc>
-					<generatedSourcesDirectory>${java.io.tmpdir}/picota-backend-apt</generatedSourcesDirectory>
-					<generatedTestSourcesDirectory>${java.io.tmpdir}/picota-backend-test-apt
-					</generatedTestSourcesDirectory>
 				</configuration>
 			</plugin>
 			<plugin>

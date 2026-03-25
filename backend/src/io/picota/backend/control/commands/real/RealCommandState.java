@@ -311,6 +311,7 @@ public class RealCommandState {
 		TwinOwnerAndTwin ownerAndTwin = requireTwinById(twinId);
 		requireMatchingTwinIngestionToken(ownerAndTwin.twin(), authToken);
 		twinOperationsDelegate.ingestSubjectSensorMetrics(ownerAndTwin.twin(), subjectId, request);
+		trainingOperationsDelegate.inferSubjectFromLatestCompletedTraining(ownerAndTwin.ownerUserId(), ownerAndTwin.twin(), subjectId);
 	}
 
 	public List<SubjectDataset> listDatasets(String authToken, String twinId) {

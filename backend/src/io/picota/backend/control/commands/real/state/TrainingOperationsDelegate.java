@@ -6,9 +6,12 @@ import io.picota.backend.control.training.*;
 import io.picota.backend.control.ui.schemas.*;
 import io.picota.backend.persistence.DatasetStorage;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
+import java.time.*;
+import java.time.temporal.WeekFields;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -231,6 +234,55 @@ public class TrainingOperationsDelegate {
 		return updated;
 	}
 
+	public void inferSubjectFromLatestCompletedTraining(String userId, DigitalTwin twin, String subjectId) {
+		if (userId == null || userId.isBlank() || twin == null || subjectId == null || subjectId.isBlank()) return;
+		try {
+			Optional<TrainingTicketSnapshot> snapshot = resolveLatestCompletedSnapshotForSubject(userId, twin, subjectId);
+			if (snapshot.isEmpty()) return;
+			appendInferencePredictionSampleForSubject(twin, snapshot.get(), subjectId);
+		} catch (RuntimeException ignored) {
+			// Never fail ingestion because inference side-effect failed.
+		}
+	}
+
+	private Optional<TrainingTicketSnapshot> resolveLatestCompletedSnapshotForSubject(String userId, DigitalTwin twin, String subjectId) {
+		List<TrainingJob> candidates = trainingJobs.values().stream()
+				.filter(job -> job != null && job.twinId() != null && job.twinId().equals(twin.id()))
+				.filter(job -> job.status() == TrainingJobStatus.DONE)
+				.filter(job -> userId.equals(trainingJobOwnerById.get(job.jobId())))
+				.sorted(trainingJobRecencyComparator())
+				.toList();
+		for (TrainingJob job : candidates) {
+			TrainingTicketSnapshot snapshot = safeGetTrainingTicket(job.jobId());
+			if (snapshot == null) continue;
+			if (!isCompletedSnapshot(snapshot)) continue;
+			if (resolveInferenceTarget(twin, snapshot.outcome(), subjectId).isEmpty()) continue;
+			return Optional.of(snapshot);
+		}
+		return Optional.empty();
+	}
+
+	private TrainingTicketSnapshot safeGetTrainingTicket(String jobId) {
+		if (jobId == null || jobId.isBlank()) return null;
+		try {
+			return getTrainingTicket(jobId);
+		} catch (RuntimeException ignored) {
+			return null;
+		}
+	}
+
+	private static Comparator<TrainingJob> trainingJobRecencyComparator() {
+		return Comparator
+				.comparing(TrainingJob::completedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+				.thenComparing(TrainingJob::createdAt, Comparator.nullsLast(Comparator.naturalOrder()))
+				.reversed();
+	}
+
+	private static boolean isCompletedSnapshot(TrainingTicketSnapshot snapshot) {
+		if (snapshot == null || snapshot.status() == null) return false;
+		return "completed".equalsIgnoreCase(snapshot.status().trim());
+	}
+
 	private InferenceEngine finalizeTraining(String userId, String twinId, TrainingTicketSnapshot snapshot) {
 		DigitalTwin twin = requireTwin(userId, twinId);
 		InferenceEngine engine = twin.inferenceEngine();
@@ -274,8 +326,342 @@ public class TrainingOperationsDelegate {
 				twin.datasets(),
 				twin.ingestionToken()
 		);
+		appendInferencePredictionSample(updatedTwin, snapshot);
 		twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).put(twin.id(), updatedTwin);
 		return UiCommandFixtures.copyInferenceEngine(trained);
+	}
+
+	private void appendInferencePredictionSample(DigitalTwin twin, TrainingTicketSnapshot snapshot) {
+		appendInferencePredictionSampleForSubject(twin, snapshot, null);
+	}
+
+	private void appendInferencePredictionSampleForSubject(DigitalTwin twin, TrainingTicketSnapshot snapshot, String subjectId) {
+		if (twin == null || snapshot == null) return;
+		String ticketId = snapshot.ticketId();
+		if (ticketId == null || ticketId.isBlank()) return;
+		Optional<InferenceTarget> target = resolveInferenceTarget(twin, snapshot.outcome(), subjectId);
+		if (target.isEmpty()) return;
+		DigitalSubject subject = target.get().subject();
+		Optional<Path> datasetPath = datasetStorage.resolveDatasetPath(twin.id(), subject.id(), subject.name());
+		if (datasetPath.isEmpty()) return;
+		Optional<LatestDatasetRow> latestDatasetRow = readLatestDatasetRow(datasetPath.get());
+		if (latestDatasetRow.isEmpty()) return;
+		LatestSensorValues latestSensorValues = readLatestSensorValues(twin, subject);
+		Map<String, Double> variables = buildInferenceVariables(snapshot.outcome(), latestDatasetRow.get(), latestSensorValues);
+		if (variables.isEmpty()) return;
+
+		Map<String, Object> request = new LinkedHashMap<>();
+		request.put("training_ticket_id", ticketId.trim());
+		request.put("output_scale", "raw");
+		request.put("instances", List.of(Map.of("variables", variables)));
+		TrainingInferenceResult inferenceResult = requestInferenceWithRetries(request);
+		if (inferenceResult == null || inferenceResult.prediction() == null || !Double.isFinite(inferenceResult.prediction())) {
+			return;
+		}
+		Instant inferredAt = inferenceResult.inferredAt() != null
+				? inferenceResult.inferredAt()
+				: latestSensorValues.instant() != null ? latestSensorValues.instant() : Instant.now();
+		Variable inferredVariable = target.get().variable();
+		datasetStorage.appendMetric(
+				twin.id(),
+				twin.version(),
+				subject.id(),
+				subject.name(),
+				inferredVariable.id(),
+				inferredVariable.name(),
+				DatasetStorage.MetricKind.INFERRED,
+				inferredAt,
+				inferenceResult.prediction()
+		);
+	}
+
+	private TrainingInferenceResult requestInferenceWithRetries(Map<String, Object> request) {
+		final int maxAttempts = 3;
+		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+			try {
+				return trainingClient.createInference(request);
+			} catch (TrainingApiException exception) {
+				if (!shouldRetryInferenceCall(exception, attempt, maxAttempts)) {
+					return null;
+				}
+				sleepSilently(250L * attempt);
+			} catch (RuntimeException ignored) {
+				return null;
+			}
+		}
+		return null;
+	}
+
+	private static boolean shouldRetryInferenceCall(TrainingApiException exception, int attempt, int maxAttempts) {
+		if (exception == null || attempt >= maxAttempts) return false;
+		int status = exception.statusCode();
+		return status == 404 || status == 409 || status == 429 || status >= 500;
+	}
+
+	private static void sleepSilently(long millis) {
+		if (millis <= 0) return;
+		try {
+			Thread.sleep(millis);
+		} catch (InterruptedException ignored) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	private Optional<InferenceTarget> resolveInferenceTarget(DigitalTwin twin, TrainingTicketOutcome outcome) {
+		return resolveInferenceTarget(twin, outcome, null);
+	}
+
+	private Optional<InferenceTarget> resolveInferenceTarget(DigitalTwin twin, TrainingTicketOutcome outcome, String subjectIdFilter) {
+		if (twin == null || outcome == null) return Optional.empty();
+		String outputVariable = outcome.outputVariable();
+		if (outputVariable == null || outputVariable.isBlank()) return Optional.empty();
+		for (DigitalSubject subject : twin.subjects()) {
+			if (subject == null || subject.variables() == null) continue;
+			if (subjectIdFilter != null && !subjectIdFilter.isBlank() && !subjectIdFilter.equals(subject.id()))
+				continue;
+			for (Variable variable : subject.variables()) {
+				if (variable == null || variable.variableType() != VariableType.INFERRED) continue;
+				if (!matchesOutputVariable(variable, outputVariable)) continue;
+				return Optional.of(new InferenceTarget(subject, variable));
+			}
+		}
+		return Optional.empty();
+	}
+
+	private Map<String, Double> buildInferenceVariables(
+			TrainingTicketOutcome outcome,
+			LatestDatasetRow row,
+			LatestSensorValues sensorValues
+	) {
+		if (outcome == null || row == null) return Map.of();
+		List<String> inputVariables = outcome.inputVariables();
+		if (inputVariables == null || inputVariables.isEmpty()) return Map.of();
+		Map<String, String> rowValues = row.values();
+		Instant referenceInstant = sensorValues == null ? null : sensorValues.instant();
+		if (referenceInstant == null) referenceInstant = row.instant();
+		if (referenceInstant == null) referenceInstant = Instant.now();
+		ZonedDateTime timestamp = referenceInstant.atZone(ZoneOffset.UTC);
+		Map<String, Double> payload = new LinkedHashMap<>();
+		for (String featureName : inputVariables) {
+			if (featureName == null || featureName.isBlank()) continue;
+			String feature = featureName.trim();
+			Double timeFeature = timeFeatureValue(feature, timestamp);
+			if (timeFeature != null) {
+				payload.put(feature, timeFeature);
+				continue;
+			}
+			int oneHotSeparator = feature.indexOf('=');
+			if (oneHotSeparator > 0) {
+				String column = feature.substring(0, oneHotSeparator);
+				String category = feature.substring(oneHotSeparator + 1);
+				String currentValue = resolveColumnValue(rowValues, column);
+				payload.put(feature, Objects.equals(currentValue == null ? "" : currentValue, category) ? 1.0 : 0.0);
+				continue;
+			}
+			Double numericValue = sensorFeatureValue(sensorValues, feature);
+			if (numericValue == null) {
+				numericValue = parseNumeric(resolveColumnValue(rowValues, feature));
+			}
+			payload.put(feature, numericValue == null ? 0.0 : numericValue);
+		}
+		return payload;
+	}
+
+	private LatestSensorValues readLatestSensorValues(DigitalTwin twin, DigitalSubject subject) {
+		if (twin == null || subject == null || subject.variables() == null) return LatestSensorValues.empty();
+		Map<String, Double> valuesByKey = new LinkedHashMap<>();
+		Instant latestInstant = null;
+		for (Variable variable : subject.variables()) {
+			if (variable == null || variable.variableType() != VariableType.SENSOR) continue;
+			DatasetStorage.MetricSeries series = datasetStorage.readMetricSeries(
+					twin.id(),
+					twin.version(),
+					subject.id(),
+					subject.name(),
+					variable.id(),
+					variable.name(),
+					DatasetStorage.MetricKind.SENSORS,
+					1
+			);
+			DatasetStorage.MetricSample latest = series.latest();
+			if (latest == null || latest.value() == null || !Double.isFinite(latest.value())) continue;
+			putSensorFeatureValue(valuesByKey, variable.id(), latest.value());
+			putSensorFeatureValue(valuesByKey, variable.name(), latest.value());
+			if (latest.instant() != null && (latestInstant == null || latest.instant().isAfter(latestInstant))) {
+				latestInstant = latest.instant();
+			}
+		}
+		return new LatestSensorValues(valuesByKey, latestInstant);
+	}
+
+	private static void putSensorFeatureValue(Map<String, Double> valuesByKey, String key, Double value) {
+		if (valuesByKey == null || value == null || !Double.isFinite(value)) return;
+		String normalized = normalizeKey(key);
+		if (normalized == null) return;
+		valuesByKey.put(normalized, value);
+	}
+
+	private static Double sensorFeatureValue(LatestSensorValues sensorValues, String featureName) {
+		if (sensorValues == null || sensorValues.valuesByKey() == null || sensorValues.valuesByKey().isEmpty())
+			return null;
+		String normalized = normalizeKey(featureName);
+		if (normalized == null) return null;
+		return sensorValues.valuesByKey().get(normalized);
+	}
+
+	private static String normalizeKey(String value) {
+		if (value == null) return null;
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed.toLowerCase(Locale.ROOT);
+	}
+
+	private Optional<LatestDatasetRow> readLatestDatasetRow(Path datasetPath) {
+		if (datasetPath == null) return Optional.empty();
+		List<String> lines;
+		try {
+			lines = Files.readAllLines(datasetPath, StandardCharsets.UTF_8);
+		} catch (IOException ignored) {
+			return Optional.empty();
+		}
+		if (lines.size() < 2) return Optional.empty();
+		char delimiter = detectDelimiter(datasetPath, lines);
+		List<String> headers = parseDelimitedLine(lines.get(0), delimiter);
+		if (headers.isEmpty()) return Optional.empty();
+
+		Map<String, String> bestRow = null;
+		Instant bestInstant = null;
+		for (int i = 1; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (line == null || line.isBlank()) continue;
+			List<String> cells = parseDelimitedLine(line, delimiter);
+			Map<String, String> row = new LinkedHashMap<>();
+			for (int col = 0; col < headers.size(); col++) {
+				String header = headers.get(col);
+				if (header == null || header.isBlank()) continue;
+				String value = col < cells.size() ? cells.get(col) : "";
+				row.put(header.trim(), value == null ? "" : value.trim());
+			}
+			Instant rowInstant = parseInstantLike(resolveColumnValue(row, "instant"));
+			if (rowInstant != null) {
+				if (bestInstant == null || rowInstant.isAfter(bestInstant)) {
+					bestInstant = rowInstant;
+					bestRow = row;
+				}
+				continue;
+			}
+			if (bestInstant == null) {
+				bestRow = row;
+			}
+		}
+		if (bestRow == null) return Optional.empty();
+		return Optional.of(new LatestDatasetRow(bestInstant == null ? Instant.now() : bestInstant, Map.copyOf(bestRow)));
+	}
+
+	private static char detectDelimiter(Path datasetPath, List<String> lines) {
+		String fileName = datasetPath.getFileName() == null ? "" : datasetPath.getFileName().toString().toLowerCase(Locale.ROOT);
+		if (fileName.endsWith(".tsv")) return '\t';
+		for (String line : lines) {
+			if (line == null || line.isBlank()) continue;
+			if (line.contains("\t")) return '\t';
+			if (line.contains(";")) return ';';
+			break;
+		}
+		return ',';
+	}
+
+	private static List<String> parseDelimitedLine(String line, char delimiter) {
+		if (line == null) return List.of();
+		List<String> values = new ArrayList<>();
+		StringBuilder current = new StringBuilder();
+		boolean inQuotes = false;
+		for (int i = 0; i < line.length(); i++) {
+			char c = line.charAt(i);
+			if (c == '"') {
+				if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+					current.append('"');
+					i++;
+				} else {
+					inQuotes = !inQuotes;
+				}
+				continue;
+			}
+			if (c == delimiter && !inQuotes) {
+				values.add(current.toString().trim());
+				current.setLength(0);
+				continue;
+			}
+			current.append(c);
+		}
+		values.add(current.toString().trim());
+		return values;
+	}
+
+	private static Instant parseInstantLike(String rawValue) {
+		if (rawValue == null || rawValue.isBlank()) return null;
+		String candidate = rawValue.trim();
+		try {
+			return Instant.parse(candidate);
+		} catch (Exception ignored) {
+		}
+		try {
+			return ZonedDateTime.parse(candidate).toInstant();
+		} catch (Exception ignored) {
+		}
+		try {
+			return LocalDateTime.parse(candidate).atZone(ZoneOffset.UTC).toInstant();
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
+	private static String resolveColumnValue(Map<String, String> rowValues, String key) {
+		if (rowValues == null || rowValues.isEmpty() || key == null || key.isBlank()) return null;
+		if (rowValues.containsKey(key)) return rowValues.get(key);
+		for (Map.Entry<String, String> entry : rowValues.entrySet()) {
+			if (entry.getKey() == null) continue;
+			if (entry.getKey().trim().equalsIgnoreCase(key.trim())) return entry.getValue();
+		}
+		return null;
+	}
+
+	private static Double parseNumeric(String rawValue) {
+		if (rawValue == null || rawValue.isBlank()) return null;
+		try {
+			double parsed = Double.parseDouble(rawValue.trim());
+			return Double.isFinite(parsed) ? parsed : null;
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
+	private static Double timeFeatureValue(String featureName, ZonedDateTime timestamp) {
+		if (featureName == null || timestamp == null) return null;
+		double monthIndex = timestamp.getMonthValue() - 1.0;
+		double dayIndex = timestamp.getDayOfMonth() - 1.0;
+		double hourIndex = timestamp.getHour();
+		double quarterIndex = (timestamp.getMonthValue() - 1) / 3.0;
+		double weekIndex = timestamp.get(WeekFields.ISO.weekOfWeekBasedYear()) - 1.0;
+		return switch (featureName) {
+			case "month_sin" -> sinComponent(monthIndex, 12.0);
+			case "month_cos" -> cosComponent(monthIndex, 12.0);
+			case "day_sin" -> sinComponent(dayIndex, 31.0);
+			case "day_cos" -> cosComponent(dayIndex, 31.0);
+			case "hour_sin" -> sinComponent(hourIndex, 24.0);
+			case "hour_cos" -> cosComponent(hourIndex, 24.0);
+			case "week_sin" -> sinComponent(weekIndex, 53.0);
+			case "week_cos" -> cosComponent(weekIndex, 53.0);
+			case "quarter_sin" -> sinComponent(quarterIndex, 4.0);
+			case "quarter_cos" -> cosComponent(quarterIndex, 4.0);
+			default -> null;
+		};
+	}
+
+	private static double sinComponent(double value, double period) {
+		return Math.sin((2.0 * Math.PI * value) / period);
+	}
+
+	private static double cosComponent(double value, double period) {
+		return Math.cos((2.0 * Math.PI * value) / period);
 	}
 
 	private TrainingLaunchContext resolveLaunchContext(DigitalTwin twin) {
@@ -745,5 +1131,33 @@ public class TrainingOperationsDelegate {
 			Integer timeHorizon,
 			Integer lookback
 	) {
+	}
+
+	private record InferenceTarget(
+			DigitalSubject subject,
+			Variable variable
+	) {
+	}
+
+	private record LatestDatasetRow(
+			Instant instant,
+			Map<String, String> values
+	) {
+		public LatestDatasetRow {
+			values = values == null ? Map.of() : Map.copyOf(values);
+		}
+	}
+
+	private record LatestSensorValues(
+			Map<String, Double> valuesByKey,
+			Instant instant
+	) {
+		public LatestSensorValues {
+			valuesByKey = valuesByKey == null ? Map.of() : Map.copyOf(valuesByKey);
+		}
+
+		private static LatestSensorValues empty() {
+			return new LatestSensorValues(Map.of(), null);
+		}
 	}
 }

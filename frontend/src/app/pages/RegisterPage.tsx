@@ -1,17 +1,24 @@
-import {useState} from "react";
-import {useNavigate, Link} from "react-router";
+import {useEffect, useMemo, useState} from "react";
+import {Link, useLocation, useNavigate} from "react-router";
 import {Eye, EyeOff} from "lucide-react";
 import {useApp} from "../context/AppContext";
 
 export default function RegisterPage() {
     const navigate = useNavigate();
-    const {register} = useApp();
+    const location = useLocation();
+    const {register, isLoggedIn} = useApp();
+    const redirectPath = useMemo(() => resolveRedirectPath(location.search), [location.search]);
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+
+    useEffect(() => {
+        if (!isLoggedIn) return;
+        navigate(redirectPath, {replace: true});
+    }, [isLoggedIn, navigate, redirectPath]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -27,7 +34,7 @@ export default function RegisterPage() {
         setLoading(true);
         try {
             await register(name, email, password);
-            navigate("/twins");
+            navigate(redirectPath, {replace: true});
         } catch (err) {
             setError(err instanceof Error ? err.message : "Unable to create account.");
         } finally {
@@ -115,7 +122,10 @@ export default function RegisterPage() {
                     <div className="mt-5 pt-5 border-t border-white/6 text-center">
                         <p className="text-white/35 text-sm">
                             Already have an account?{" "}
-                            <Link to="/login" className="text-cyan-400 hover:text-cyan-300 transition-colors">
+                            <Link
+                                to={`/login?redirect=${encodeURIComponent(redirectPath)}`}
+                                className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                            >
                                 Sign in
                             </Link>
                         </p>
@@ -130,4 +140,13 @@ export default function RegisterPage() {
             </div>
         </div>
     );
+}
+
+function resolveRedirectPath(search: string): string {
+    const raw = new URLSearchParams(search).get("redirect");
+    if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/twins";
+    const normalized = raw.trim();
+    if (normalized === "/login" || normalized.startsWith("/login?")) return "/twins";
+    if (normalized === "/register" || normalized.startsWith("/register?")) return "/twins";
+    return normalized;
 }

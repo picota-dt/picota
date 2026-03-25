@@ -7,6 +7,8 @@ public interface ExternalTrainingClient {
 
 	TrainingTicketSnapshot getTraining(String ticketId);
 
+	TrainingInferenceResult createInference(Map<String, Object> request);
+
 	static ExternalTrainingClient disabled() {
 		return new ExternalTrainingClient() {
 			@Override
@@ -16,6 +18,11 @@ public interface ExternalTrainingClient {
 
 			@Override
 			public TrainingTicketSnapshot getTraining(String ticketId) {
+				throw new TrainingApiException("Training API is not configured");
+			}
+
+			@Override
+			public TrainingInferenceResult createInference(Map<String, Object> request) {
 				throw new TrainingApiException("Training API is not configured");
 			}
 		};

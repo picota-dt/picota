@@ -20,6 +20,7 @@ import java.util.Map;
 
 public class HttpExternalTrainingClient implements ExternalTrainingClient {
 	private static final String TRAININGS_PATH = "/api/v1/trainings";
+	private static final String INFERENCES_PATH = "/api/v1/inferences";
 
 	private final String baseUrl;
 	private final Duration requestTimeout;
@@ -101,6 +102,7 @@ public class HttpExternalTrainingClient implements ExternalTrainingClient {
 		TrainingTicketOutcome outcome = result.isObject()
 				? new TrainingTicketOutcome(
 				text(result, "output_variable", ""),
+				inputVariablesFromResult(result),
 				nullableDouble(testMetrics, "r2"),
 				nullableDouble(testMetrics, "mae_raw"),
 				nullableInt(testMetrics, "n_samples"),
@@ -133,6 +135,35 @@ public class HttpExternalTrainingClient implements ExternalTrainingClient {
 				outcome,
 				errorMessage,
 				historyStatuses
+		);
+	}
+
+	@Override
+	public TrainingInferenceResult createInference(Map<String, Object> request) {
+		String body = writeJson(request == null ? Map.of() : request);
+		HttpRequest httpRequest = HttpRequest.newBuilder()
+				.uri(URI.create(baseUrl + INFERENCES_PATH))
+				.timeout(requestTimeout)
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+				.build();
+		String response = send(httpRequest, 200);
+		JsonNode json = readJson(response);
+		JsonNode firstPrediction = null;
+		JsonNode predictions = json.path("predictions");
+		if (predictions.isArray() && predictions.size() > 0) {
+			firstPrediction = predictions.get(0);
+		}
+		Double predictedValue = null;
+		if (firstPrediction != null && firstPrediction.isObject()) {
+			predictedValue = nullableDouble(firstPrediction, "value");
+			if (predictedValue == null) predictedValue = nullableDouble(firstPrediction, "raw");
+			if (predictedValue == null) predictedValue = nullableDouble(firstPrediction, "normalized");
+		}
+		return new TrainingInferenceResult(
+				text(json, "output_variable", ""),
+				predictedValue,
+				parseInstant(text(json, "inferred_at", ""))
 		);
 	}
 
@@ -211,6 +242,35 @@ public class HttpExternalTrainingClient implements ExternalTrainingClient {
 			rates.put(constraint, rate);
 		});
 		return rates;
+	}
+
+	private static List<String> textList(JsonNode node) {
+		if (node == null || !node.isArray()) return List.of();
+		List<String> result = new ArrayList<>();
+		for (JsonNode item : node) {
+			if (item == null || item.isNull()) continue;
+			String value = item.asText();
+			if (value == null || value.isBlank()) continue;
+			result.add(value.trim());
+		}
+		return List.copyOf(result);
+	}
+
+	private static List<String> inputVariablesFromResult(JsonNode resultNode) {
+		if (resultNode == null || !resultNode.isObject()) return List.of();
+		List<String> explicit = textList(resultNode.path("input_variables"));
+		if (!explicit.isEmpty()) return explicit;
+
+		JsonNode featureNames = resultNode.path("metadata").path("feature_names");
+		if (!featureNames.isObject()) return List.of();
+		List<String> values = new ArrayList<>();
+		values.addAll(textList(featureNames.path("t")));
+		values.addAll(textList(featureNames.path("numerical_t_features")));
+		values.addAll(textList(featureNames.path("categorical_t_features")));
+		values.addAll(textList(featureNames.path("lookback_t")));
+		values.addAll(textList(featureNames.path("numerical_lookback_features")));
+		values.addAll(textList(featureNames.path("categorical_lookback_features")));
+		return values.isEmpty() ? List.of() : List.copyOf(values);
 	}
 
 	private static Instant parseInstant(String raw) {

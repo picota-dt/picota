@@ -7,16 +7,19 @@ import {Activity, Cpu, Sparkles} from "lucide-react";
 
 function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: VariableTelemetry }) {
     const inferred = isInferredVariable(variable);
+    const lastValueAt = useMemo(() => resolveTelemetryLastTimestampLabel(telemetry), [telemetry]);
     const history = useMemo(() => {
-        if (!telemetry?.history?.length) return fallbackHistory(variable.value);
+        const fallbackBase = Number.isFinite(telemetry?.current) ? Number(telemetry?.current) : 0;
+        if (!telemetry?.history?.length) return fallbackHistory(fallbackBase);
         const normalized = telemetry.history
             .map((point) => ({
                 time: formatTelemetryTime(point.time),
                 value: Number(point.value),
+                atMillis: parseTelemetryMillis(point.time) ?? Date.now(),
             }))
             .filter((point) => Number.isFinite(point.value));
-        return normalized.length > 0 ? normalized : fallbackHistory(variable.value);
-    }, [telemetry, variable.value]);
+        return normalized.length > 0 ? normalized : fallbackHistory(fallbackBase);
+    }, [telemetry]);
     const current = Number.isFinite(telemetry?.current) ? Number(telemetry?.current) : (history[history.length - 1]?.value ?? variable.value);
     const min = Math.min(...history.map((h) => h.value));
     const max = Math.max(...history.map((h) => h.value));
@@ -41,6 +44,11 @@ function VariableCard({variable, telemetry}: { variable: Variable; telemetry?: V
         </span>
                 <span className="text-white/35 text-xs mb-1">{variable.unit}</span>
             </div>
+            {lastValueAt && (
+                <div className="text-white/30 text-[11px] font-mono mb-2">
+                    on {lastValueAt}
+                </div>
+            )}
 
             {/* Sparkline */}
             <div className="h-14">
@@ -102,7 +110,7 @@ export function MonitoringTab({twin}: Props) {
             const entries = await Promise.all(
                 twin.subjects.map(async (subject) => {
                     try {
-                        const telemetry = await getSubjectTelemetry(twin.id, subject.id, 20);
+                        const telemetry = await getSubjectTelemetry(twin.id, subject.id, 50);
                         const byVariable = Object.fromEntries(
                             telemetry.map((item) => [item.variableId, item])
                         );
@@ -236,14 +244,62 @@ function formatTelemetryTime(value: string): string {
     return parsed.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
 }
 
+function parseTelemetryMillis(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && Number.isFinite(value)) {
+        const millis = Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value;
+        return Number.isFinite(millis) ? millis : null;
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed.length === 0) return null;
+        const numeric = Number(trimmed);
+        if (Number.isFinite(numeric)) return parseTelemetryMillis(numeric);
+        const parsed = new Date(trimmed);
+        if (Number.isNaN(parsed.getTime())) return null;
+        return parsed.getTime();
+    }
+    return null;
+}
+
+function formatLastValueTimestamp(millis: number): string {
+    const parsed = new Date(millis);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleString([], {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+}
+
+function resolveTelemetryLastTimestampLabel(telemetry?: VariableTelemetry): string | null {
+    if (!telemetry?.history?.length) return null;
+    let latestMillis: number | null = null;
+    for (const point of telemetry.history) {
+        const millis = parseTelemetryMillis(point?.time);
+        if (millis === null) continue;
+        if (latestMillis === null || millis > latestMillis) {
+            latestMillis = millis;
+        }
+    }
+    if (latestMillis === null) return null;
+    const formatted = formatLastValueTimestamp(latestMillis);
+    return formatted.length > 0 ? formatted : null;
+}
+
 function fallbackHistory(base: number, points = 20) {
     const safeBase = Number.isFinite(base) ? base : 0;
-    const history: { time: string; value: number }[] = [];
+    const history: { time: string; value: number; atMillis: number }[] = [];
     for (let i = points; i >= 0; i--) {
-        const now = new Date(Date.now() - i * 3000);
+        const atMillis = Date.now() - i * 3000;
+        const now = new Date(atMillis);
         history.push({
             time: now.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}),
             value: safeBase,
+            atMillis,
         });
     }
     return history;

@@ -403,16 +403,46 @@ public class TwinOperationsDelegate {
 				.filter(sample -> sample != null && sample.instant() != null && sample.value() != null && Double.isFinite(sample.value()))
 				.map(sample -> new TelemetryPoint(sample.instant(), sample.value()))
 				.toList();
-		if (history.isEmpty() && metricKind == DatasetStorage.MetricKind.SENSORS) {
-			history = fallbackHistoryFromDataset(twin, subject, variable, historyPoints);
-		}
-		if (history.isEmpty()) {
-			history = List.of(new TelemetryPoint(Instant.now(), 0.0));
+		if (metricKind == DatasetStorage.MetricKind.SENSORS) {
+			history = mergeSensorHistory(
+					fallbackHistoryFromDataset(twin, subject, variable, historyPoints),
+					history,
+					historyPoints
+			);
 		}
 		Double current = series.latest() != null && series.latest().value() != null && Double.isFinite(series.latest().value())
 				? series.latest().value()
-				: history.get(history.size() - 1).value();
+				: history.isEmpty() ? null : history.get(history.size() - 1).value();
 		return new VariableTelemetry(telemetryVariableId, telemetryVariableName, variable.unit(), current, history);
+	}
+
+	private static List<TelemetryPoint> mergeSensorHistory(
+			List<TelemetryPoint> datasetHistory,
+			List<TelemetryPoint> ingestedHistory,
+			int historyPoints
+	) {
+		int safeHistoryPoints = Math.max(1, historyPoints);
+		NavigableMap<Instant, Double> mergedByInstant = new TreeMap<>();
+		if (datasetHistory != null) {
+			for (TelemetryPoint point : datasetHistory) {
+				if (point == null || point.time() == null || point.value() == null || !Double.isFinite(point.value()))
+					continue;
+				mergedByInstant.put(point.time(), point.value());
+			}
+		}
+		if (ingestedHistory != null) {
+			for (TelemetryPoint point : ingestedHistory) {
+				if (point == null || point.time() == null || point.value() == null || !Double.isFinite(point.value()))
+					continue;
+				mergedByInstant.put(point.time(), point.value());
+			}
+		}
+		if (mergedByInstant.isEmpty()) return List.of();
+		List<TelemetryPoint> merged = mergedByInstant.entrySet().stream()
+				.map(entry -> new TelemetryPoint(entry.getKey(), entry.getValue()))
+				.toList();
+		if (merged.size() <= safeHistoryPoints) return merged;
+		return List.copyOf(merged.subList(merged.size() - safeHistoryPoints, merged.size()));
 	}
 
 	private static String sensorActualTelemetryId(Variable variable) {

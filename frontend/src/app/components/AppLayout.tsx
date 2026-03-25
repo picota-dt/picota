@@ -1,9 +1,10 @@
-import {Navigate, Outlet} from "react-router";
+import {Navigate, Outlet, useLocation} from "react-router";
 import {Navbar} from "./Navbar";
 import {useApp} from "../context/AppContext";
 
 export function AppLayout() {
     const {isLoggedIn, loading} = useApp();
+    const location = useLocation();
 
     if (loading) {
         return (
@@ -11,7 +12,8 @@ export function AppLayout() {
         );
     }
     if (!isLoggedIn) {
-        return <Navigate to="/login" replace/>;
+        const redirect = `${location.pathname}${location.search}${location.hash}`;
+        return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace/>;
     }
 
     return (
