@@ -7,7 +7,7 @@ import java.util.*;
 
 public final class UiCommandFixtures {
 	public static final String DEFAULT_EMAIL = "alex.laurent@acme.io";
-	public static final String DEFAULT_PASSWORD = "password123";
+	public static final String DEFAULT_GOOGLE_SUBJECT = "google_demo_subject";
 
 	private UiCommandFixtures() {
 	}

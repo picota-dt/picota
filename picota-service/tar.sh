@@ -1,1 +1,0 @@
-tar -cf ../digital-twin/res/scripts/trainer.tar ./

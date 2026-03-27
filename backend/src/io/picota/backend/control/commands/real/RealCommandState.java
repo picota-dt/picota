@@ -1,5 +1,6 @@
 package io.picota.backend.control.commands.real;
 
+import io.picota.backend.control.auth.*;
 import io.picota.backend.control.commands.TwinModelTemplate;
 import io.picota.backend.control.commands.UiCommandException;
 import io.picota.backend.control.commands.UiCommandFixtures;
@@ -33,24 +34,26 @@ import java.util.concurrent.ConcurrentMap;
 public class RealCommandState {
 	private final ConcurrentMap<String, StoredUser> usersById = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, String> userIdByEmail = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, String> userIdByGoogleSubject = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, String> userIdByToken = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, ConcurrentMap<String, DigitalTwin>> twinsByUser = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, TrainingJob> trainingJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, String> trainingJobOwnerById = new ConcurrentHashMap<>();
 	private final ModelPersistence persistence;
+	private final GoogleIdentityVerifier googleIdentityVerifier;
 	private final TwinOperationsDelegate twinOperationsDelegate;
 	private final TrainingOperationsDelegate trainingOperationsDelegate;
 
 	public RealCommandState() {
-		this(null, TwinModelTemplate.defaultTemplate(), defaultDatasetStorage(), ExternalTrainingClient.disabled());
+		this(null, TwinModelTemplate.defaultTemplate(), defaultDatasetStorage(), ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public RealCommandState(ModelPersistence persistence) {
-		this(persistence, TwinModelTemplate.defaultTemplate(), defaultDatasetStorage(), ExternalTrainingClient.disabled());
+		this(persistence, TwinModelTemplate.defaultTemplate(), defaultDatasetStorage(), ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public RealCommandState(ModelPersistence persistence, TwinModelTemplate twinModelTemplate) {
-		this(persistence, twinModelTemplate, defaultDatasetStorage(), ExternalTrainingClient.disabled());
+		this(persistence, twinModelTemplate, defaultDatasetStorage(), ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public RealCommandState(ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir) {
@@ -67,21 +70,24 @@ public class RealCommandState {
 				persistence,
 				twinModelTemplate,
 				new FilesystemDatasetStorage(datasetsRootDir == null ? defaultDatasetRootDir() : datasetsRootDir),
-				trainingClient
+				trainingClient,
+				defaultGoogleIdentityVerifier()
 		);
 	}
 
 	public RealCommandState(ModelPersistence persistence, TwinModelTemplate twinModelTemplate, DatasetStorage datasetStorage) {
-		this(persistence, twinModelTemplate, datasetStorage, ExternalTrainingClient.disabled());
+		this(persistence, twinModelTemplate, datasetStorage, ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public RealCommandState(
 			ModelPersistence persistence,
 			TwinModelTemplate twinModelTemplate,
 			DatasetStorage datasetStorage,
-			ExternalTrainingClient trainingClient
+			ExternalTrainingClient trainingClient,
+			GoogleIdentityVerifier googleIdentityVerifier
 	) {
 		this.persistence = persistence;
+		this.googleIdentityVerifier = googleIdentityVerifier == null ? defaultGoogleIdentityVerifier() : googleIdentityVerifier;
 		TwinModelTemplate template = twinModelTemplate == null ? TwinModelTemplate.defaultTemplate() : twinModelTemplate;
 		DatasetStorage safeDatasetStorage = datasetStorage == null ? defaultDatasetStorage() : datasetStorage;
 		ExternalTrainingClient safeTrainingClient = trainingClient == null ? ExternalTrainingClient.disabled() : trainingClient;
@@ -111,63 +117,79 @@ public class RealCommandState {
 		}
 	}
 
-	public AuthResponse register(RegisterRequest request) {
-		validate(request != null && request.email() != null && !request.email().isBlank(), 422, "VALIDATION_ERROR", "Email is required");
-		validate(request.password() != null && request.password().length() >= 8, 422, "VALIDATION_ERROR", "Password must be at least 8 characters");
-		String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
-		if (userIdByEmail.containsKey(normalizedEmail)) {
-			throw new UiCommandException(409, "EMAIL_ALREADY_EXISTS", "An account with this email already exists");
+	public GoogleAuthConfigResponse getGoogleAuthConfig() {
+		String clientId = googleIdentityVerifier.config() == null ? "" : googleIdentityVerifier.config().clientId();
+		if (clientId == null || clientId.isBlank()) {
+			throw new UiCommandException(503, "GOOGLE_AUTH_NOT_CONFIGURED", "Google authentication is not configured");
 		}
-
-		String userId = "usr_" + shortId();
-		String name = request.name() == null || request.name().isBlank() ? "New User" : request.name().trim();
-		User user = new User(
-				userId,
-				name,
-				normalizedEmail,
-				initials(name),
-				1_000,
-				Instant.now().toString()
-		);
-		usersById.put(userId, new StoredUser(user, request.password()));
-		userIdByEmail.put(normalizedEmail, userId);
-		twinsByUser.putIfAbsent(userId, new ConcurrentHashMap<>());
-		String token = issueToken(userId);
-		persistState();
-		return new AuthResponse(token, 86_400, UiCommandFixtures.copyUser(user));
+		return new GoogleAuthConfigResponse(clientId);
 	}
 
-	public AuthResponse login(LoginRequest request) {
-		validate(request != null && request.email() != null && request.password() != null, 422, "VALIDATION_ERROR", "Email and password are required");
-		String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
-		String userId = userIdByEmail.get(normalizedEmail);
-		if (userId == null) {
-			throw new UiCommandException(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
+	public AuthResponse authenticateWithGoogle(GoogleAuthenticationRequest request) {
+		validate(request != null && request.credential() != null && !request.credential().isBlank(),
+				422,
+				"VALIDATION_ERROR",
+				"Google credential is required");
+		final GoogleIdentity identity;
+		try {
+			identity = googleIdentityVerifier.verify(request.credential());
+		} catch (GoogleIdentityVerificationException e) {
+			throw new UiCommandException(401, "INVALID_GOOGLE_CREDENTIAL", e.getMessage());
 		}
-		StoredUser storedUser = usersById.get(userId);
-		if (storedUser == null || !storedUser.password().equals(request.password())) {
-			throw new UiCommandException(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
+
+		String normalizedEmail = normalizeEmail(identity.email());
+		validate(normalizedEmail != null, 422, "VALIDATION_ERROR", "Google account email is missing");
+
+		String userId = userIdByGoogleSubject.get(identity.subject());
+		StoredUser storedUser = userId == null ? null : usersById.get(userId);
+		User nextUser;
+		String nextUserId;
+		if (storedUser == null) {
+			String existingUserId = userIdByEmail.get(normalizedEmail);
+			if (existingUserId != null) {
+				storedUser = usersById.get(existingUserId);
+				userId = existingUserId;
+			}
 		}
-		String token = issueToken(userId);
+		if (storedUser == null) {
+			nextUserId = "usr_" + shortId();
+			String resolvedName = trimToNull(identity.name()) == null ? normalizedEmail : identity.name().trim();
+			nextUser = new User(
+					nextUserId,
+					resolvedName,
+					normalizedEmail,
+					initials(resolvedName),
+					1_000,
+					Instant.now().toString()
+			);
+		} else {
+			User current = storedUser.user();
+			nextUserId = current.id();
+			nextUser = new User(
+					current.id(),
+					current.name(),
+					normalizedEmail,
+					current.avatarInitials(),
+					current.credits(),
+					current.joinedAt()
+			);
+			String currentEmail = normalizeEmail(current.email());
+			if (currentEmail != null && !currentEmail.equals(normalizedEmail)) {
+				userIdByEmail.remove(currentEmail);
+			}
+		}
+		usersById.put(nextUserId, new StoredUser(nextUser, identity.subject()));
+		userIdByEmail.put(normalizedEmail, nextUserId);
+		userIdByGoogleSubject.put(identity.subject(), nextUserId);
+		twinsByUser.putIfAbsent(nextUserId, new ConcurrentHashMap<>());
+		String token = issueToken(nextUserId);
 		persistState();
-		return new AuthResponse(token, 86_400, UiCommandFixtures.copyUser(storedUser.user()));
+		return new AuthResponse(token, 86_400, UiCommandFixtures.copyUser(nextUser));
 	}
 
 	public void logout(String authToken) {
 		if (authToken == null || authToken.isBlank()) return;
 		userIdByToken.remove(authToken);
-		persistState();
-	}
-
-	public void changePassword(String authToken, ChangePasswordRequest request) {
-		String userId = requireUserId(authToken);
-		validate(request != null && request.currentPassword() != null && request.newPassword() != null, 422, "VALIDATION_ERROR", "Both passwords are required");
-		validate(request.newPassword().length() >= 8, 422, "VALIDATION_ERROR", "Password must be at least 8 characters");
-		StoredUser stored = requireStoredUser(userId);
-		if (!stored.password().equals(request.currentPassword())) {
-			throw new UiCommandException(422, "INVALID_CURRENT_PASSWORD", "Current password is incorrect");
-		}
-		usersById.put(userId, new StoredUser(stored.user(), request.newPassword()));
 		persistState();
 	}
 
@@ -179,23 +201,20 @@ public class RealCommandState {
 		String userId = requireUserId(authToken);
 		StoredUser stored = requireStoredUser(userId);
 		User current = stored.user();
+		String requestedEmail = normalizeEmail(request == null ? null : request.email());
+		String currentEmail = normalizeEmail(current.email());
+		if (requestedEmail != null && currentEmail != null && !requestedEmail.equals(currentEmail)) {
+			throw new UiCommandException(422, "EMAIL_READ_ONLY", "Email address is managed by Google and cannot be changed here");
+		}
 		User updated = new User(
 				current.id(),
 				coalesce(request == null ? null : request.name(), current.name()),
-				normalizeEmail(coalesce(request == null ? null : request.email(), current.email())),
+				current.email(),
 				current.avatarInitials(),
 				current.credits(),
 				current.joinedAt()
 		);
-		if (!current.email().equalsIgnoreCase(updated.email())) {
-			String existing = userIdByEmail.get(updated.email().toLowerCase(Locale.ROOT));
-			if (existing != null && !existing.equals(userId)) {
-				throw new UiCommandException(409, "EMAIL_ALREADY_EXISTS", "An account with this email already exists");
-			}
-			userIdByEmail.remove(current.email().toLowerCase(Locale.ROOT));
-			userIdByEmail.put(updated.email().toLowerCase(Locale.ROOT), userId);
-		}
-		usersById.put(userId, new StoredUser(updated, stored.password()));
+		usersById.put(userId, new StoredUser(updated, stored.googleSubject()));
 		persistState();
 		return UiCommandFixtures.copyUser(updated);
 	}
@@ -205,6 +224,9 @@ public class RealCommandState {
 		StoredUser removed = usersById.remove(userId);
 		if (removed != null) {
 			userIdByEmail.remove(removed.user().email().toLowerCase(Locale.ROOT));
+			if (removed.googleSubject() != null && !removed.googleSubject().isBlank()) {
+				userIdByGoogleSubject.remove(removed.googleSubject());
+			}
 		}
 		ConcurrentMap<String, DigitalTwin> removedTwins = twinsByUser.remove(userId);
 		if (removedTwins != null) {
@@ -236,7 +258,7 @@ public class RealCommandState {
 				current.credits() + creditsAdded,
 				current.joinedAt()
 		);
-		usersById.put(userId, new StoredUser(updated, stored.password()));
+		usersById.put(userId, new StoredUser(updated, stored.googleSubject()));
 		persistState();
 		return new PurchaseCreditsResponse(updated.credits(), creditsAdded, "txn_" + shortId());
 	}
@@ -457,6 +479,7 @@ public class RealCommandState {
 
 		usersById.clear();
 		userIdByEmail.clear();
+		userIdByGoogleSubject.clear();
 		userIdByToken.clear();
 		twinsByUser.clear();
 		trainingJobs.clear();
@@ -465,9 +488,12 @@ public class RealCommandState {
 		for (UserAccount account : model.users()) {
 			if (account == null || account.id() == null) continue;
 			User uiUser = ModelViewMapper.toViewUser(account);
-			usersById.put(account.id(), new StoredUser(uiUser, account.passwordHash()));
+			usersById.put(account.id(), new StoredUser(uiUser, account.googleSubject()));
 			if (uiUser.email() != null) {
 				userIdByEmail.put(uiUser.email().toLowerCase(Locale.ROOT), account.id());
+			}
+			if (account.googleSubject() != null && !account.googleSubject().isBlank()) {
+				userIdByGoogleSubject.put(account.googleSubject(), account.id());
 			}
 		}
 		for (UserSession session : model.sessions()) {
@@ -502,7 +528,7 @@ public class RealCommandState {
 
 	private Application exportModel() {
 		List<UserAccount> users = usersById.values().stream()
-				.map(stored -> ModelViewMapper.toDomainUserAccount(stored.user(), stored.password()))
+				.map(stored -> ModelViewMapper.toDomainUserAccount(stored.user(), stored.googleSubject()))
 				.sorted(Comparator.comparing(UserAccount::id))
 				.toList();
 
@@ -537,6 +563,10 @@ public class RealCommandState {
 		return new FilesystemDatasetStorage(defaultDatasetRootDir());
 	}
 
+	private static GoogleIdentityVerifier defaultGoogleIdentityVerifier() {
+		return new StubGoogleIdentityVerifier(new GoogleAuthConfig("demo-google-client-id"), null);
+	}
+
 	private static String normalizeEmail(String email) {
 		return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
 	}
@@ -565,7 +595,7 @@ public class RealCommandState {
 		return "itok_" + UUID.randomUUID().toString().replace("-", "");
 	}
 
-	private record StoredUser(User user, String password) {
+	private record StoredUser(User user, String googleSubject) {
 	}
 
 	private record TwinOwnerAndTwin(String ownerUserId, DigitalTwin twin) {

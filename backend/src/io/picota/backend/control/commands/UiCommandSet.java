@@ -10,10 +10,9 @@ import java.util.Map;
 import java.util.Objects;
 
 public record UiCommandSet(
-		RegisterCommand registerCommand,
-		LoginCommand loginCommand,
+		GetGoogleAuthConfigCommand getGoogleAuthConfigCommand,
+		AuthenticateWithGoogleCommand authenticateWithGoogleCommand,
 		LogoutCommand logoutCommand,
-		ChangePasswordCommand changePasswordCommand,
 		GetMeCommand getMeCommand,
 		UpdateMeCommand updateMeCommand,
 		DeleteMeCommand deleteMeCommand,
@@ -43,10 +42,9 @@ public record UiCommandSet(
 		GetTrainingJobCommand getTrainingJobCommand
 ) {
 	public UiCommandSet {
-		registerCommand = Objects.requireNonNull(registerCommand, "registerCommand");
-		loginCommand = Objects.requireNonNull(loginCommand, "loginCommand");
+		getGoogleAuthConfigCommand = Objects.requireNonNull(getGoogleAuthConfigCommand, "getGoogleAuthConfigCommand");
+		authenticateWithGoogleCommand = Objects.requireNonNull(authenticateWithGoogleCommand, "authenticateWithGoogleCommand");
 		logoutCommand = Objects.requireNonNull(logoutCommand, "logoutCommand");
-		changePasswordCommand = Objects.requireNonNull(changePasswordCommand, "changePasswordCommand");
 		getMeCommand = Objects.requireNonNull(getMeCommand, "getMeCommand");
 		updateMeCommand = Objects.requireNonNull(updateMeCommand, "updateMeCommand");
 		deleteMeCommand = Objects.requireNonNull(deleteMeCommand, "deleteMeCommand");
@@ -76,20 +74,16 @@ public record UiCommandSet(
 		getTrainingJobCommand = Objects.requireNonNull(getTrainingJobCommand, "getTrainingJobCommand");
 	}
 
-	public AuthResponse register(RegisterRequest request) {
-		return registerCommand.register(request);
+	public GoogleAuthConfigResponse getGoogleAuthConfig() {
+		return getGoogleAuthConfigCommand.getGoogleAuthConfig();
 	}
 
-	public AuthResponse login(LoginRequest request) {
-		return loginCommand.login(request);
+	public AuthResponse authenticateWithGoogle(GoogleAuthenticationRequest request) {
+		return authenticateWithGoogleCommand.authenticateWithGoogle(request);
 	}
 
 	public void logout(String authToken) {
 		logoutCommand.logout(authToken);
-	}
-
-	public void changePassword(String authToken, ChangePasswordRequest request) {
-		changePasswordCommand.changePassword(authToken, request);
 	}
 
 	public User getMe(String authToken) {

@@ -1,5 +1,5 @@
 import {useNavigate} from "react-router";
-import {ArrowRight, Activity, Layers, Zap, ShieldCheck, ChevronRight} from "lucide-react";
+import {Activity, ArrowRight, ChevronRight, Layers, ShieldCheck, Zap} from "lucide-react";
 
 const FEATURES = [
     {
@@ -51,10 +51,10 @@ export default function LandingPage() {
                             onClick={() => navigate("/login")}
                             className="text-white/50 hover:text-white text-sm transition-colors"
                         >
-                            Sign in
+                            Continue with Google
                         </button>
                         <button
-                            onClick={() => navigate("/register")}
+                            onClick={() => navigate("/login")}
                             className="bg-cyan-500 hover:bg-cyan-400 text-white text-sm px-4 py-2 rounded-xl transition-colors shadow-lg shadow-cyan-500/20"
                             style={{fontWeight: 500}}
                         >
@@ -95,18 +95,18 @@ export default function LandingPage() {
 
                     <div className="flex items-center justify-center gap-3 flex-wrap">
                         <button
-                            onClick={() => navigate("/register")}
+                            onClick={() => navigate("/login")}
                             className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-white px-6 py-3 rounded-xl transition-all shadow-xl shadow-cyan-500/25"
                             style={{fontWeight: 600}}
                         >
-                            Start for free
+                            Continue with Google
                             <ArrowRight className="w-4 h-4"/>
                         </button>
                         <button
                             onClick={() => navigate("/login")}
                             className="flex items-center gap-2 bg-white/6 hover:bg-white/10 text-white/70 hover:text-white px-6 py-3 rounded-xl border border-white/10 transition-all"
                         >
-                            Sign in
+                            Access Picota
                             <ChevronRight className="w-4 h-4"/>
                         </button>
                     </div>
@@ -162,11 +162,11 @@ export default function LandingPage() {
                         Get started in minutes. No infrastructure required.
                     </p>
                     <button
-                        onClick={() => navigate("/register")}
+                        onClick={() => navigate("/login")}
                         className="bg-cyan-500 hover:bg-cyan-400 text-white px-6 py-3 rounded-xl transition-colors shadow-lg shadow-cyan-500/20"
                         style={{fontWeight: 600}}
                     >
-                        Create free account
+                        Continue with Google
                     </button>
                 </div>
             </section>

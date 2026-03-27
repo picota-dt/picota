@@ -96,6 +96,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 				statement.execute(sql);
 			}
 			ensureIngestionTokenColumn(connection);
+			ensureGoogleSubjectColumn(connection);
 		} catch (SQLException e) {
 			throw new PersistenceException("Unable to initialize persistence schema", e);
 		}
@@ -120,7 +121,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 	}
 
 	private List<UserAccount> loadUsers(Connection connection) throws SQLException {
-		String sql = "select id, name, email, password_hash, avatar_initials, credits, joined_at from users";
+		String sql = "select id, name, email, google_subject, avatar_initials, credits, joined_at from users";
 		try (PreparedStatement statement = connection.prepareStatement(sql);
 			 ResultSet rs = statement.executeQuery()) {
 			List<UserAccount> users = new ArrayList<>();
@@ -129,7 +130,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 						rs.getString("id"),
 						rs.getString("name"),
 						rs.getString("email"),
-						rs.getString("password_hash"),
+						rs.getString("google_subject"),
 						rs.getString("avatar_initials"),
 						rs.getInt("credits"),
 						parseInstant(rs.getString("joined_at"))
@@ -206,14 +207,14 @@ public class JdbcModelPersistence implements ModelPersistence {
 	}
 
 	private void insertUsers(Connection connection, List<UserAccount> users) throws SQLException {
-		String sql = "insert into users (id, name, email, password_hash, avatar_initials, credits, joined_at) values (?, ?, ?, ?, ?, ?, ?)";
+		String sql = "insert into users (id, name, email, google_subject, avatar_initials, credits, joined_at) values (?, ?, ?, ?, ?, ?, ?)";
 		try (PreparedStatement statement = connection.prepareStatement(sql)) {
 			for (UserAccount user : users) {
 				if (user == null || user.id() == null || user.id().isBlank()) continue;
 				statement.setString(1, user.id());
 				statement.setString(2, nullToEmpty(user.name()));
 				statement.setString(3, nullToEmpty(user.email()));
-				statement.setString(4, nullToEmpty(user.passwordHash()));
+				statement.setString(4, nullToEmpty(user.googleSubject()));
 				statement.setString(5, user.avatarInitials());
 				statement.setInt(6, user.credits());
 				if (user.joinedAt() == null) statement.setNull(7, Types.VARCHAR);
@@ -293,7 +294,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 						"id text primary key, " +
 						"name text not null, " +
 						"email text not null unique, " +
-						"password_hash text not null, " +
+						"google_subject text not null unique, " +
 						"avatar_initials text, " +
 						"credits integer not null default 0, " +
 						"joined_at text" +
@@ -338,7 +339,7 @@ public class JdbcModelPersistence implements ModelPersistence {
 						"id varchar(64) primary key, " +
 						"name varchar(255) not null, " +
 						"email varchar(320) not null unique, " +
-						"password_hash varchar(255) not null, " +
+						"google_subject varchar(255) not null unique, " +
 						"avatar_initials varchar(16), " +
 						"credits int not null default 0, " +
 						"joined_at varchar(64)" +
@@ -380,6 +381,17 @@ public class JdbcModelPersistence implements ModelPersistence {
 		String ddl = config.engine() == PersistenceEngine.SQLITE
 				? "alter table twins add column ingestion_token text"
 				: "alter table twins add column ingestion_token varchar(255)";
+		try (Statement statement = connection.createStatement()) {
+			statement.execute(ddl);
+		} catch (SQLException e) {
+			if (!isDuplicateColumnError(e)) throw e;
+		}
+	}
+
+	private void ensureGoogleSubjectColumn(Connection connection) throws SQLException {
+		String ddl = config.engine() == PersistenceEngine.SQLITE
+				? "alter table users add column google_subject text"
+				: "alter table users add column google_subject varchar(255)";
 		try (Statement statement = connection.createStatement()) {
 			statement.execute(ddl);
 		} catch (SQLException e) {

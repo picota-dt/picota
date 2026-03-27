@@ -14,7 +14,7 @@ function bumpVersion(version: string, type: "patch" | "minor" | "major"): string
 }
 
 const LSP_MARKER_OWNER = "picota-model-lsp";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/v1";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/+$/, "");
 const TOKEN_STORAGE_KEY = "picota.auth.token";
 const TARA_LANGUAGE_ID = "tara";
 const TARA_THEME_ID = "picota-tara-dark";

@@ -1,5 +1,9 @@
 package io.picota.backend.control.commands.demo;
 
+import io.picota.backend.control.auth.GoogleAuthConfig;
+import io.picota.backend.control.auth.GoogleIdentity;
+import io.picota.backend.control.auth.GoogleIdentityVerifier;
+import io.picota.backend.control.auth.StubGoogleIdentityVerifier;
 import io.picota.backend.control.commands.TwinModelTemplate;
 import io.picota.backend.control.commands.UiCommandFixtures;
 import io.picota.backend.control.commands.real.RealCommandState;
@@ -20,28 +24,38 @@ import java.util.Optional;
 public class DemoCommandState {
 	private final RealCommandState delegate;
 	private final String demoToken;
+	private final GoogleIdentityVerifier googleIdentityVerifier;
 
 	public DemoCommandState() {
-		this(TwinModelTemplate.defaultTemplate());
+		this(TwinModelTemplate.defaultTemplate(), defaultGoogleIdentityVerifier());
 	}
 
 	public DemoCommandState(TwinModelTemplate twinModelTemplate) {
-		this.delegate = new RealCommandState(new InMemoryModelPersistence(createDemoModel()), twinModelTemplate, DatasetStorage.noOp());
-		this.demoToken = delegate.login(new LoginRequest(UiCommandFixtures.DEFAULT_EMAIL, UiCommandFixtures.DEFAULT_PASSWORD)).token();
+		this(twinModelTemplate, defaultGoogleIdentityVerifier());
 	}
 
-	public AuthResponse register(RegisterRequest request) {
-		return new AuthResponse(demoToken, 86_400, UiCommandFixtures.copyUser(UiCommandFixtures.demoUser()));
-	}
-
-	public AuthResponse login(LoginRequest request) {
-		return new AuthResponse(demoToken, 86_400, UiCommandFixtures.copyUser(UiCommandFixtures.demoUser()));
+	public DemoCommandState(TwinModelTemplate twinModelTemplate, GoogleIdentityVerifier googleIdentityVerifier) {
+		this.googleIdentityVerifier = googleIdentityVerifier == null ? defaultGoogleIdentityVerifier() : googleIdentityVerifier;
+		this.delegate = new RealCommandState(
+				new InMemoryModelPersistence(createDemoModel()),
+				twinModelTemplate,
+				DatasetStorage.noOp(),
+				io.picota.backend.control.training.ExternalTrainingClient.disabled(),
+				this.googleIdentityVerifier
+		);
+		this.demoToken = delegate.authenticateWithGoogle(new GoogleAuthenticationRequest("demo-google-credential")).token();
 	}
 
 	public void logout(String authToken) {
 	}
 
-	public void changePassword(String authToken, ChangePasswordRequest request) {
+	public GoogleAuthConfigResponse getGoogleAuthConfig() {
+		String clientId = googleIdentityVerifier.config() == null ? "" : googleIdentityVerifier.config().clientId();
+		return new GoogleAuthConfigResponse(clientId);
+	}
+
+	public AuthResponse authenticateWithGoogle(GoogleAuthenticationRequest request) {
+		return new AuthResponse(demoToken, 86_400, UiCommandFixtures.copyUser(UiCommandFixtures.demoUser()));
 	}
 
 	public User getMe(String authToken) {
@@ -153,12 +167,19 @@ public class DemoCommandState {
 
 	private static Application createDemoModel() {
 		User demoUser = UiCommandFixtures.demoUser();
-		UserAccount account = ModelViewMapper.toDomainUserAccount(demoUser, UiCommandFixtures.DEFAULT_PASSWORD);
+		UserAccount account = ModelViewMapper.toDomainUserAccount(demoUser, UiCommandFixtures.DEFAULT_GOOGLE_SUBJECT);
 		List<TwinAggregate> demoTwins = UiCommandFixtures.demoTwins().stream()
 				.map(ModelViewMapper::toDomainTwin)
 				.map(twin -> new TwinAggregate(account.id(), twin))
 				.toList();
 		return new Application(List.of(account), List.of(), demoTwins, List.of());
+	}
+
+	private static GoogleIdentityVerifier defaultGoogleIdentityVerifier() {
+		return new StubGoogleIdentityVerifier(
+				new GoogleAuthConfig("demo-google-client-id"),
+				new GoogleIdentity(UiCommandFixtures.DEFAULT_GOOGLE_SUBJECT, UiCommandFixtures.DEFAULT_EMAIL, true, UiCommandFixtures.demoUser().name())
+		);
 	}
 
 	private static final class InMemoryModelPersistence implements ModelPersistence {

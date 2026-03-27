@@ -349,7 +349,8 @@ public class TrainingOperationsDelegate {
 		Optional<LatestDatasetRow> latestDatasetRow = readLatestDatasetRow(datasetPath.get());
 		if (latestDatasetRow.isEmpty()) return;
 		LatestSensorValues latestSensorValues = readLatestSensorValues(twin, subject);
-		Map<String, Double> variables = buildInferenceVariables(snapshot.outcome(), latestDatasetRow.get(), latestSensorValues);
+		Instant baseInstant = resolveInferenceBaseInstant(latestDatasetRow.get(), latestSensorValues);
+		Map<String, Double> variables = buildInferenceVariables(snapshot.outcome(), latestDatasetRow.get(), latestSensorValues, baseInstant);
 		if (variables.isEmpty()) return;
 
 		Map<String, Object> request = new LinkedHashMap<>();
@@ -360,10 +361,8 @@ public class TrainingOperationsDelegate {
 		if (inferenceResult == null || inferenceResult.prediction() == null || !Double.isFinite(inferenceResult.prediction())) {
 			return;
 		}
-		Instant inferredAt = inferenceResult.inferredAt() != null
-				? inferenceResult.inferredAt()
-				: latestSensorValues.instant() != null ? latestSensorValues.instant() : Instant.now();
 		Variable inferredVariable = target.get().variable();
+		Instant predictedInstant = resolvePredictedInstant(baseInstant, subject.timeBucket(), inferredVariable.timeHorizon());
 		datasetStorage.appendMetric(
 				twin.id(),
 				twin.version(),
@@ -372,7 +371,7 @@ public class TrainingOperationsDelegate {
 				inferredVariable.id(),
 				inferredVariable.name(),
 				DatasetStorage.MetricKind.INFERRED,
-				inferredAt,
+				predictedInstant,
 				inferenceResult.prediction()
 		);
 	}
@@ -433,16 +432,14 @@ public class TrainingOperationsDelegate {
 	private Map<String, Double> buildInferenceVariables(
 			TrainingTicketOutcome outcome,
 			LatestDatasetRow row,
-			LatestSensorValues sensorValues
+			LatestSensorValues sensorValues,
+			Instant baseInstant
 	) {
 		if (outcome == null || row == null) return Map.of();
 		List<String> inputVariables = outcome.inputVariables();
 		if (inputVariables == null || inputVariables.isEmpty()) return Map.of();
 		Map<String, String> rowValues = row.values();
-		Instant referenceInstant = sensorValues == null ? null : sensorValues.instant();
-		if (referenceInstant == null) referenceInstant = row.instant();
-		if (referenceInstant == null) referenceInstant = Instant.now();
-		ZonedDateTime timestamp = referenceInstant.atZone(ZoneOffset.UTC);
+		ZonedDateTime timestamp = (baseInstant == null ? Instant.now() : baseInstant).atZone(ZoneOffset.UTC);
 		Map<String, Double> payload = new LinkedHashMap<>();
 		for (String featureName : inputVariables) {
 			if (featureName == null || featureName.isBlank()) continue;
@@ -467,6 +464,31 @@ public class TrainingOperationsDelegate {
 			payload.put(feature, numericValue == null ? 0.0 : numericValue);
 		}
 		return payload;
+	}
+
+	private static Instant resolveInferenceBaseInstant(LatestDatasetRow datasetRow, LatestSensorValues sensorValues) {
+		Instant sensorInstant = sensorValues == null ? null : sensorValues.instant();
+		if (sensorInstant != null) return sensorInstant;
+		Instant rowInstant = datasetRow == null ? null : datasetRow.instant();
+		return rowInstant == null ? Instant.now() : rowInstant;
+	}
+
+	private static Instant resolvePredictedInstant(Instant baseInstant, TimeBucket timeBucket, Integer timeHorizon) {
+		Instant safeBase = baseInstant == null ? Instant.now() : baseInstant;
+		if (timeHorizon == null || timeHorizon <= 0 || timeBucket == null) return safeBase;
+		try {
+			ZonedDateTime reference = safeBase.atZone(ZoneOffset.UTC);
+			return switch (timeBucket) {
+				case YEARS -> reference.plusYears(timeHorizon.longValue()).toInstant();
+				case MONTHS -> reference.plusMonths(timeHorizon.longValue()).toInstant();
+				case DAYS -> reference.plusDays(timeHorizon.longValue()).toInstant();
+				case HOURS -> reference.plusHours(timeHorizon.longValue()).toInstant();
+				case MINUTES -> reference.plusMinutes(timeHorizon.longValue()).toInstant();
+				case SECONDS -> reference.plusSeconds(timeHorizon.longValue()).toInstant();
+			};
+		} catch (RuntimeException ignored) {
+			return safeBase;
+		}
 	}
 
 	private LatestSensorValues readLatestSensorValues(DigitalTwin twin, DigitalSubject subject) {

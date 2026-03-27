@@ -25,13 +25,13 @@ public final class ModelViewMapper {
 		);
 	}
 
-	public static UserAccount toDomainUserAccount(User user, String passwordHash) {
+	public static UserAccount toDomainUserAccount(User user, String googleSubject) {
 		if (user == null) return null;
 		return new UserAccount(
 				user.id(),
 				user.name(),
 				user.email(),
-				passwordHash == null ? "" : passwordHash,
+				googleSubject == null ? "" : googleSubject,
 				user.avatarInitials(),
 				user.credits() == null ? 0 : user.credits(),
 				parseInstant(user.joinedAt())

@@ -1,6 +1,10 @@
 package io.picota.backend.control;
 
 import io.intino.alexandria.logger4j.Logger;
+import io.picota.backend.control.auth.GoogleAuthConfig;
+import io.picota.backend.control.auth.GoogleIdTokenVerifierService;
+import io.picota.backend.control.auth.GoogleIdentityVerifier;
+import io.picota.backend.control.auth.StubGoogleIdentityVerifier;
 import io.picota.backend.control.commands.TwinModelTemplate;
 import io.picota.backend.control.commands.UiCommandSet;
 import io.picota.backend.control.commands.UiCommandsFactory;
@@ -42,14 +46,32 @@ public final class Main {
 		Path datasetsRootDir = loadDatasetsRootDir(properties, config.workdir());
 		UiCommandsMode mode = loadCommandsMode(properties);
 		ExternalTrainingClient trainingClient = loadTrainingClient(properties, mode);
+		GoogleIdentityVerifier googleIdentityVerifier = loadGoogleIdentityVerifier(properties, mode);
 		ModelPersistence persistence = PersistenceFactory.create(persistenceConfig);
-		UiCommandSet commands = UiCommandsFactory.create(mode, persistence, twinModelTemplate, datasetsRootDir, trainingClient);
+		UiCommandSet commands = UiCommandsFactory.create(mode, persistence, twinModelTemplate, datasetsRootDir, trainingClient, googleIdentityVerifier);
 		BackendWebServer server = new BackendWebServer(config, commands);
+		printStartupBanner(configPath, config, mode);
 		server.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			server.stop();
 			persistence.close();
 		}));
+	}
+
+	private static void printStartupBanner(Path configPath, BackendWebServer.Config config, UiCommandsMode mode) {
+		String banner = """
+				 ____ ___ ____ ___ _____   _
+				|  _ \\_ _/ ___/ _ \\_   _/ / \\
+				| |_) | | |  | | | || |  / _ \\
+				|  __/| | |__| |_| || | / ___ \\
+				|_|  |___\\____\\___/ |_|/_/   \\_\\
+				""";
+		System.out.println(banner);
+		System.out.println("PICOTA backend arrancando...");
+		System.out.println("Config: " + configPath);
+		System.out.println("Modo: " + mode.name());
+		System.out.println("Endpoint: http://" + config.host() + ":" + config.port() + config.apiPrefix());
+		System.out.println("Workdir: " + config.workdir());
 	}
 
 	private static Properties loadProperties(Path configPath) {
@@ -114,6 +136,7 @@ public final class Main {
 		p.setProperty("app.datasets.dir", "datasets");
 		p.setProperty("app.training.api.base-url", "");
 		p.setProperty("app.training.api.timeout.seconds", "30");
+		p.setProperty("app.auth.google.client-id", "");
 		p.setProperty("app.db.engine", "sqlite");
 		p.setProperty("app.db.sqlite.file", "picota.db");
 		p.setProperty("app.db.mysql.host", "127.0.0.1");
@@ -165,6 +188,20 @@ public final class Main {
 		String normalizedBaseUrl = validateTrainingApiBaseUrl(baseUrl);
 		int timeoutSeconds = Math.max(1, intProperty(properties, "app.training.api.timeout.seconds", 30));
 		return new HttpExternalTrainingClient(normalizedBaseUrl, Duration.ofSeconds(timeoutSeconds));
+	}
+
+	private static GoogleIdentityVerifier loadGoogleIdentityVerifier(Properties properties, UiCommandsMode mode) {
+		String clientId = property(properties, "app.auth.google.client-id");
+		if (clientId.isBlank()) {
+			if (mode == UiCommandsMode.REAL) {
+				throw new IllegalArgumentException(
+						"Missing required property 'app.auth.google.client-id' for real mode. " +
+								"Set the Google Web client id used by the frontend."
+				);
+			}
+			return new StubGoogleIdentityVerifier(new GoogleAuthConfig("demo-google-client-id"), null);
+		}
+		return new GoogleIdTokenVerifierService(new GoogleAuthConfig(clientId));
 	}
 
 	private static String validateTrainingApiBaseUrl(String rawBaseUrl) {

@@ -157,6 +157,10 @@ interface AuthResponse {
     user: User;
 }
 
+interface GoogleAuthConfigResponse {
+    clientId: string;
+}
+
 interface IngestionTokenResponse {
     token: string;
 }
@@ -166,8 +170,7 @@ interface AppContextValue {
     twins: DigitalTwin[];
     setTwins: React.Dispatch<React.SetStateAction<DigitalTwin[]>>;
     getTwin: (id: string) => DigitalTwin | undefined;
-    updateProfile: (updates: { name?: string; email?: string }) => Promise<User>;
-    changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+    updateProfile: (updates: { name?: string }) => Promise<User>;
     deleteAccount: () => Promise<void>;
     updateTwin: (id: string, updates: Partial<DigitalTwin>) => Promise<void>;
     deleteTwin: (id: string) => Promise<void>;
@@ -184,10 +187,10 @@ interface AppContextValue {
     rotateTwinIngestionToken: (twinId: string) => Promise<string>;
     launchTrainingJob: (twinId: string) => Promise<TrainingJob>;
     getTrainingJob: (twinId: string, jobId: string) => Promise<TrainingJob>;
+    getGoogleClientId: () => Promise<string>;
+    signInWithGoogle: (credential: string) => Promise<void>;
     isLoggedIn: boolean;
     loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
-    register: (name: string, email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -200,7 +203,7 @@ const EMPTY_USER: User = {
 };
 
 const TOKEN_KEY = "picota.auth.token";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/v1";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/v1").replace(/\/+$/, "");
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -255,21 +258,10 @@ export function AppProvider({children}: { children: ReactNode }) {
         setIsLoggedIn(true);
     };
 
-    const login = async (email: string, password: string) => {
-        const auth = await apiRequest<AuthResponse>("/auth/login", {
+    const signInWithGoogle = async (credential: string) => {
+        const auth = await apiRequest<AuthResponse>("/auth/google", {
             method: "POST",
-            body: {email, password},
-            skipAuth: true,
-        });
-        setSession(auth.token, auth.user);
-        const catalog = await apiRequest<DigitalTwin[]>("/twins", {token: auth.token});
-        setTwins(catalog);
-    };
-
-    const register = async (name: string, email: string, password: string) => {
-        const auth = await apiRequest<AuthResponse>("/auth/register", {
-            method: "POST",
-            body: {name, email, password},
+            body: {credential},
             skipAuth: true,
         });
         setSession(auth.token, auth.user);
@@ -287,7 +279,7 @@ export function AppProvider({children}: { children: ReactNode }) {
 
     const getTwin = (id: string) => twins.find((t) => t.id === id);
 
-    const updateProfile = async (updates: { name?: string; email?: string }): Promise<User> => {
+    const updateProfile = async (updates: { name?: string }): Promise<User> => {
         const activeToken = token;
         if (!activeToken) throw new Error("No authenticated session");
         const updated = await apiRequest<User>("/users/me", {
@@ -297,16 +289,6 @@ export function AppProvider({children}: { children: ReactNode }) {
         });
         setUser(updated);
         return updated;
-    };
-
-    const changePassword = async (currentPassword: string, newPassword: string) => {
-        const activeToken = token;
-        if (!activeToken) throw new Error("No authenticated session");
-        await apiRequest<void>("/auth/change-password", {
-            method: "POST",
-            body: {currentPassword, newPassword},
-            token: activeToken,
-        });
     };
 
     const deleteAccount = async () => {
@@ -439,6 +421,15 @@ export function AppProvider({children}: { children: ReactNode }) {
         return resolved;
     };
 
+    const getGoogleClientId = async (): Promise<string> => {
+        const response = await apiRequest<GoogleAuthConfigResponse>("/auth/google/config", {
+            skipAuth: true,
+        });
+        const clientId = String(response?.clientId ?? "").trim();
+        if (!clientId) throw new Error("Google authentication is not configured");
+        return clientId;
+    };
+
     const launchTrainingJob = async (twinId: string): Promise<TrainingJob> => {
         const activeToken = token;
         if (!activeToken) throw new Error("No authenticated session");
@@ -499,7 +490,6 @@ export function AppProvider({children}: { children: ReactNode }) {
                 setTwins,
                 getTwin,
                 updateProfile,
-                changePassword,
                 deleteAccount,
                 updateTwin,
                 deleteTwin,
@@ -511,10 +501,10 @@ export function AppProvider({children}: { children: ReactNode }) {
                 rotateTwinIngestionToken,
                 launchTrainingJob,
                 getTrainingJob,
+                getGoogleClientId,
+                signInWithGoogle,
                 isLoggedIn,
                 loading,
-                login,
-                register,
                 logout,
             }}
         >
@@ -551,8 +541,9 @@ async function apiRequest<T>(
     });
 
     if (!response.ok) {
-        const errorBody = await parseJsonSafe<{ message?: string }>(response);
-        throw new Error(errorBody?.message ?? `HTTP ${response.status}`);
+        const errorBody = await parseJsonSafe<{ message?: string; details?: { reason?: string } }>(response);
+        const message = resolveApiErrorMessage(errorBody, response.status);
+        throw new Error(message);
     }
 
     if (response.status === 204) return undefined as T;
@@ -564,6 +555,18 @@ async function parseJsonSafe<T>(response: Response): Promise<T | undefined> {
     const text = await response.text();
     if (!text) return undefined;
     return JSON.parse(text) as T;
+}
+
+function resolveApiErrorMessage(
+    errorBody: { message?: string; details?: { reason?: string } } | undefined,
+    statusCode: number
+): string {
+    const message = typeof errorBody?.message === "string" ? errorBody.message.trim() : "";
+    const reason = typeof errorBody?.details?.reason === "string" ? errorBody.details.reason.trim() : "";
+    if (reason.length > 0 && (message.length === 0 || message === "Unexpected server error")) {
+        return reason;
+    }
+    return message.length > 0 ? message : `HTTP ${statusCode}`;
 }
 
 async function uploadMultipartWithProgress<T>({

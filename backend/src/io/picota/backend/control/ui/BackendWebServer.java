@@ -66,8 +66,15 @@ public class BackendWebServer {
 				});
 			}
 
-			javalin.routes.exception(UiCommandException.class, (e, ctx) -> writeError(ctx, e.statusCode(), e.code(), e.getMessage(), e.details()));
-			javalin.routes.exception(Exception.class, (e, ctx) -> writeError(ctx, 500, "INTERNAL_ERROR", "Unexpected server error", Map.of("reason", e.getMessage())));
+			javalin.routes.exception(UiCommandException.class, (e, ctx) -> {
+				System.err.printf("[API] %s %s -> %d %s: %s%n", ctx.method(), ctx.path(), e.statusCode(), e.code(), e.getMessage());
+				writeError(ctx, e.statusCode(), e.code(), e.getMessage(), e.details());
+			});
+			javalin.routes.exception(Exception.class, (e, ctx) -> {
+				System.err.printf("[API] %s %s -> 500 INTERNAL_ERROR: %s%n", ctx.method(), ctx.path(), e.getMessage());
+				e.printStackTrace(System.err);
+				writeError(ctx, 500, "INTERNAL_ERROR", "Unexpected server error", Map.of("reason", e.getMessage()));
+			});
 			javalin.routes.apiBuilder(() -> {
 				registerSystemRoutes(frontendAssets);
 				registerApiAtConfiguredPrefix();
@@ -119,17 +126,15 @@ public class BackendWebServer {
 
 	private void registerApiRoutes() {
 		path("auth", () -> {
-			post("register", ctx -> {
-				AuthResponse response = commands.register(ctx.bodyAsClass(RegisterRequest.class));
-				ctx.status(201).json(response);
+			path("google", () -> {
+				get("config", ctx -> ctx.json(commands.getGoogleAuthConfig()));
+				post(ctx -> {
+					AuthResponse response = commands.authenticateWithGoogle(ctx.bodyAsClass(GoogleAuthenticationRequest.class));
+					ctx.status(200).json(response);
+				});
 			});
-			post("login", ctx -> ctx.json(commands.login(ctx.bodyAsClass(LoginRequest.class))));
 			post("logout", ctx -> {
 				commands.logout(authToken(ctx));
-				ctx.status(204);
-			});
-			post("change-password", ctx -> {
-				commands.changePassword(authToken(ctx), ctx.bodyAsClass(ChangePasswordRequest.class));
 				ctx.status(204);
 			});
 		});

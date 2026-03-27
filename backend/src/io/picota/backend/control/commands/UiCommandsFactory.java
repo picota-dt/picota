@@ -1,5 +1,8 @@
 package io.picota.backend.control.commands;
 
+import io.picota.backend.control.auth.GoogleAuthConfig;
+import io.picota.backend.control.auth.GoogleIdentityVerifier;
+import io.picota.backend.control.auth.StubGoogleIdentityVerifier;
 import io.picota.backend.control.commands.demo.*;
 import io.picota.backend.control.commands.real.*;
 import io.picota.backend.control.ingestion.DemoIngestSensorMetricsCommand;
@@ -14,35 +17,54 @@ public final class UiCommandsFactory {
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode) {
-		return create(mode, null, TwinModelTemplate.defaultTemplate(), defaultDatasetsRootDir(), ExternalTrainingClient.disabled());
+		return create(mode, null, TwinModelTemplate.defaultTemplate(), defaultDatasetsRootDir(), ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence) {
-		return create(mode, persistence, TwinModelTemplate.defaultTemplate(), defaultDatasetsRootDir(), ExternalTrainingClient.disabled());
+		return create(mode, persistence, TwinModelTemplate.defaultTemplate(), defaultDatasetsRootDir(), ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence, TwinModelTemplate twinModelTemplate) {
-		return create(mode, persistence, twinModelTemplate, defaultDatasetsRootDir(), ExternalTrainingClient.disabled());
+		return create(mode, persistence, twinModelTemplate, defaultDatasetsRootDir(), ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir) {
-		return create(mode, persistence, twinModelTemplate, datasetsRootDir, ExternalTrainingClient.disabled());
+		return create(mode, persistence, twinModelTemplate, datasetsRootDir, ExternalTrainingClient.disabled(), defaultGoogleIdentityVerifier());
 	}
 
 	public static UiCommandSet create(UiCommandsMode mode, ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir, ExternalTrainingClient trainingClient) {
+		return create(mode, persistence, twinModelTemplate, datasetsRootDir, trainingClient, defaultGoogleIdentityVerifier());
+	}
+
+	public static UiCommandSet create(
+			UiCommandsMode mode,
+			ModelPersistence persistence,
+			TwinModelTemplate twinModelTemplate,
+			Path datasetsRootDir,
+			ExternalTrainingClient trainingClient,
+			GoogleIdentityVerifier googleIdentityVerifier
+	) {
 		TwinModelTemplate template = twinModelTemplate == null ? TwinModelTemplate.defaultTemplate() : twinModelTemplate;
 		Path safeDatasetsRoot = datasetsRootDir == null ? defaultDatasetsRootDir() : datasetsRootDir.toAbsolutePath().normalize();
 		ExternalTrainingClient safeTrainingClient = trainingClient == null ? ExternalTrainingClient.disabled() : trainingClient;
-		return mode == UiCommandsMode.DEMO ? createDemoSet(template) : createRealSet(persistence, template, safeDatasetsRoot, safeTrainingClient);
+		GoogleIdentityVerifier safeGoogleIdentityVerifier = googleIdentityVerifier == null ? defaultGoogleIdentityVerifier() : googleIdentityVerifier;
+		return mode == UiCommandsMode.DEMO
+				? createDemoSet(template, safeGoogleIdentityVerifier)
+				: createRealSet(persistence, template, safeDatasetsRoot, safeTrainingClient, safeGoogleIdentityVerifier);
 	}
 
-	private static UiCommandSet createRealSet(ModelPersistence persistence, TwinModelTemplate twinModelTemplate, Path datasetsRootDir, ExternalTrainingClient trainingClient) {
-		RealCommandState state = new RealCommandState(persistence, twinModelTemplate, datasetsRootDir, trainingClient);
+	private static UiCommandSet createRealSet(
+			ModelPersistence persistence,
+			TwinModelTemplate twinModelTemplate,
+			Path datasetsRootDir,
+			ExternalTrainingClient trainingClient,
+			GoogleIdentityVerifier googleIdentityVerifier
+	) {
+		RealCommandState state = new RealCommandState(persistence, twinModelTemplate, new io.picota.backend.persistence.FilesystemDatasetStorage(datasetsRootDir), trainingClient, googleIdentityVerifier);
 		return new UiCommandSet(
-				new RealRegisterCommand(state),
-				new RealLoginCommand(state),
+				new RealGetGoogleAuthConfigCommand(state),
+				new RealAuthenticateWithGoogleCommand(state),
 				new RealLogoutCommand(state),
-				new RealChangePasswordCommand(state),
 				new RealGetMeCommand(state),
 				new RealUpdateMeCommand(state),
 				new RealDeleteMeCommand(state),
@@ -73,13 +95,12 @@ public final class UiCommandsFactory {
 		);
 	}
 
-	private static UiCommandSet createDemoSet(TwinModelTemplate twinModelTemplate) {
-		DemoCommandState state = new DemoCommandState(twinModelTemplate);
+	private static UiCommandSet createDemoSet(TwinModelTemplate twinModelTemplate, GoogleIdentityVerifier googleIdentityVerifier) {
+		DemoCommandState state = new DemoCommandState(twinModelTemplate, googleIdentityVerifier);
 		return new UiCommandSet(
-				new DemoRegisterCommand(state),
-				new DemoLoginCommand(state),
+				new DemoGetGoogleAuthConfigCommand(state),
+				new DemoAuthenticateWithGoogleCommand(state),
 				new DemoLogoutCommand(state),
-				new DemoChangePasswordCommand(state),
 				new DemoGetMeCommand(state),
 				new DemoUpdateMeCommand(state),
 				new DemoDeleteMeCommand(state),
@@ -112,5 +133,9 @@ public final class UiCommandsFactory {
 
 	private static Path defaultDatasetsRootDir() {
 		return Path.of("./runtime/datasets").toAbsolutePath().normalize();
+	}
+
+	private static GoogleIdentityVerifier defaultGoogleIdentityVerifier() {
+		return new StubGoogleIdentityVerifier(new GoogleAuthConfig("demo-google-client-id"), null);
 	}
 }

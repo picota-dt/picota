@@ -9,7 +9,7 @@ public record UserAccount(
 		String id,
 		String name,
 		String email,
-		String passwordHash,
+		String googleSubject,
 		String avatarInitials,
 		int credits,
 		Instant joinedAt

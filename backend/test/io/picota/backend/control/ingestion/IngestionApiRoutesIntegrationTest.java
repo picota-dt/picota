@@ -6,16 +6,7 @@ import io.picota.backend.control.commands.UiCommandsFactory;
 import io.picota.backend.control.commands.UiCommandsMode;
 import io.picota.backend.control.training.ExternalTrainingClient;
 import io.picota.backend.control.ui.BackendWebServer;
-import io.picota.backend.model.Application;
-import io.picota.backend.model.DigitalSubject;
-import io.picota.backend.model.DigitalTwin;
-import io.picota.backend.model.TimeBucket;
-import io.picota.backend.model.TwinAggregate;
-import io.picota.backend.model.UserAccount;
-import io.picota.backend.model.UserSession;
-import io.picota.backend.model.Variable;
-import io.picota.backend.model.VariableDataType;
-import io.picota.backend.model.VariableType;
+import io.picota.backend.model.*;
 import io.picota.backend.persistence.ModelPersistence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -122,7 +113,7 @@ class IngestionApiRoutesIntegrationTest {
 				USER_ID,
 				"Ingestion Tester",
 				"ingestion@test.picota",
-				"password",
+				"google-sub-ingestion-test",
 				"IT",
 				1000,
 				Instant.parse("2035-01-01T00:00:00Z")
