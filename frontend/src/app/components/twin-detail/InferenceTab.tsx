@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from "react";
-import {DigitalTwin, InferenceEngine, RetrainingConfig, TrainingJob, useApp} from "../../context/AppContext";
+import {DigitalTwin, InferenceEngine, RetrainingConfig, TrainingJob, useApp, Variable} from "../../context/AppContext";
 import {
     AlertCircle,
     BarChart3,
@@ -660,6 +660,7 @@ function TrainingResults({engine, twin}: { engine: InferenceEngine; twin: Digita
         ? parsedLaunchedAt.toLocaleDateString("en-US", {year: "numeric", month: "long", day: "numeric"})
         : "—";
     const totalTrainingTime = formatDuration(engine.trainingDurationSeconds);
+    const inferredTimeHorizonQueues = resolveInferredTimeHorizonQueues(twin);
 
     return (
         <div className="flex flex-col gap-4">
@@ -703,10 +704,10 @@ function TrainingResults({engine, twin}: { engine: InferenceEngine; twin: Digita
                         <h3 className="text-white" style={{fontWeight: 600}}>Inference quality</h3>
                     </div>
                     <div className="flex flex-col gap-4">
-                        {engine.inferredVariables.map((v) => {
+                        {engine.inferredVariables.map((v, variableIndex) => {
                             const isCategorical = v.dataType === "categorical"
                                 || (v.dataType === undefined && (v.accuracy !== undefined || v.macroF1 !== undefined));
-                            const timeHorizon = resolveInferredTimeHorizon(twin, v.name);
+                            const timeHorizon = takeInferredTimeHorizon(inferredTimeHorizonQueues, v.name);
                             const totalViolationPercent = normalizePercentage(v.violations);
                             const constraintViolations = Object.entries(v.constraintViolations ?? {})
                                 .map(([constraint, rate]) => ({constraint, rate: normalizePercentage(rate)}))
@@ -722,7 +723,7 @@ function TrainingResults({engine, twin}: { engine: InferenceEngine; twin: Digita
                                 ] : []),
                             ];
                             return (
-                                <div key={v.name} className="bg-white/4 rounded-xl p-4">
+                                <div key={`${v.name}-${variableIndex}`} className="bg-white/4 rounded-xl p-4">
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-2">
                                             <span className="w-2 h-2 rounded-full bg-violet-400"/>
@@ -739,7 +740,7 @@ function TrainingResults({engine, twin}: { engine: InferenceEngine; twin: Digita
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         {orderedMetrics.map((metric) => (
-                                            <div key={`${v.name}-${metric.label}`}
+                                            <div key={`${v.name}-${variableIndex}-${metric.label}`}
                                                  className="bg-white/4 rounded-lg p-3">
                                                 <p className="text-white/30 text-[11px] mb-1">{metric.label}</p>
                                                 <p className="text-white font-mono text-sm"
@@ -760,7 +761,7 @@ function TrainingResults({engine, twin}: { engine: InferenceEngine; twin: Digita
                                                 <div className="flex flex-wrap gap-2">
                                                     {constraintViolations.map((entry) => (
                                                         <span
-                                                            key={`${v.name}-${entry.constraint}`}
+                                                            key={`${v.name}-${variableIndex}-${entry.constraint}`}
                                                             className="text-[11px] px-2 py-1 rounded-md border border-white/10 bg-white/5 text-white/65 font-mono"
                                                         >
                                                             {entry.constraint}: {entry.rate!.toFixed(2)}%
@@ -866,19 +867,47 @@ export function InferenceTab({twin}: Props) {
     );
 }
 
-function resolveInferredTimeHorizon(twin: DigitalTwin, inferredVariableName: string): number {
-    const normalizedName = inferredVariableName.trim().toLowerCase();
-    if (!normalizedName) return 0;
+function resolveInferredTimeHorizonQueues(twin: DigitalTwin): Map<string, number[]> {
+    const queues = new Map<string, number[]>();
     for (const subject of twin.subjects ?? []) {
         for (const variable of subject.variables ?? []) {
             if (variable.variableType !== "inferred") continue;
-            const byName = variable.name?.trim().toLowerCase() === normalizedName;
-            const byId = variable.id?.trim().toLowerCase() === normalizedName;
-            if (!byName && !byId) continue;
-            return typeof variable.timeHorizon === "number" && Number.isFinite(variable.timeHorizon)
+            const key = normalizeInferredVariableKey(resolveInferredVariableDisplayName(variable));
+            if (!key) continue;
+            const queue = queues.get(key);
+            const horizon = typeof variable.timeHorizon === "number" && Number.isFinite(variable.timeHorizon)
                 ? Math.max(0, Math.trunc(variable.timeHorizon))
                 : 0;
+            if (queue) {
+                queue.push(horizon);
+            } else {
+                queues.set(key, [horizon]);
+            }
         }
     }
-    return 0;
+    return queues;
+}
+
+function takeInferredTimeHorizon(queues: Map<string, number[]>, inferredVariableName: string): number {
+    const key = normalizeInferredVariableKey(inferredVariableName);
+    if (!key) return 0;
+    const queue = queues.get(key);
+    if (!queue || queue.length === 0) return 0;
+    const horizon = queue.shift();
+    if (typeof horizon !== "number" || !Number.isFinite(horizon)) return 0;
+    return Math.max(0, Math.trunc(horizon));
+}
+
+function resolveInferredVariableDisplayName(variable: Variable): string {
+    const name = variable.name?.trim();
+    if (name) return name;
+    const id = variable.id?.trim();
+    if (id) return id;
+    return "";
+}
+
+function normalizeInferredVariableKey(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return "";
+    return normalized;
 }

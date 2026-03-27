@@ -63,7 +63,7 @@ public class ModelProjectionDelegate {
 				String subjectId = resolveSubjectName(parsedSubject);
 				if (subjectId == null || subjectId.isBlank()) continue;
 				TimeBucket timeBucket = resolveTimeBucket(parsedSubject);
-				Map<String, InferenceModelSettings> inferredByVariableName = inferenceSettingsByVariableName(parsedSubject);
+				Map<String, List<InferenceModelSettings>> inferredByVariableName = inferenceSettingsByVariableName(parsedSubject);
 				List<Variable> variables = mergeVariables(globalVariables, parsedSubject.subject().variableList(), inferredByVariableName);
 				parsedSubjects.add(new DigitalSubject(subjectId, subjectId, timeBucket, variables));
 			}
@@ -74,19 +74,21 @@ public class ModelProjectionDelegate {
 		}
 	}
 
-	private Map<String, InferenceModelSettings> inferenceSettingsByVariableName(
+	private Map<String, List<InferenceModelSettings>> inferenceSettingsByVariableName(
 			io.quassar.monentia.picota.DigitalTwin.DigitalSubject parsedSubject
 	) {
 		if (parsedSubject.inferenceModelList() == null || parsedSubject.inferenceModelList().isEmpty()) return Map.of();
-		Map<String, InferenceModelSettings> settings = new LinkedHashMap<>();
+		Map<String, List<InferenceModelSettings>> settings = new LinkedHashMap<>();
 		for (io.quassar.monentia.picota.DigitalTwin.DigitalSubject.InferenceModel inferenceModel : parsedSubject.inferenceModelList()) {
 			if (inferenceModel == null || inferenceModel.variable() == null) continue;
 			String variableName = blankToNull(inferenceModel.variable().name$());
 			if (variableName == null) continue;
 			Integer timeHorizon = inferenceModel.timeHorizon() <= 0 ? null : inferenceModel.timeHorizon();
 			Integer lookback = resolveLookback(inferenceModel.lookback());
-			settings.put(normalizeVariableKey(variableName), new InferenceModelSettings(timeHorizon, lookback));
+			String key = normalizeVariableKey(variableName);
+			settings.computeIfAbsent(key, ignored -> new ArrayList<>()).add(new InferenceModelSettings(timeHorizon, lookback));
 		}
+		settings.replaceAll((key, value) -> List.copyOf(value));
 		return settings;
 	}
 
@@ -118,18 +120,24 @@ public class ModelProjectionDelegate {
 	private List<Variable> mergeVariables(
 			List<io.quassar.monentia.picota.Variable> globalVariables,
 			List<io.quassar.monentia.picota.Variable> subjectVariables,
-			Map<String, InferenceModelSettings> inferredByVariableName
+			Map<String, List<InferenceModelSettings>> inferredByVariableName
 	) {
 		Map<String, io.quassar.monentia.picota.Variable> byName = new LinkedHashMap<>();
 		appendVariables(byName, globalVariables);
 		appendVariables(byName, subjectVariables);
 		List<Variable> projected = new ArrayList<>();
+		Set<String> usedVariableIds = new HashSet<>();
 		for (io.quassar.monentia.picota.Variable variable : byName.values()) {
 			if (variable == null) continue;
-			InferenceModelSettings inferredSettings = inferredByVariableName.get(normalizeVariableKey(variable.name$()));
-			projected.add(toSensorVariable(variable));
-			if (inferredSettings != null) {
-				projected.add(toInferredVariable(variable, inferredSettings));
+			Variable sensor = toSensorVariable(variable);
+			projected.add(sensor);
+			usedVariableIds.add(normalizeVariableKey(sensor.id()));
+			List<InferenceModelSettings> inferredSettings = inferredByVariableName.get(normalizeVariableKey(variable.name$()));
+			if (inferredSettings == null || inferredSettings.isEmpty()) continue;
+			for (InferenceModelSettings settings : inferredSettings) {
+				Variable inferred = toInferredVariable(variable, settings, usedVariableIds);
+				projected.add(inferred);
+				usedVariableIds.add(normalizeVariableKey(inferred.id()));
 			}
 		}
 		return List.copyOf(projected);
@@ -144,17 +152,25 @@ public class ModelProjectionDelegate {
 	}
 
 	private Variable toSensorVariable(io.quassar.monentia.picota.Variable variable) {
-		return toVariable(variable, VariableType.SENSOR, null);
+		return toVariable(variable, VariableType.SENSOR, null, variable.name$());
 	}
 
-	private Variable toInferredVariable(io.quassar.monentia.picota.Variable variable, InferenceModelSettings inferredSettings) {
-		return toVariable(variable, VariableType.INFERRED, inferredSettings);
+	private Variable toInferredVariable(
+			io.quassar.monentia.picota.Variable variable,
+			InferenceModelSettings inferredSettings,
+			Set<String> usedIds
+	) {
+		String baseName = blankToNull(variable.name$());
+		String baseId = inferredVariableId(baseName, inferredSettings == null ? null : inferredSettings.timeHorizon());
+		String uniqueId = disambiguateId(baseId, usedIds);
+		return toVariable(variable, VariableType.INFERRED, inferredSettings, uniqueId);
 	}
 
 	private Variable toVariable(
 			io.quassar.monentia.picota.Variable variable,
 			VariableType variableType,
-			InferenceModelSettings inferredSettings
+			InferenceModelSettings inferredSettings,
+			String variableId
 	) {
 		String name = variable.name$();
 		String description = firstNonBlank(
@@ -164,7 +180,7 @@ public class ModelProjectionDelegate {
 		String unit = variable.isNumeric() ? blankToNull(variable.asNumeric().unit()) : null;
 		VariableDataType dataType = variable.isNumeric() ? VariableDataType.NUMERIC : VariableDataType.CATEGORICAL;
 		return new Variable(
-				name,
+				variableId,
 				name,
 				description,
 				unit,
@@ -173,6 +189,27 @@ public class ModelProjectionDelegate {
 				inferredSettings == null ? null : inferredSettings.timeHorizon(),
 				inferredSettings == null ? null : inferredSettings.lookback()
 		);
+	}
+
+	private String inferredVariableId(String baseName, Integer timeHorizon) {
+		String root = baseName == null ? "inferred" : baseName.trim();
+		if (root.isEmpty()) root = "inferred";
+		if (timeHorizon == null || timeHorizon <= 0) return root + "__inferred";
+		return root + "__t_plus_" + timeHorizon;
+	}
+
+	private String disambiguateId(String candidate, Set<String> usedIds) {
+		String base = blankToNull(candidate);
+		if (base == null) base = "inferred";
+		String normalized = normalizeVariableKey(base);
+		if (usedIds == null || !usedIds.contains(normalized)) return base;
+		int suffix = 2;
+		String next = base + "__" + suffix;
+		while (usedIds.contains(normalizeVariableKey(next))) {
+			suffix++;
+			next = base + "__" + suffix;
+		}
+		return next;
 	}
 
 	private String normalizeVariableKey(String value) {

@@ -254,6 +254,14 @@ function sensorActualTileId(variable: Variable): string {
 
 function inferredTileId(variable: Variable): string {
     const base = telemetryIdentityBase(variable);
+    const lowerBase = base.toLowerCase();
+    if (lowerBase.includes("__t_plus_") || lowerBase.endsWith("__inferred")) {
+        return base;
+    }
+    const horizon = typeof variable.timeHorizon === "number" && Number.isFinite(variable.timeHorizon)
+        ? Math.max(0, Math.trunc(variable.timeHorizon))
+        : 0;
+    if (horizon > 0) return `${base}__t_plus_${horizon}`;
     return `${base}__inferred`;
 }
 

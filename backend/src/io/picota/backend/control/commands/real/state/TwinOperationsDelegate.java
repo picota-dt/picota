@@ -289,8 +289,9 @@ public class TwinOperationsDelegate {
 				.findFirst()
 				.orElseThrow(() -> new UiCommandException(404, "SUBJECT_NOT_FOUND", "No subject found with id " + subjectId));
 
-		DatasetStatisticsDelegate.CsvStats stats = datasetStatisticsDelegate.computeCsvStats(subject, content);
-		datasetStorage.storeDataset(twin.id(), twin.version(), subjectId, subject.name(), fileName, content);
+		byte[] normalizedContent = sortDatasetByInstant(content, fileName);
+		DatasetStatisticsDelegate.CsvStats stats = datasetStatisticsDelegate.computeCsvStats(subject, normalizedContent);
+		datasetStorage.storeDataset(twin.id(), twin.version(), subjectId, subject.name(), fileName, normalizedContent);
 		SubjectDataset dataset = new SubjectDataset(
 				subjectId,
 				fileName,
@@ -321,6 +322,95 @@ public class TwinOperationsDelegate {
 		twinsByUser.get(userId).put(twin.id(), updatedTwin);
 		persistAction.run();
 		return UiCommandFixtures.copyDataset(dataset);
+	}
+
+	private static byte[] sortDatasetByInstant(byte[] content, String fileName) {
+		if (content == null || content.length == 0) return content;
+		String raw = new String(content, StandardCharsets.UTF_8);
+		if (raw.isBlank()) return content;
+		List<String> lines = new ArrayList<>(raw.replace("\r\n", "\n").split("\n", -1).length);
+		lines.addAll(Arrays.asList(raw.replace("\r\n", "\n").split("\n", -1)));
+		if (lines.size() < 2) return content;
+
+		char delimiter = detectDelimiter(fileName, lines);
+		List<String> headers = parseDelimitedLine(lines.get(0), delimiter);
+		if (headers.isEmpty()) return content;
+		int instantIndex = resolveInstantColumnIndex(headers.toArray(String[]::new));
+		if (instantIndex < 0) return content;
+
+		List<RowWithInstant> rows = new ArrayList<>();
+		for (int i = 1; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (line == null || line.isBlank()) continue;
+			List<String> cells = parseDelimitedLine(line, delimiter);
+			if (instantIndex >= cells.size()) return content;
+			Instant instant = parseInstantOrNull(cleanCsvCell(cells.get(instantIndex)));
+			if (instant == null) return content;
+			rows.add(new RowWithInstant(line, instant, i));
+		}
+		if (rows.size() < 2) return content;
+		rows.sort(
+				Comparator.comparing(RowWithInstant::instant)
+						.thenComparingInt(RowWithInstant::originalIndex)
+		);
+
+		StringBuilder builder = new StringBuilder();
+		builder.append(lines.get(0)).append('\n');
+		for (RowWithInstant row : rows) {
+			builder.append(row.rawLine()).append('\n');
+		}
+		return builder.toString().getBytes(StandardCharsets.UTF_8);
+	}
+
+	private static char detectDelimiter(String fileName, List<String> lines) {
+		String lowered = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+		if (lowered.endsWith(".tsv")) return '\t';
+		for (String line : lines) {
+			if (line == null || line.isBlank()) continue;
+			if (line.contains("\t")) return '\t';
+			if (line.contains(";")) return ';';
+			break;
+		}
+		return ',';
+	}
+
+	private static List<String> parseDelimitedLine(String line, char delimiter) {
+		if (line == null) return List.of();
+		List<String> values = new ArrayList<>();
+		StringBuilder current = new StringBuilder();
+		boolean inQuotes = false;
+		for (int i = 0; i < line.length(); i++) {
+			char c = line.charAt(i);
+			if (c == '"') {
+				if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+					current.append('"');
+					i++;
+				} else {
+					inQuotes = !inQuotes;
+				}
+				continue;
+			}
+			if (c == delimiter && !inQuotes) {
+				values.add(current.toString());
+				current.setLength(0);
+				continue;
+			}
+			current.append(c);
+		}
+		values.add(current.toString());
+		return values;
+	}
+
+	private static Instant parseInstantOrNull(String value) {
+		if (value == null || value.isBlank()) return null;
+		try {
+			return Instant.parse(value.trim());
+		} catch (RuntimeException ignored) {
+			return null;
+		}
+	}
+
+	private record RowWithInstant(String rawLine, Instant instant, int originalIndex) {
 	}
 
 	public void deleteDataset(String userId, DigitalTwin twin, String subjectId) {
@@ -394,7 +484,7 @@ public class TwinOperationsDelegate {
 				twin.version(),
 				subject.id(),
 				subject.name(),
-				variable.id(),
+				metricKind == DatasetStorage.MetricKind.INFERRED ? inferredStorageVariableId(variable) : variable.id(),
 				variable.name(),
 				metricKind,
 				historyPoints
@@ -481,7 +571,15 @@ public class TwinOperationsDelegate {
 		String base = trimToNull(variable == null ? null : variable.id());
 		if (base == null) base = trimToNull(variable == null ? null : variable.name());
 		if (base == null) base = "variable";
+		String lowerBase = base.toLowerCase(Locale.ROOT);
+		if (lowerBase.contains("__t_plus_") || lowerBase.endsWith("__inferred")) return base;
+		Integer timeHorizon = variable == null ? null : variable.timeHorizon();
+		if (timeHorizon != null && timeHorizon > 0) return base + "__t_plus_" + timeHorizon;
 		return base + "__inferred";
+	}
+
+	private static String inferredStorageVariableId(Variable variable) {
+		return inferredTelemetryId(variable);
 	}
 
 	private List<TelemetryPoint> fallbackHistoryFromDataset(DigitalTwin twin, DigitalSubject subject, Variable variable, int historyPoints) {

@@ -6,7 +6,7 @@
       <module fileurl="file://$PROJECT_DIR$/digital-twin/digital-twin.iml" filepath="$PROJECT_DIR$/digital-twin/digital-twin.iml" />
       <module fileurl="file://$PROJECT_DIR$/dsl/dsl.iml" filepath="$PROJECT_DIR$/dsl/dsl.iml" />
       <module fileurl="file://$PROJECT_DIR$/frontend/frontend.iml" filepath="$PROJECT_DIR$/frontend/frontend.iml" />
-      <module fileurl="file://$PROJECT_DIR$/picota-service/picota-service.iml" filepath="$PROJECT_DIR$/picota-service/picota-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/picota-ml/picota-ml.iml" filepath="$PROJECT_DIR$/picota-ml/picota-ml.iml" />
       <module fileurl="file://$PROJECT_DIR$/runtime.test/runtime.test.iml" filepath="$PROJECT_DIR$/runtime.test/runtime.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/untitled.iml" filepath="$PROJECT_DIR$/untitled.iml" />
     </modules>

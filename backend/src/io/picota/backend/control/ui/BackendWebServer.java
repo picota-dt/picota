@@ -67,7 +67,9 @@ public class BackendWebServer {
 			}
 
 			javalin.routes.exception(UiCommandException.class, (e, ctx) -> {
-				System.err.printf("[API] %s %s -> %d %s: %s%n", ctx.method(), ctx.path(), e.statusCode(), e.code(), e.getMessage());
+				if (shouldLogUiException(e)) {
+					System.err.printf("[API] %s %s -> %d %s: %s%n", ctx.method(), ctx.path(), e.statusCode(), e.code(), e.getMessage());
+				}
 				writeError(ctx, e.statusCode(), e.code(), e.getMessage(), e.details());
 			});
 			javalin.routes.exception(Exception.class, (e, ctx) -> {
@@ -88,6 +90,12 @@ public class BackendWebServer {
 		});
 
 		app.start(config.host(), config.port());
+	}
+
+	private static boolean shouldLogUiException(UiCommandException exception) {
+		if (exception == null) return true;
+		if (exception.statusCode() == 401) return false;
+		return !"UNAUTHORIZED".equalsIgnoreCase(exception.code());
 	}
 
 	public synchronized void stop() {

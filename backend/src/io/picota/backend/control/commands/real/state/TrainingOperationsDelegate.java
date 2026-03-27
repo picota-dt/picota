@@ -6,12 +6,9 @@ import io.picota.backend.control.training.*;
 import io.picota.backend.control.ui.schemas.*;
 import io.picota.backend.persistence.DatasetStorage;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.*;
-import java.time.temporal.WeekFields;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -26,9 +23,12 @@ public class TrainingOperationsDelegate {
 	private final ConcurrentMap<String, ConcurrentMap<String, DigitalTwin>> twinsByUser;
 	private final ConcurrentMap<String, TrainingJob> trainingJobs;
 	private final ConcurrentMap<String, String> trainingJobOwnerById;
+	private final ConcurrentMap<String, TrainingBatchState> trainingBatchByJobId = new ConcurrentHashMap<>();
 	private final DatasetStorage datasetStorage;
 	private final ExternalTrainingClient trainingClient;
 	private final TrainingDatasetPreparer trainingDatasetPreparer;
+	private final TrainingJobLifecycle jobLifecycle;
+	private final TrainingInferenceWriter inferenceWriter;
 	private final Runnable persistAction;
 
 	public TrainingOperationsDelegate(
@@ -45,6 +45,8 @@ public class TrainingOperationsDelegate {
 		this.datasetStorage = datasetStorage == null ? DatasetStorage.noOp() : datasetStorage;
 		this.trainingClient = trainingClient == null ? ExternalTrainingClient.disabled() : trainingClient;
 		this.trainingDatasetPreparer = new TrainingDatasetPreparer(this.datasetStorage);
+		this.jobLifecycle = new TrainingJobLifecycle();
+		this.inferenceWriter = new TrainingInferenceWriter(this.datasetStorage, this.trainingClient);
 		this.persistAction = persistAction;
 	}
 
@@ -163,7 +165,8 @@ public class TrainingOperationsDelegate {
 
 	public TrainingJob launchTraining(String userId, String twinId, DigitalTwin twin) {
 		validate(twin.inferenceEngine() != null, 422, "PRECONDITION_FAILED", "Inference engine is not configured");
-		TrainingLaunchContext launchContext = resolveLaunchContext(twin);
+		List<TrainingLaunchContext> launchContexts = resolveLaunchContexts(twin);
+		validate(!launchContexts.isEmpty(), 422, "PRECONDITION_FAILED", "No valid inference models were found to train");
 
 		boolean hasRunning = trainingJobs.values().stream()
 				.anyMatch(job -> job.twinId().equals(twinId) &&
@@ -175,17 +178,38 @@ public class TrainingOperationsDelegate {
 			throw new UiCommandException(409, "TRAINING_ALREADY_RUNNING", "A training job is already in progress for this twin");
 		}
 
-		Map<String, Object> request = buildTrainingRequest(userId, twin, launchContext);
-		TrainingTicketAccepted accepted = createTrainingTicket(request);
-		String jobId = normalizeTicketId(accepted.ticketId());
-		TrainingJobStatus initialStatus = mapExternalStatus(accepted.status(), null);
+		List<ChildTrainingTicket> childTickets = new ArrayList<>();
+		List<TrainingJobStatus> childStatuses = new ArrayList<>();
+		Instant createdAt = null;
+		for (TrainingLaunchContext launchContext : launchContexts) {
+			Map<String, Object> request = buildTrainingRequest(userId, twin, launchContext);
+			TrainingTicketAccepted accepted = createTrainingTicket(request);
+			String ticketId = normalizeTicketId(accepted.ticketId());
+			Instant ticketCreatedAt = accepted.createdAt() == null ? Instant.now() : accepted.createdAt();
+			createdAt = createdAt == null || ticketCreatedAt.isBefore(createdAt) ? ticketCreatedAt : createdAt;
+			childTickets.add(new ChildTrainingTicket(ticketId, launchContext, ticketCreatedAt));
+			TrainingJobStatus childStatus = jobLifecycle.mapExternalStatus(accepted.status(), null);
+			childStatuses.add(childStatus);
+			inferenceWriter.rememberTemporalContext(
+					ticketId,
+					launchContext.subject().id(),
+					launchContext.outputVariable(),
+					launchContext.timeBucket(),
+					launchContext.predictionTimeHorizon(),
+					launchContext.requestTimeHorizon()
+			);
+		}
+		String jobId = resolveRootJobId(childTickets);
+		trainingBatchByJobId.put(jobId, new TrainingBatchState(childTickets));
+		TrainingJobStatus initialStatus = aggregateStatus(childStatuses, false);
+		int initialProgress = aggregateProgress(childStatuses, List.<ChildTicketPollResult>of(), null);
 		TrainingJob job = new TrainingJob(
 				jobId,
 				twinId,
 				initialStatus,
-				resolveProgress(initialStatus, null, null),
-				phaseForStatus(initialStatus),
-				accepted.createdAt() == null ? Instant.now() : accepted.createdAt(),
+				initialProgress,
+				phaseForAggregateStatus(initialStatus, childStatuses.size(), 0),
+				createdAt == null ? Instant.now() : createdAt,
 				null,
 				null,
 				null,
@@ -199,24 +223,32 @@ public class TrainingOperationsDelegate {
 
 	public TrainingJob getTrainingJob(String userId, String twinId, String jobId) {
 		TrainingJob current = requireTrainingJob(userId, twinId, jobId);
-		if (current.status() != null && isTerminal(current.status())) {
+		if (current.status() != null && jobLifecycle.isTerminal(current.status())) {
 			return current;
 		}
-		TrainingTicketSnapshot snapshot = getTrainingTicket(jobId);
-		TrainingJobStatus nextStatus = mapExternalStatus(snapshot.status(), current);
-		if (nextStatus == TrainingJobStatus.TRAINING && snapshot.outcome() != null) {
-			nextStatus = TrainingJobStatus.EVALUATING;
+		TrainingBatchState batchState = trainingBatchByJobId.get(jobId);
+		if (batchState == null || batchState.tickets().isEmpty()) {
+			return pollSingleTicketJob(userId, twinId, current, jobId);
 		}
-		Integer nextProgress = resolveProgress(nextStatus, current.progress(), snapshot);
-		Instant startedAt = selectStartedAt(current, snapshot, nextStatus);
-		Instant completedAt = isTerminal(nextStatus) ? selectCompletedAt(current, snapshot) : null;
+
+		List<ChildTicketPollResult> childResults = pollChildTickets(batchState, current);
+		List<TrainingJobStatus> childStatuses = childResults.stream().map(ChildTicketPollResult::status).toList();
+		long completedChildren = childStatuses.stream().filter(status -> status == TrainingJobStatus.DONE).count();
+		TrainingJobStatus nextStatus = aggregateStatus(childStatuses, childResults.stream().anyMatch(result -> result.snapshot() != null && result.snapshot().outcome() != null));
+		Integer nextProgress = aggregateProgress(childStatuses, childResults, current.progress());
+		Instant startedAt = resolveAggregateStartedAt(current, childResults, nextStatus);
+		Instant completedAt = jobLifecycle.isTerminal(nextStatus) ? resolveAggregateCompletedAt(current, childResults) : null;
 		String errorMessage = nextStatus == TrainingJobStatus.FAILED
-				? nonBlank(snapshot.errorMessage()).orElse("Training failed")
+				? aggregateErrorMessage(childResults)
 				: null;
 
 		InferenceEngine result = current.result();
 		if (nextStatus == TrainingJobStatus.DONE) {
-			result = finalizeTraining(userId, twinId, snapshot);
+			List<TrainingCompletedSnapshot> completedSnapshots = childResults.stream()
+					.filter(resultItem -> isCompletedSnapshot(resultItem.snapshot()))
+					.map(resultItem -> new TrainingCompletedSnapshot(resultItem.snapshot(), resultItem.ticket().launchContext()))
+					.toList();
+			result = finalizeTraining(userId, twinId, completedSnapshots);
 		}
 
 		TrainingJob updated = new TrainingJob(
@@ -224,7 +256,7 @@ public class TrainingOperationsDelegate {
 				current.twinId(),
 				nextStatus,
 				nextProgress,
-				phaseForSnapshot(nextStatus, snapshot),
+				phaseForAggregateStatus(nextStatus, childStatuses.size(), (int) completedChildren),
 				current.createdAt(),
 				startedAt,
 				completedAt,
@@ -241,7 +273,7 @@ public class TrainingOperationsDelegate {
 		try {
 			Optional<TrainingTicketSnapshot> snapshot = resolveLatestCompletedSnapshotForSubject(userId, twin, subjectId);
 			if (snapshot.isEmpty()) return;
-			appendInferencePredictionSampleForSubject(twin, snapshot.get(), subjectId);
+			inferenceWriter.appendInferencePredictionSampleForSubject(twin, snapshot.get(), subjectId);
 		} catch (RuntimeException ignored) {
 			// Never fail ingestion because inference side-effect failed.
 		}
@@ -255,19 +287,40 @@ public class TrainingOperationsDelegate {
 				.sorted(trainingJobRecencyComparator())
 				.toList();
 		for (TrainingJob job : candidates) {
-			TrainingTicketSnapshot snapshot = safeGetTrainingTicket(job.jobId());
-			if (snapshot == null) continue;
-			if (!isCompletedSnapshot(snapshot)) continue;
-			if (resolveInferenceTarget(twin, snapshot.outcome(), subjectId).isEmpty()) continue;
-			return Optional.of(snapshot);
+			List<TrainingTicketSnapshot> snapshots = resolveSnapshotsForJob(job.jobId());
+			for (TrainingTicketSnapshot snapshot : snapshots) {
+				if (!isCompletedSnapshot(snapshot)) continue;
+				if (!inferenceWriter.hasInferenceTarget(twin, snapshot.outcome(), subjectId)) continue;
+				return Optional.of(snapshot);
+			}
 		}
 		return Optional.empty();
 	}
 
-	private TrainingTicketSnapshot safeGetTrainingTicket(String jobId) {
-		if (jobId == null || jobId.isBlank()) return null;
+	private List<TrainingTicketSnapshot> resolveSnapshotsForJob(String jobId) {
+		if (jobId == null || jobId.isBlank()) return List.of();
+		TrainingBatchState batchState = trainingBatchByJobId.get(jobId);
+		if (batchState == null || batchState.tickets().isEmpty()) {
+			TrainingTicketSnapshot single = safeGetTrainingTicket(jobId);
+			if (single == null) return List.of();
+			return List.of(single);
+		}
+		List<TrainingTicketSnapshot> snapshots = new ArrayList<>();
+		for (ChildTrainingTicket ticket : batchState.tickets()) {
+			TrainingTicketSnapshot snapshot = safeGetTrainingTicket(ticket.ticketId());
+			if (snapshot != null) snapshots.add(snapshot);
+		}
+		snapshots.sort(Comparator
+				.comparing(TrainingTicketSnapshot::finishedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+				.thenComparing(TrainingTicketSnapshot::updatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+				.reversed());
+		return List.copyOf(snapshots);
+	}
+
+	private TrainingTicketSnapshot safeGetTrainingTicket(String ticketId) {
+		if (ticketId == null || ticketId.isBlank()) return null;
 		try {
-			return getTrainingTicket(jobId);
+			return getTrainingTicket(ticketId);
 		} catch (RuntimeException ignored) {
 			return null;
 		}
@@ -285,15 +338,18 @@ public class TrainingOperationsDelegate {
 		return "completed".equalsIgnoreCase(snapshot.status().trim());
 	}
 
-	private InferenceEngine finalizeTraining(String userId, String twinId, TrainingTicketSnapshot snapshot) {
+	private InferenceEngine finalizeTraining(String userId, String twinId, List<TrainingCompletedSnapshot> completedSnapshots) {
 		DigitalTwin twin = requireTwin(userId, twinId);
 		InferenceEngine engine = twin.inferenceEngine();
 		if (engine == null) return null;
-		List<InferredVariableResult> inferred = buildInferredVariables(twin, engine, snapshot.outcome());
-		Instant launchedAt = firstNonNull(snapshot.createdAt(), snapshot.startedAt(), engine.launchedAt());
-		Instant finishedAt = firstNonNull(snapshot.finishedAt(), snapshot.updatedAt(), Instant.now());
+		List<TrainingCompletedSnapshot> safeSnapshots = completedSnapshots == null ? List.of() : completedSnapshots.stream()
+																								 .filter(snapshot -> snapshot != null && snapshot.snapshot() != null)
+																								 .toList();
+		List<InferredVariableResult> inferred = buildInferredVariables(twin, engine, safeSnapshots);
+		Instant launchedAt = firstNonNull(earliestCreatedOrStartedAt(safeSnapshots), engine.launchedAt(), Instant.now());
+		Instant finishedAt = firstNonNull(latestFinishedOrUpdatedAt(safeSnapshots), Instant.now());
 		Double trainingDurationSeconds = resolveTrainingDurationSeconds(
-				firstNonNull(snapshot.startedAt(), launchedAt),
+				firstNonNull(earliestStartedAt(safeSnapshots), launchedAt),
 				finishedAt,
 				engine.trainingDurationSeconds()
 		);
@@ -328,367 +384,15 @@ public class TrainingOperationsDelegate {
 				twin.datasets(),
 				twin.ingestionToken()
 		);
-		appendInferencePredictionSample(updatedTwin, snapshot);
+		for (TrainingCompletedSnapshot snapshot : safeSnapshots) {
+			inferenceWriter.appendInferencePredictionSample(updatedTwin, snapshot.snapshot());
+		}
 		twinsByUser.computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>()).put(twin.id(), updatedTwin);
 		return UiCommandFixtures.copyInferenceEngine(trained);
 	}
 
-	private void appendInferencePredictionSample(DigitalTwin twin, TrainingTicketSnapshot snapshot) {
-		appendInferencePredictionSampleForSubject(twin, snapshot, null);
-	}
 
-	private void appendInferencePredictionSampleForSubject(DigitalTwin twin, TrainingTicketSnapshot snapshot, String subjectId) {
-		if (twin == null || snapshot == null) return;
-		String ticketId = snapshot.ticketId();
-		if (ticketId == null || ticketId.isBlank()) return;
-		Optional<InferenceTarget> target = resolveInferenceTarget(twin, snapshot.outcome(), subjectId);
-		if (target.isEmpty()) return;
-		DigitalSubject subject = target.get().subject();
-		Optional<Path> datasetPath = datasetStorage.resolveDatasetPath(twin.id(), subject.id(), subject.name());
-		if (datasetPath.isEmpty()) return;
-		Optional<LatestDatasetRow> latestDatasetRow = readLatestDatasetRow(datasetPath.get());
-		if (latestDatasetRow.isEmpty()) return;
-		LatestSensorValues latestSensorValues = readLatestSensorValues(twin, subject);
-		Instant baseInstant = resolveInferenceBaseInstant(latestDatasetRow.get(), latestSensorValues);
-		Map<String, Double> variables = buildInferenceVariables(snapshot.outcome(), latestDatasetRow.get(), latestSensorValues, baseInstant);
-		if (variables.isEmpty()) return;
-
-		Map<String, Object> request = new LinkedHashMap<>();
-		request.put("training_ticket_id", ticketId.trim());
-		request.put("output_scale", "raw");
-		request.put("instances", List.of(Map.of("variables", variables)));
-		TrainingInferenceResult inferenceResult = requestInferenceWithRetries(request);
-		if (inferenceResult == null || inferenceResult.prediction() == null || !Double.isFinite(inferenceResult.prediction())) {
-			return;
-		}
-		Variable inferredVariable = target.get().variable();
-		Instant predictedInstant = resolvePredictedInstant(baseInstant, subject.timeBucket(), inferredVariable.timeHorizon());
-		datasetStorage.appendMetric(
-				twin.id(),
-				twin.version(),
-				subject.id(),
-				subject.name(),
-				inferredVariable.id(),
-				inferredVariable.name(),
-				DatasetStorage.MetricKind.INFERRED,
-				predictedInstant,
-				inferenceResult.prediction()
-		);
-	}
-
-	private TrainingInferenceResult requestInferenceWithRetries(Map<String, Object> request) {
-		final int maxAttempts = 3;
-		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-			try {
-				return trainingClient.createInference(request);
-			} catch (TrainingApiException exception) {
-				if (!shouldRetryInferenceCall(exception, attempt, maxAttempts)) {
-					return null;
-				}
-				sleepSilently(250L * attempt);
-			} catch (RuntimeException ignored) {
-				return null;
-			}
-		}
-		return null;
-	}
-
-	private static boolean shouldRetryInferenceCall(TrainingApiException exception, int attempt, int maxAttempts) {
-		if (exception == null || attempt >= maxAttempts) return false;
-		int status = exception.statusCode();
-		return status == 404 || status == 409 || status == 429 || status >= 500;
-	}
-
-	private static void sleepSilently(long millis) {
-		if (millis <= 0) return;
-		try {
-			Thread.sleep(millis);
-		} catch (InterruptedException ignored) {
-			Thread.currentThread().interrupt();
-		}
-	}
-
-	private Optional<InferenceTarget> resolveInferenceTarget(DigitalTwin twin, TrainingTicketOutcome outcome) {
-		return resolveInferenceTarget(twin, outcome, null);
-	}
-
-	private Optional<InferenceTarget> resolveInferenceTarget(DigitalTwin twin, TrainingTicketOutcome outcome, String subjectIdFilter) {
-		if (twin == null || outcome == null) return Optional.empty();
-		String outputVariable = outcome.outputVariable();
-		if (outputVariable == null || outputVariable.isBlank()) return Optional.empty();
-		for (DigitalSubject subject : twin.subjects()) {
-			if (subject == null || subject.variables() == null) continue;
-			if (subjectIdFilter != null && !subjectIdFilter.isBlank() && !subjectIdFilter.equals(subject.id()))
-				continue;
-			for (Variable variable : subject.variables()) {
-				if (variable == null || variable.variableType() != VariableType.INFERRED) continue;
-				if (!matchesOutputVariable(variable, outputVariable)) continue;
-				return Optional.of(new InferenceTarget(subject, variable));
-			}
-		}
-		return Optional.empty();
-	}
-
-	private Map<String, Double> buildInferenceVariables(
-			TrainingTicketOutcome outcome,
-			LatestDatasetRow row,
-			LatestSensorValues sensorValues,
-			Instant baseInstant
-	) {
-		if (outcome == null || row == null) return Map.of();
-		List<String> inputVariables = outcome.inputVariables();
-		if (inputVariables == null || inputVariables.isEmpty()) return Map.of();
-		Map<String, String> rowValues = row.values();
-		ZonedDateTime timestamp = (baseInstant == null ? Instant.now() : baseInstant).atZone(ZoneOffset.UTC);
-		Map<String, Double> payload = new LinkedHashMap<>();
-		for (String featureName : inputVariables) {
-			if (featureName == null || featureName.isBlank()) continue;
-			String feature = featureName.trim();
-			Double timeFeature = timeFeatureValue(feature, timestamp);
-			if (timeFeature != null) {
-				payload.put(feature, timeFeature);
-				continue;
-			}
-			int oneHotSeparator = feature.indexOf('=');
-			if (oneHotSeparator > 0) {
-				String column = feature.substring(0, oneHotSeparator);
-				String category = feature.substring(oneHotSeparator + 1);
-				String currentValue = resolveColumnValue(rowValues, column);
-				payload.put(feature, Objects.equals(currentValue == null ? "" : currentValue, category) ? 1.0 : 0.0);
-				continue;
-			}
-			Double numericValue = sensorFeatureValue(sensorValues, feature);
-			if (numericValue == null) {
-				numericValue = parseNumeric(resolveColumnValue(rowValues, feature));
-			}
-			payload.put(feature, numericValue == null ? 0.0 : numericValue);
-		}
-		return payload;
-	}
-
-	private static Instant resolveInferenceBaseInstant(LatestDatasetRow datasetRow, LatestSensorValues sensorValues) {
-		Instant sensorInstant = sensorValues == null ? null : sensorValues.instant();
-		if (sensorInstant != null) return sensorInstant;
-		Instant rowInstant = datasetRow == null ? null : datasetRow.instant();
-		return rowInstant == null ? Instant.now() : rowInstant;
-	}
-
-	private static Instant resolvePredictedInstant(Instant baseInstant, TimeBucket timeBucket, Integer timeHorizon) {
-		Instant safeBase = baseInstant == null ? Instant.now() : baseInstant;
-		if (timeHorizon == null || timeHorizon <= 0 || timeBucket == null) return safeBase;
-		try {
-			ZonedDateTime reference = safeBase.atZone(ZoneOffset.UTC);
-			return switch (timeBucket) {
-				case YEARS -> reference.plusYears(timeHorizon.longValue()).toInstant();
-				case MONTHS -> reference.plusMonths(timeHorizon.longValue()).toInstant();
-				case DAYS -> reference.plusDays(timeHorizon.longValue()).toInstant();
-				case HOURS -> reference.plusHours(timeHorizon.longValue()).toInstant();
-				case MINUTES -> reference.plusMinutes(timeHorizon.longValue()).toInstant();
-				case SECONDS -> reference.plusSeconds(timeHorizon.longValue()).toInstant();
-			};
-		} catch (RuntimeException ignored) {
-			return safeBase;
-		}
-	}
-
-	private LatestSensorValues readLatestSensorValues(DigitalTwin twin, DigitalSubject subject) {
-		if (twin == null || subject == null || subject.variables() == null) return LatestSensorValues.empty();
-		Map<String, Double> valuesByKey = new LinkedHashMap<>();
-		Instant latestInstant = null;
-		for (Variable variable : subject.variables()) {
-			if (variable == null || variable.variableType() != VariableType.SENSOR) continue;
-			DatasetStorage.MetricSeries series = datasetStorage.readMetricSeries(
-					twin.id(),
-					twin.version(),
-					subject.id(),
-					subject.name(),
-					variable.id(),
-					variable.name(),
-					DatasetStorage.MetricKind.SENSORS,
-					1
-			);
-			DatasetStorage.MetricSample latest = series.latest();
-			if (latest == null || latest.value() == null || !Double.isFinite(latest.value())) continue;
-			putSensorFeatureValue(valuesByKey, variable.id(), latest.value());
-			putSensorFeatureValue(valuesByKey, variable.name(), latest.value());
-			if (latest.instant() != null && (latestInstant == null || latest.instant().isAfter(latestInstant))) {
-				latestInstant = latest.instant();
-			}
-		}
-		return new LatestSensorValues(valuesByKey, latestInstant);
-	}
-
-	private static void putSensorFeatureValue(Map<String, Double> valuesByKey, String key, Double value) {
-		if (valuesByKey == null || value == null || !Double.isFinite(value)) return;
-		String normalized = normalizeKey(key);
-		if (normalized == null) return;
-		valuesByKey.put(normalized, value);
-	}
-
-	private static Double sensorFeatureValue(LatestSensorValues sensorValues, String featureName) {
-		if (sensorValues == null || sensorValues.valuesByKey() == null || sensorValues.valuesByKey().isEmpty())
-			return null;
-		String normalized = normalizeKey(featureName);
-		if (normalized == null) return null;
-		return sensorValues.valuesByKey().get(normalized);
-	}
-
-	private static String normalizeKey(String value) {
-		if (value == null) return null;
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed.toLowerCase(Locale.ROOT);
-	}
-
-	private Optional<LatestDatasetRow> readLatestDatasetRow(Path datasetPath) {
-		if (datasetPath == null) return Optional.empty();
-		List<String> lines;
-		try {
-			lines = Files.readAllLines(datasetPath, StandardCharsets.UTF_8);
-		} catch (IOException ignored) {
-			return Optional.empty();
-		}
-		if (lines.size() < 2) return Optional.empty();
-		char delimiter = detectDelimiter(datasetPath, lines);
-		List<String> headers = parseDelimitedLine(lines.get(0), delimiter);
-		if (headers.isEmpty()) return Optional.empty();
-
-		Map<String, String> bestRow = null;
-		Instant bestInstant = null;
-		for (int i = 1; i < lines.size(); i++) {
-			String line = lines.get(i);
-			if (line == null || line.isBlank()) continue;
-			List<String> cells = parseDelimitedLine(line, delimiter);
-			Map<String, String> row = new LinkedHashMap<>();
-			for (int col = 0; col < headers.size(); col++) {
-				String header = headers.get(col);
-				if (header == null || header.isBlank()) continue;
-				String value = col < cells.size() ? cells.get(col) : "";
-				row.put(header.trim(), value == null ? "" : value.trim());
-			}
-			Instant rowInstant = parseInstantLike(resolveColumnValue(row, "instant"));
-			if (rowInstant != null) {
-				if (bestInstant == null || rowInstant.isAfter(bestInstant)) {
-					bestInstant = rowInstant;
-					bestRow = row;
-				}
-				continue;
-			}
-			if (bestInstant == null) {
-				bestRow = row;
-			}
-		}
-		if (bestRow == null) return Optional.empty();
-		return Optional.of(new LatestDatasetRow(bestInstant == null ? Instant.now() : bestInstant, Map.copyOf(bestRow)));
-	}
-
-	private static char detectDelimiter(Path datasetPath, List<String> lines) {
-		String fileName = datasetPath.getFileName() == null ? "" : datasetPath.getFileName().toString().toLowerCase(Locale.ROOT);
-		if (fileName.endsWith(".tsv")) return '\t';
-		for (String line : lines) {
-			if (line == null || line.isBlank()) continue;
-			if (line.contains("\t")) return '\t';
-			if (line.contains(";")) return ';';
-			break;
-		}
-		return ',';
-	}
-
-	private static List<String> parseDelimitedLine(String line, char delimiter) {
-		if (line == null) return List.of();
-		List<String> values = new ArrayList<>();
-		StringBuilder current = new StringBuilder();
-		boolean inQuotes = false;
-		for (int i = 0; i < line.length(); i++) {
-			char c = line.charAt(i);
-			if (c == '"') {
-				if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
-					current.append('"');
-					i++;
-				} else {
-					inQuotes = !inQuotes;
-				}
-				continue;
-			}
-			if (c == delimiter && !inQuotes) {
-				values.add(current.toString().trim());
-				current.setLength(0);
-				continue;
-			}
-			current.append(c);
-		}
-		values.add(current.toString().trim());
-		return values;
-	}
-
-	private static Instant parseInstantLike(String rawValue) {
-		if (rawValue == null || rawValue.isBlank()) return null;
-		String candidate = rawValue.trim();
-		try {
-			return Instant.parse(candidate);
-		} catch (Exception ignored) {
-		}
-		try {
-			return ZonedDateTime.parse(candidate).toInstant();
-		} catch (Exception ignored) {
-		}
-		try {
-			return LocalDateTime.parse(candidate).atZone(ZoneOffset.UTC).toInstant();
-		} catch (Exception ignored) {
-			return null;
-		}
-	}
-
-	private static String resolveColumnValue(Map<String, String> rowValues, String key) {
-		if (rowValues == null || rowValues.isEmpty() || key == null || key.isBlank()) return null;
-		if (rowValues.containsKey(key)) return rowValues.get(key);
-		for (Map.Entry<String, String> entry : rowValues.entrySet()) {
-			if (entry.getKey() == null) continue;
-			if (entry.getKey().trim().equalsIgnoreCase(key.trim())) return entry.getValue();
-		}
-		return null;
-	}
-
-	private static Double parseNumeric(String rawValue) {
-		if (rawValue == null || rawValue.isBlank()) return null;
-		try {
-			double parsed = Double.parseDouble(rawValue.trim());
-			return Double.isFinite(parsed) ? parsed : null;
-		} catch (Exception ignored) {
-			return null;
-		}
-	}
-
-	private static Double timeFeatureValue(String featureName, ZonedDateTime timestamp) {
-		if (featureName == null || timestamp == null) return null;
-		double monthIndex = timestamp.getMonthValue() - 1.0;
-		double dayIndex = timestamp.getDayOfMonth() - 1.0;
-		double hourIndex = timestamp.getHour();
-		double quarterIndex = (timestamp.getMonthValue() - 1) / 3.0;
-		double weekIndex = timestamp.get(WeekFields.ISO.weekOfWeekBasedYear()) - 1.0;
-		return switch (featureName) {
-			case "month_sin" -> sinComponent(monthIndex, 12.0);
-			case "month_cos" -> cosComponent(monthIndex, 12.0);
-			case "day_sin" -> sinComponent(dayIndex, 31.0);
-			case "day_cos" -> cosComponent(dayIndex, 31.0);
-			case "hour_sin" -> sinComponent(hourIndex, 24.0);
-			case "hour_cos" -> cosComponent(hourIndex, 24.0);
-			case "week_sin" -> sinComponent(weekIndex, 53.0);
-			case "week_cos" -> cosComponent(weekIndex, 53.0);
-			case "quarter_sin" -> sinComponent(quarterIndex, 4.0);
-			case "quarter_cos" -> cosComponent(quarterIndex, 4.0);
-			default -> null;
-		};
-	}
-
-	private static double sinComponent(double value, double period) {
-		return Math.sin((2.0 * Math.PI * value) / period);
-	}
-
-	private static double cosComponent(double value, double period) {
-		return Math.cos((2.0 * Math.PI * value) / period);
-	}
-
-	private TrainingLaunchContext resolveLaunchContext(DigitalTwin twin) {
+	private List<TrainingLaunchContext> resolveLaunchContexts(DigitalTwin twin) {
 		List<SubjectDataset> uploadedDatasets = twin.datasets().stream()
 				.filter(dataset -> dataset != null && dataset.subjectId() != null && !dataset.subjectId().isBlank())
 				.filter(dataset -> dataset.uploadedRecords() != null && dataset.uploadedRecords() > 0)
@@ -705,14 +409,14 @@ public class TrainingOperationsDelegate {
 		boolean missingInferredVariable = false;
 		boolean missingStoredFile = false;
 		boolean missingSubjectResolution = false;
+		List<TrainingLaunchContext> launchContexts = new ArrayList<>();
 		for (SubjectDataset dataset : uploadedDatasets) {
 			DigitalSubject subject = subjectsById.get(dataset.subjectId());
 			if (subject == null) continue;
-			Variable output = subject.variables().stream()
+			List<Variable> inferredOutputs = subject.variables().stream()
 					.filter(variable -> variable != null && variable.variableType() == VariableType.INFERRED)
-					.findFirst()
-					.orElse(null);
-			if (output == null) {
+					.toList();
+			if (inferredOutputs.isEmpty()) {
 				missingInferredVariable = true;
 				continue;
 			}
@@ -726,43 +430,49 @@ public class TrainingOperationsDelegate {
 				missingSubjectResolution = true;
 				continue;
 			}
-			String outputColumn = columnName(output);
-			List<String> numericalInputs = new ArrayList<>();
-			List<String> categoricalInputs = new ArrayList<>();
-			for (Variable variable : subject.variables()) {
-				if (variable == null || variable.variableType() != VariableType.SENSOR) continue;
-				String candidateColumn = columnName(variable);
-				if (candidateColumn.equalsIgnoreCase(outputColumn)) continue;
-				if (variable.dataType() == VariableDataType.CATEGORICAL) {
-					categoricalInputs.add(candidateColumn);
-				} else {
-					numericalInputs.add(candidateColumn);
+			List<Variable> sensors = subject.variables().stream()
+					.filter(variable -> variable != null && variable.variableType() == VariableType.SENSOR)
+					.toList();
+			for (Variable output : inferredOutputs) {
+				String outputColumn = columnName(output);
+				List<String> numericalInputs = new ArrayList<>();
+				List<String> categoricalInputs = new ArrayList<>();
+				for (Variable sensor : sensors) {
+					String candidateColumn = columnName(sensor);
+					if (candidateColumn.equalsIgnoreCase(outputColumn)) continue;
+					if (sensor.dataType() == VariableDataType.CATEGORICAL) {
+						categoricalInputs.add(candidateColumn);
+					} else {
+						numericalInputs.add(candidateColumn);
+					}
 				}
+				int resolvedTimeHorizon = positiveOrDefault(output.timeHorizon(), 1);
+				Integer predictionTimeHorizon = output.timeHorizon();
+				int resolvedLookback = nonNegativeOrDefault(
+						output.lookback(),
+						nonNegativeOrDefault(twin.inferenceEngine() == null ? null : twin.inferenceEngine().windowSize(), DEFAULT_WINDOW_SIZE)
+				);
+				Path preparedDatasetPath = trainingDatasetPreparer.prepareSubjectTrainingDataset(
+						twin.id(),
+						twin.version(),
+						subject,
+						outputColumn,
+						mergeInputColumns(numericalInputs, categoricalInputs),
+						datasetPath.get(),
+						timeBucket
+				);
+				launchContexts.add(new TrainingLaunchContext(
+						subject,
+						outputColumn,
+						preparedDatasetPath,
+						numericalInputs,
+						categoricalInputs,
+						timeBucket,
+						resolvedTimeHorizon,
+						predictionTimeHorizon,
+						resolvedLookback
+				));
 			}
-			int resolvedTimeHorizon = positiveOrDefault(output.timeHorizon(), 1);
-			int resolvedLookback = nonNegativeOrDefault(
-					output.lookback(),
-					nonNegativeOrDefault(twin.inferenceEngine() == null ? null : twin.inferenceEngine().windowSize(), DEFAULT_WINDOW_SIZE)
-			);
-			Path preparedDatasetPath = trainingDatasetPreparer.prepareSubjectTrainingDataset(
-					twin.id(),
-					twin.version(),
-					subject,
-					outputColumn,
-					mergeInputColumns(numericalInputs, categoricalInputs),
-					datasetPath.get(),
-					timeBucket
-			);
-			return new TrainingLaunchContext(
-					subject,
-					outputColumn,
-					preparedDatasetPath,
-					numericalInputs,
-					categoricalInputs,
-					timeBucket,
-					resolvedTimeHorizon,
-					resolvedLookback
-			);
 		}
 		if (missingStoredFile) {
 			throw new UiCommandException(
@@ -785,7 +495,10 @@ public class TrainingOperationsDelegate {
 					"At least one inferred variable is required in a subject with uploaded dataset"
 			);
 		}
-		throw new UiCommandException(422, "PRECONDITION_FAILED", "No valid dataset was found for training");
+		if (launchContexts.isEmpty()) {
+			throw new UiCommandException(422, "PRECONDITION_FAILED", "No valid dataset was found for training");
+		}
+		return List.copyOf(launchContexts);
 	}
 
 	private Map<String, Object> buildTrainingRequest(String userId, DigitalTwin twin, TrainingLaunchContext launchContext) {
@@ -815,12 +528,12 @@ public class TrainingOperationsDelegate {
 		architecture.put("seed", 42);
 
 		Map<String, Object> request = new LinkedHashMap<>();
-		request.put("job_name", "twin-" + twin.id() + "-v" + sanitizeVersion(twin.version()));
+		request.put("job_name", trainingJobName(twin, launchContext));
 		request.put("created_by", userId);
 		request.put("data_source", dataSource);
 		request.put("target_variable", launchContext.outputVariable());
 		request.put("lookback", launchContext.lookback());
-		request.put("time_horizon", Map.of("value", launchContext.timeHorizon(), "unit", "steps"));
+		request.put("time_horizon", Map.of("value", launchContext.requestTimeHorizon(), "unit", "steps"));
 		request.put("split", Map.of("train_ratio", 0.64, "val_ratio", 0.16, "test_ratio", 0.20));
 		request.put("architecture", architecture);
 		return request;
@@ -861,6 +574,296 @@ public class TrainingOperationsDelegate {
 		return new UiCommandException(status, "TRAINING_API_ERROR", message + ": " + error.getMessage(), details);
 	}
 
+	private TrainingJob pollSingleTicketJob(String userId, String twinId, TrainingJob current, String ticketId) {
+		TrainingTicketSnapshot snapshot = getTrainingTicket(ticketId);
+		TrainingJobStatus nextStatus = jobLifecycle.mapExternalStatus(snapshot.status(), current);
+		if (nextStatus == TrainingJobStatus.TRAINING && snapshot.outcome() != null) {
+			nextStatus = TrainingJobStatus.EVALUATING;
+		}
+		Integer nextProgress = jobLifecycle.resolveProgress(nextStatus, current.progress(), snapshot);
+		Instant startedAt = jobLifecycle.selectStartedAt(current, snapshot, nextStatus);
+		Instant completedAt = jobLifecycle.isTerminal(nextStatus) ? jobLifecycle.selectCompletedAt(current, snapshot) : null;
+		String errorMessage = nextStatus == TrainingJobStatus.FAILED
+				? nonBlank(snapshot.errorMessage()).orElse("Training failed")
+				: null;
+
+		InferenceEngine result = current.result();
+		if (nextStatus == TrainingJobStatus.DONE) {
+			result = finalizeTraining(userId, twinId, List.of(new TrainingCompletedSnapshot(snapshot, null)));
+		}
+
+		TrainingJob updated = new TrainingJob(
+				current.jobId(),
+				current.twinId(),
+				nextStatus,
+				nextProgress,
+				jobLifecycle.phaseForSnapshot(nextStatus, snapshot),
+				current.createdAt(),
+				startedAt,
+				completedAt,
+				errorMessage,
+				result
+		);
+		trainingJobs.put(updated.jobId(), updated);
+		persistAction.run();
+		return updated;
+	}
+
+	private String resolveRootJobId(List<ChildTrainingTicket> childTickets) {
+		if (childTickets == null || childTickets.isEmpty()) {
+			throw new UiCommandException(502, "TRAINING_API_ERROR", "Training API did not return any training tickets");
+		}
+		return childTickets.get(0).ticketId();
+	}
+
+	private List<ChildTicketPollResult> pollChildTickets(TrainingBatchState batchState, TrainingJob current) {
+		List<ChildTicketPollResult> results = new ArrayList<>();
+		for (ChildTrainingTicket ticket : batchState.tickets()) {
+			TrainingTicketSnapshot snapshot = getTrainingTicket(ticket.ticketId());
+			TrainingJobStatus status = jobLifecycle.mapExternalStatus(snapshot.status(), current);
+			if (status == TrainingJobStatus.TRAINING && snapshot.outcome() != null) {
+				status = TrainingJobStatus.EVALUATING;
+			}
+			Integer progress = jobLifecycle.resolveProgress(status, null, snapshot);
+			results.add(new ChildTicketPollResult(ticket, snapshot, status, progress));
+		}
+		return List.copyOf(results);
+	}
+
+	private static TrainingJobStatus aggregateStatus(List<TrainingJobStatus> childStatuses, boolean anyOutcomeAvailable) {
+		if (childStatuses == null || childStatuses.isEmpty()) return TrainingJobStatus.QUEUED;
+		if (childStatuses.stream().anyMatch(status -> status == TrainingJobStatus.FAILED))
+			return TrainingJobStatus.FAILED;
+		boolean allDone = childStatuses.stream().allMatch(status -> status == TrainingJobStatus.DONE);
+		if (allDone) return TrainingJobStatus.DONE;
+		if (childStatuses.stream().anyMatch(status -> status == TrainingJobStatus.EVALUATING))
+			return TrainingJobStatus.EVALUATING;
+		if (childStatuses.stream().anyMatch(status -> status == TrainingJobStatus.TRAINING)) {
+			return anyOutcomeAvailable ? TrainingJobStatus.EVALUATING : TrainingJobStatus.TRAINING;
+		}
+		if (childStatuses.stream().anyMatch(status -> status == TrainingJobStatus.PREPARING))
+			return TrainingJobStatus.PREPARING;
+		return TrainingJobStatus.QUEUED;
+	}
+
+	private int aggregateProgress(
+			List<TrainingJobStatus> childStatuses,
+			List<ChildTicketPollResult> childResults,
+			Integer currentProgress
+	) {
+		int current = currentProgress == null ? 0 : currentProgress;
+		if (childStatuses == null || childStatuses.isEmpty()) {
+			return clamp(Math.max(current, 0), 0, 100);
+		}
+		TrainingJobStatus aggregateStatus = aggregateStatus(childStatuses, childResults != null && childResults.stream().anyMatch(result -> result.snapshot() != null && result.snapshot().outcome() != null));
+		if (aggregateStatus == TrainingJobStatus.DONE) return 100;
+
+		double average;
+		if (childResults == null || childResults.isEmpty()) {
+			average = childStatuses.stream()
+					.mapToInt(status -> jobLifecycle.resolveProgress(status, null, null))
+					.average()
+					.orElse(0.0);
+		} else {
+			average = childResults.stream()
+					.map(ChildTicketPollResult::progress)
+					.filter(Objects::nonNull)
+					.mapToInt(Integer::intValue)
+					.average()
+					.orElse(0.0);
+		}
+		int rounded = (int) Math.round(average);
+		if (aggregateStatus == TrainingJobStatus.FAILED) {
+			return clamp(Math.max(current, rounded), 0, 100);
+		}
+		return clamp(Math.max(current, rounded), 0, 99);
+	}
+
+	private static Instant resolveAggregateStartedAt(
+			TrainingJob current,
+			List<ChildTicketPollResult> childResults,
+			TrainingJobStatus nextStatus
+	) {
+		Instant earliest = null;
+		if (childResults != null) {
+			for (ChildTicketPollResult result : childResults) {
+				TrainingTicketSnapshot snapshot = result.snapshot();
+				if (snapshot == null || snapshot.startedAt() == null) continue;
+				if (earliest == null || snapshot.startedAt().isBefore(earliest)) {
+					earliest = snapshot.startedAt();
+				}
+			}
+		}
+		if (earliest != null) return earliest;
+		if (current != null && current.startedAt() != null) return current.startedAt();
+		if (nextStatus == TrainingJobStatus.TRAINING
+				|| nextStatus == TrainingJobStatus.EVALUATING
+				|| nextStatus == TrainingJobStatus.DONE
+				|| nextStatus == TrainingJobStatus.FAILED) {
+			return Instant.now();
+		}
+		return null;
+	}
+
+	private static Instant resolveAggregateCompletedAt(TrainingJob current, List<ChildTicketPollResult> childResults) {
+		Instant latest = null;
+		if (childResults != null) {
+			for (ChildTicketPollResult result : childResults) {
+				TrainingTicketSnapshot snapshot = result.snapshot();
+				if (snapshot == null) continue;
+				Instant candidate = firstNonNull(snapshot.finishedAt(), snapshot.updatedAt());
+				if (candidate == null) continue;
+				if (latest == null || candidate.isAfter(latest)) {
+					latest = candidate;
+				}
+			}
+		}
+		if (latest != null) return latest;
+		if (current != null && current.completedAt() != null) return current.completedAt();
+		return Instant.now();
+	}
+
+	private static String aggregateErrorMessage(List<ChildTicketPollResult> childResults) {
+		if (childResults == null || childResults.isEmpty()) return "Training failed";
+		for (ChildTicketPollResult result : childResults) {
+			if (result.status() != TrainingJobStatus.FAILED) continue;
+			String message = result.snapshot() == null ? null : result.snapshot().errorMessage();
+			if (message == null || message.isBlank()) continue;
+			return "Ticket " + result.ticket().ticketId() + " failed: " + message.trim();
+		}
+		return "Training failed for one or more inference models";
+	}
+
+	private String phaseForAggregateStatus(TrainingJobStatus status, int totalTickets, int completedTickets) {
+		int total = Math.max(1, totalTickets);
+		int completed = Math.max(0, Math.min(completedTickets, total));
+		if (total == 1) return jobLifecycle.phaseForStatus(status);
+		return switch (status) {
+			case QUEUED -> "Queued (" + total + " models)";
+			case PREPARING -> "Preparing " + total + " models...";
+			case TRAINING -> "Training models (" + completed + "/" + total + ")...";
+			case EVALUATING -> "Evaluating models (" + completed + "/" + total + ")...";
+			case DONE -> "Training complete";
+			case FAILED -> "Training failed";
+		};
+	}
+
+	private static Instant earliestCreatedOrStartedAt(List<TrainingCompletedSnapshot> snapshots) {
+		if (snapshots == null || snapshots.isEmpty()) return null;
+		Instant earliest = null;
+		for (TrainingCompletedSnapshot snapshot : snapshots) {
+			if (snapshot == null || snapshot.snapshot() == null) continue;
+			Instant candidate = firstNonNull(snapshot.snapshot().createdAt(), snapshot.snapshot().startedAt());
+			if (candidate == null) continue;
+			if (earliest == null || candidate.isBefore(earliest)) {
+				earliest = candidate;
+			}
+		}
+		return earliest;
+	}
+
+	private static Instant earliestStartedAt(List<TrainingCompletedSnapshot> snapshots) {
+		if (snapshots == null || snapshots.isEmpty()) return null;
+		Instant earliest = null;
+		for (TrainingCompletedSnapshot snapshot : snapshots) {
+			if (snapshot == null || snapshot.snapshot() == null || snapshot.snapshot().startedAt() == null) continue;
+			Instant candidate = snapshot.snapshot().startedAt();
+			if (earliest == null || candidate.isBefore(earliest)) {
+				earliest = candidate;
+			}
+		}
+		return earliest;
+	}
+
+	private static Instant latestFinishedOrUpdatedAt(List<TrainingCompletedSnapshot> snapshots) {
+		if (snapshots == null || snapshots.isEmpty()) return null;
+		Instant latest = null;
+		for (TrainingCompletedSnapshot snapshot : snapshots) {
+			if (snapshot == null || snapshot.snapshot() == null) continue;
+			Instant candidate = firstNonNull(snapshot.snapshot().finishedAt(), snapshot.snapshot().updatedAt());
+			if (candidate == null) continue;
+			if (latest == null || candidate.isAfter(latest)) {
+				latest = candidate;
+			}
+		}
+		return latest;
+	}
+
+	private static String inferredVariableKey(Variable variable) {
+		if (variable == null) return "inferred";
+		String byId = normalizeKey(trimToNull(variable.id()));
+		if (byId != null) return byId;
+		return inferredOutcomeKey(columnName(variable), variable.timeHorizon());
+	}
+
+	private static String inferredOutcomeKey(String outputVariable, Integer predictionHorizon) {
+		String normalizedOutput = normalizeKey(trimToNull(outputVariable));
+		if (normalizedOutput == null) normalizedOutput = "inferred";
+		if (predictionHorizon != null && predictionHorizon > 0) {
+			return normalizedOutput + "__t_plus_" + predictionHorizon;
+		}
+		return normalizedOutput + "__inferred";
+	}
+
+	private static String normalizeKey(String value) {
+		if (value == null) return null;
+		String trimmed = value.trim();
+		if (trimmed.isEmpty()) return null;
+		return trimmed.toLowerCase(Locale.ROOT);
+	}
+
+	private static String trimToNull(String value) {
+		if (value == null) return null;
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	private Variable resolveMatchedInferenceVariable(DigitalTwin twin, TrainingCompletedSnapshot completed) {
+		if (twin == null || completed == null || completed.snapshot() == null || completed.snapshot().outcome() == null)
+			return null;
+		TrainingTicketOutcome outcome = completed.snapshot().outcome();
+		String outputVariable = trimToNull(outcome.outputVariable());
+		if (outputVariable == null) return null;
+		TrainingLaunchContext context = completed.launchContext();
+		List<VariableCandidate> candidates = new ArrayList<>();
+		for (DigitalSubject subject : twin.subjects()) {
+			if (subject == null || subject.variables() == null) continue;
+			if (context != null && context.subject() != null && context.subject().id() != null
+					&& subject.id() != null && !context.subject().id().equalsIgnoreCase(subject.id())) {
+				continue;
+			}
+			for (Variable variable : subject.variables()) {
+				if (variable == null || variable.variableType() != VariableType.INFERRED) continue;
+				if (!matchesOutputVariable(variable, outputVariable)) continue;
+				candidates.add(new VariableCandidate(subject, variable));
+			}
+		}
+		if (candidates.isEmpty()) return null;
+		if (context == null || context.predictionTimeHorizon() == null) {
+			return candidates.get(0).variable();
+		}
+		for (VariableCandidate candidate : candidates) {
+			if (Objects.equals(candidate.variable().timeHorizon(), context.predictionTimeHorizon())) {
+				return candidate.variable();
+			}
+		}
+		return candidates.get(0).variable();
+	}
+
+	private String trainingJobName(DigitalTwin twin, TrainingLaunchContext launchContext) {
+		String base = "twin-" + sanitizeToken(twin == null ? null : twin.id()) + "-v" + sanitizeVersion(twin == null ? null : twin.version());
+		if (launchContext == null) return base;
+		String subjectToken = sanitizeToken(launchContext.subject() == null ? null : launchContext.subject().id());
+		String outputToken = sanitizeToken(launchContext.outputVariable());
+		Integer horizon = firstNonNull(launchContext.predictionTimeHorizon(), launchContext.requestTimeHorizon(), 1);
+		return base + "-" + subjectToken + "-" + outputToken + "-h" + Math.max(1, horizon);
+	}
+
+	private static String sanitizeToken(String value) {
+		String normalized = value == null ? "" : value.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
+		return normalized.isBlank() ? "item" : normalized;
+	}
+
 	private TrainingJob requireTrainingJob(String userId, String twinId, String jobId) {
 		TrainingJob current = trainingJobs.get(jobId);
 		String ownerId = trainingJobOwnerById.get(jobId);
@@ -873,13 +876,48 @@ public class TrainingOperationsDelegate {
 	private List<InferredVariableResult> buildInferredVariables(
 			DigitalTwin twin,
 			InferenceEngine currentEngine,
-			TrainingTicketOutcome outcome
+			List<TrainingCompletedSnapshot> completedSnapshots
 	) {
-		if (outcome != null && outcome.outputVariable() != null && !outcome.outputVariable().isBlank()) {
-			VariableDataType outputType = resolveOutcomeDataType(twin, outcome);
+		Map<String, Variable> inferredVariablesByKey = new LinkedHashMap<>();
+		for (DigitalSubject subject : twin.subjects()) {
+			if (subject == null || subject.variables() == null) continue;
+			for (Variable variable : subject.variables()) {
+				if (variable == null || variable.variableType() != VariableType.INFERRED) continue;
+				inferredVariablesByKey.put(inferredVariableKey(variable), variable);
+			}
+		}
+
+		Map<String, InferredVariableResult> resultsByKey = new LinkedHashMap<>();
+		inferredVariablesByKey.forEach((key, variable) -> resultsByKey.put(
+				key,
+				new InferredVariableResult(
+						columnName(variable),
+						null,
+						null,
+						null,
+						null,
+						variable.dataType(),
+						null,
+						null,
+						null,
+						Map.of()
+				)
+		));
+
+		List<TrainingCompletedSnapshot> safeSnapshots = completedSnapshots == null ? List.of() : completedSnapshots.stream()
+																								 .filter(item -> item != null && item.snapshot() != null && item.snapshot().outcome() != null)
+																								 .toList();
+		for (TrainingCompletedSnapshot completed : safeSnapshots) {
+			TrainingTicketOutcome outcome = completed.snapshot().outcome();
+			Variable matched = resolveMatchedInferenceVariable(twin, completed);
+			VariableDataType outputType = matched == null ? resolveOutcomeDataType(twin, outcome) : matched.dataType();
 			boolean isCategorical = outputType == VariableDataType.CATEGORICAL;
-			return List.of(new InferredVariableResult(
-					outcome.outputVariable(),
+			String key = matched == null
+					? inferredOutcomeKey(outcome.outputVariable(), completed.launchContext() == null ? null : completed.launchContext().predictionTimeHorizon())
+					: inferredVariableKey(matched);
+			String displayName = matched == null ? outcome.outputVariable() : columnName(matched);
+			resultsByKey.put(key, new InferredVariableResult(
+					displayName,
 					roundNullable(outcome.maeRaw(), 4),
 					roundNullable(outcome.r2(), 4),
 					outcome.testSamples(),
@@ -891,125 +929,16 @@ public class TrainingOperationsDelegate {
 					constraintViolationPercentages(outcome.constraintViolationRates())
 			));
 		}
-		if (currentEngine.inferredVariables() != null && !currentEngine.inferredVariables().isEmpty()) {
+
+		if (!resultsByKey.isEmpty()) {
+			return List.copyOf(resultsByKey.values());
+		}
+		if (currentEngine != null && currentEngine.inferredVariables() != null && !currentEngine.inferredVariables().isEmpty()) {
 			return currentEngine.inferredVariables();
 		}
-		return twin.subjects().stream()
-				.flatMap(subject -> subject.variables().stream())
-				.filter(variable -> variable.variableType() == VariableType.INFERRED)
-				.map(variable -> new InferredVariableResult(
-						columnName(variable),
-						null,
-						null,
-						null,
-						null,
-						variable.dataType(),
-						null,
-						null,
-						null,
-						Map.of()
-				))
-				.toList();
+		return List.of();
 	}
 
-	private TrainingJobStatus mapExternalStatus(String externalStatus, TrainingJob current) {
-		if (externalStatus == null || externalStatus.isBlank()) {
-			return current == null || current.status() == null ? TrainingJobStatus.QUEUED : current.status();
-		}
-		String normalized = externalStatus.trim().toLowerCase(Locale.ROOT);
-		return switch (normalized) {
-			case "queued" -> current == null ? TrainingJobStatus.QUEUED : TrainingJobStatus.PREPARING;
-			case "running" -> current != null && current.status() == TrainingJobStatus.PREPARING
-					? TrainingJobStatus.TRAINING
-					: current != null && current.status() == TrainingJobStatus.QUEUED
-					? TrainingJobStatus.PREPARING
-					: TrainingJobStatus.TRAINING;
-			case "completed" -> TrainingJobStatus.DONE;
-			case "failed" -> TrainingJobStatus.FAILED;
-			default -> current == null || current.status() == null ? TrainingJobStatus.QUEUED : current.status();
-		};
-	}
-
-	private Integer resolveProgress(TrainingJobStatus status, Integer currentProgress, TrainingTicketSnapshot snapshot) {
-		int current = currentProgress == null ? 0 : currentProgress;
-		Integer epochsProgress = progressFromEpochs(snapshot);
-		return switch (status) {
-			case DONE -> 100;
-			case FAILED -> epochsProgress != null ? clamp(epochsProgress, 0, 100) : (current > 0 ? current : 100);
-			case QUEUED -> Math.max(current, 5);
-			case PREPARING -> clamp(Math.max(current + 8, 15), 10, 35);
-			case TRAINING -> epochsProgress == null
-					? clamp(Math.max(current + 12, 40), 35, 92)
-					: clamp(Math.max(epochsProgress, current), 0, 99);
-			case EVALUATING -> epochsProgress == null
-					? clamp(Math.max(current + 6, 93), 90, 98)
-					: clamp(Math.max(epochsProgress, 95), 90, 99);
-		};
-	}
-
-	private String phaseForSnapshot(TrainingJobStatus status, TrainingTicketSnapshot snapshot) {
-		if (status == TrainingJobStatus.FAILED) return "Training failed";
-		Optional<String> epochLabel = epochLabel(snapshot);
-		if (status == TrainingJobStatus.TRAINING && epochLabel.isPresent()) {
-			return "Training epoch " + epochLabel.get() + "…";
-		}
-		if (status == TrainingJobStatus.EVALUATING && epochLabel.isPresent()) {
-			return "Evaluating model… (" + epochLabel.get() + ")";
-		}
-		return phaseForStatus(status);
-	}
-
-	private Integer progressFromEpochs(TrainingTicketSnapshot snapshot) {
-		if (snapshot == null) return null;
-		if (snapshot.progressPercent() != null && Double.isFinite(snapshot.progressPercent())) {
-			return (int) Math.round(snapshot.progressPercent());
-		}
-		Integer completed = snapshot.epochsCompleted();
-		Integer total = snapshot.epochsTotal();
-		if (completed == null || total == null || total <= 0) return null;
-		return (int) Math.round((completed * 100.0) / total);
-	}
-
-	private Optional<String> epochLabel(TrainingTicketSnapshot snapshot) {
-		if (snapshot == null) return Optional.empty();
-		Integer completed = snapshot.epochsCompleted();
-		Integer total = snapshot.epochsTotal();
-		if (completed == null || total == null || total <= 0) return Optional.empty();
-		return Optional.of(clamp(completed, 0, total) + "/" + total);
-	}
-
-	private String phaseForStatus(TrainingJobStatus status) {
-		return switch (status) {
-			case QUEUED -> "Queued";
-			case PREPARING -> "Preparing dataset…";
-			case TRAINING -> "Training in progress…";
-			case EVALUATING -> "Evaluating model…";
-			case DONE -> "Training complete";
-			case FAILED -> "Training failed";
-		};
-	}
-
-	private Instant selectStartedAt(TrainingJob current, TrainingTicketSnapshot snapshot, TrainingJobStatus nextStatus) {
-		if (snapshot.startedAt() != null) return snapshot.startedAt();
-		if (current.startedAt() != null) return current.startedAt();
-		if (nextStatus == TrainingJobStatus.TRAINING
-				|| nextStatus == TrainingJobStatus.EVALUATING
-				|| nextStatus == TrainingJobStatus.DONE
-				|| nextStatus == TrainingJobStatus.FAILED) {
-			return Instant.now();
-		}
-		return null;
-	}
-
-	private Instant selectCompletedAt(TrainingJob current, TrainingTicketSnapshot snapshot) {
-		if (snapshot.finishedAt() != null) return snapshot.finishedAt();
-		if (current.completedAt() != null) return current.completedAt();
-		return Instant.now();
-	}
-
-	private static boolean isTerminal(TrainingJobStatus status) {
-		return status == TrainingJobStatus.DONE || status == TrainingJobStatus.FAILED;
-	}
 
 	private static String normalizeTicketId(String rawTicketId) {
 		if (rawTicketId == null || rawTicketId.isBlank()) {
@@ -1168,36 +1097,43 @@ public class TrainingOperationsDelegate {
 			List<String> numericalInputColumns,
 			List<String> categoricalInputColumns,
 			TimeBucket timeBucket,
-			Integer timeHorizon,
+			Integer requestTimeHorizon,
+			Integer predictionTimeHorizon,
 			Integer lookback
 	) {
 	}
 
-	private record InferenceTarget(
+	private record TrainingBatchState(List<ChildTrainingTicket> tickets) {
+		private TrainingBatchState {
+			tickets = tickets == null ? List.of() : List.copyOf(tickets);
+		}
+	}
+
+	private record ChildTrainingTicket(
+			String ticketId,
+			TrainingLaunchContext launchContext,
+			Instant createdAt
+	) {
+	}
+
+	private record ChildTicketPollResult(
+			ChildTrainingTicket ticket,
+			TrainingTicketSnapshot snapshot,
+			TrainingJobStatus status,
+			Integer progress
+	) {
+	}
+
+	private record TrainingCompletedSnapshot(
+			TrainingTicketSnapshot snapshot,
+			TrainingLaunchContext launchContext
+	) {
+	}
+
+	private record VariableCandidate(
 			DigitalSubject subject,
 			Variable variable
 	) {
 	}
 
-	private record LatestDatasetRow(
-			Instant instant,
-			Map<String, String> values
-	) {
-		public LatestDatasetRow {
-			values = values == null ? Map.of() : Map.copyOf(values);
-		}
-	}
-
-	private record LatestSensorValues(
-			Map<String, Double> valuesByKey,
-			Instant instant
-	) {
-		public LatestSensorValues {
-			valuesByKey = valuesByKey == null ? Map.of() : Map.copyOf(valuesByKey);
-		}
-
-		private static LatestSensorValues empty() {
-			return new LatestSensorValues(Map.of(), null);
-		}
-	}
 }

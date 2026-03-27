@@ -16,6 +16,7 @@
 	</properties>
 
 	<build>
+		<finalName>picota</finalName>
 		<sourceDirectory>src</sourceDirectory>
 		<testSourceDirectory>test</testSourceDirectory>
 		<outputDirectory>../out/production/backend</outputDirectory>
