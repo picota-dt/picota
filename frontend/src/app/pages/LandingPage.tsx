@@ -1,5 +1,5 @@
 import {useNavigate} from "react-router";
-import {Activity, ArrowRight, ChevronRight, Layers, ShieldCheck, Zap} from "lucide-react";
+import {Activity, ArrowRight, Layers, ShieldCheck, Zap} from "lucide-react";
 
 const FEATURES = [
     {
@@ -51,7 +51,7 @@ export default function LandingPage() {
                             onClick={() => navigate("/login")}
                             className="text-white/50 hover:text-white text-sm transition-colors"
                         >
-                            Continue with Google
+                            Sign in
                         </button>
                         <button
                             onClick={() => navigate("/login")}
@@ -99,15 +99,8 @@ export default function LandingPage() {
                             className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-white px-6 py-3 rounded-xl transition-all shadow-xl shadow-cyan-500/25"
                             style={{fontWeight: 600}}
                         >
-                            Continue with Google
+                            Start for free
                             <ArrowRight className="w-4 h-4"/>
-                        </button>
-                        <button
-                            onClick={() => navigate("/login")}
-                            className="flex items-center gap-2 bg-white/6 hover:bg-white/10 text-white/70 hover:text-white px-6 py-3 rounded-xl border border-white/10 transition-all"
-                        >
-                            Access Picota
-                            <ChevronRight className="w-4 h-4"/>
                         </button>
                     </div>
                 </div>
