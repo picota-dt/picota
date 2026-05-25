@@ -9,25 +9,37 @@ Picota is a **model-driven pipeline** to engineer and deploy **inference-capable
 
 ## What Picota does
 
-Given a Picota DSML model (authored in Quassar) and an input dataset, Picota:
-1. Compiles the model into training + validation artifacts (including MR loss terms and MR checks).
-2. Trains inference models (neural core implemented in **PyTorch**) for the specified targets.
-3. Evaluates and generates an **evaluation report** (PDF) with **MAE/MSE** per predicted variable and feature influence information.
-4. Packages deployable inference services (HTTP endpoints) and, optionally, exposes **AAS-aligned** descriptors and quality indicators.
+Picota provides an end-to-end workflow to define digital twins and train inference engines from the **Picota interface**:
+1. Define and version the twin model in the **Model** tab.
+2. Upload subject datasets in the **Data** tab.
+3. Configure the inference engine in the **Inference Engine** tab (KAN/TabNet, epochs, learning rate, window size, batch size).
+4. Launch asynchronous training jobs and track status (`queued`, `preparing`, `training`, `evaluating`, `done`, `failed`).
+5. Store and expose training results in the UI (for example MAE/R2 and constraint-violation indicators) and use the trained engine for inference and retraining scheduling.
+
+Operationally, Picota backend orchestrates the workflow and delegates training/inference execution to `picota-ml` (PyTorch runtime service).
+
+---
+
+## Metamodel
+
+The Picota **metamodel/DSML** is described in **Quassar**.
+
+- Quassar: https://quassar.io/models/metta/u1Au7USg/
+
+The modeling and training workflow for case studies is executed in the Picota UI.
 
 ---
 
 ## Requirements
 
-Picota is intended to run on a **GPU-enabled runtime**.
+### Core stack
+- Java: **21** (backend)
+- Python: **3.12** + PyTorch **2.7.0** (`picota-ml`)
+- Node.js + npm (frontend build/dev)
 
-### Stack
-- Java: **21**
-- Python: **3.12**
-- PyTorch: **2.7.0**
-- Docker Engine + NVIDIA Container Toolkit (for GPU access)
-
-> For consistent reproducibility, Picota is packaged and executed via Docker.
+### Optional (for faster training)
+- NVIDIA GPU runtime
+- Docker + NVIDIA Container Toolkit
 
 ---
 
@@ -41,45 +53,71 @@ cd picota
 git checkout 1.3.11
 ```
 
-### 2) Build the Docker image
-
-Picota provides a helper script:
+### 2) Build frontend assets for backend serving
 
 ```bash
-./docker-build
+cd frontend
+npm install
+npm run build
 ```
 
-This produces a Docker image containing both:
-- the Java orchestration layer, and
-- the Python (torch) neural core.
-
-> If your environment requires a specific CUDA runtime, follow the CUDA/base-image instructions in this repository (or in the Dockerfile).
+This writes static assets to `backend/res/webapp`, which are served by the backend.
 
 ---
 
 ## Run (case studies)
 
-Picota is designed to be executed as part of the workflow used in the paper case studies:
+### Recommended workflow (Picota UI)
 
-1) Go to **https://quassar.io**  
-2) Open a case-study model (`model.tara`) from `picota-artifacts`  
-3) Deploy it to Picota  
-4) Provide the dataset (when applicable) and run training/evaluation
+1) Start the ML runtime service:
+
+```bash
+cd picota-ml
+pip install -r requirements
+python -m picota.picota_service --host 0.0.0.0 --port 8090 --workspace-dir ../temp/training-workspace
+```
+
+2) Start backend (configured to call `picota-ml` on port `8090` via `backend/sandbox/application.properties`):
+
+```bash
+cd backend
+mvn -DskipTests package
+java -jar ../out/build/backend/picota.jar sandbox/application.properties
+```
+
+3) Open Picota in the browser:
+
+- http://localhost:8080
+
+4) Run the case study from Picota UI:
+
+- Create/open the twin
+- Define/update the model in **Model**
+- Upload the dataset in **Data**
+- Configure algorithm/hyperparameters in **Inference Engine**
+- Launch training and review results
 
 See: https://github.com/picota-dt/picota-artifacts
 
 ### Outputs
 For each case study, Picota generates:
 
-- `study_cases/<case-name>/report.pdf` — evaluation report (MAE/MSE per predicted variable + feature influence)
-- deployable inference endpoints (service runtime)
-- runtime quality indicators (including MR violation indicators when defined in the model)
+- Training job history and progress in the UI
+- Engine quality results (for example MAE/R2 and constraint violations, depending on the target type)
+- Persisted training tickets and artifacts in the `picota-ml` workspace:
+  - `<workspace>/<case_id>/tickets/<ticket_id>/`
+  - For backend-launched runs, `case_id` is typically `default`
+
+### API/debug workflow (optional)
+
+`picota-ml` also exposes direct HTTP APIs for training/inference and case-centric dataset management.  
+Reference: `picota-ml/picota/API_CONTRACT.md` and `picota-ml/picota/openapi.yaml`.
 
 ---
 
 ## GPU runtime notes
 
-To use GPU inside Docker, your host must have:
+To use GPU acceleration, your host should have:
 - NVIDIA GPU driver installed
 - NVIDIA Container Toolkit installed
 
@@ -94,34 +132,26 @@ docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 
 ## Project structure (high level)
 
-> Names may vary; adjust if your repository structure differs.
-
-- `docker-build` — build helper
-- `Dockerfile` / docker build assets
-- Java modules (DT orchestration, packaging, runtime)
-- Python modules (torch training/inference, feature influence reporting)
-- Integration modules (HTTP endpoints, optional AAS layer)
+- `frontend/` — Picota web UI
+- `backend/` — Picota backend API + UI serving + orchestration
+- `picota-ml/` — Python training/inference runtime service
+- `temp/` — local runtime/workspace data (depending on configuration)
 
 ---
 
 ## Troubleshooting
 
-### Docker builds but no GPU is available
-- Verify `nvidia-smi` works on the host.
-- Verify `docker run --gpus all ...` works (see GPU notes above).
-- Ensure Docker is using the NVIDIA runtime.
+### Backend starts but training does not launch
+- Check `app.training.api.base-url` in `backend/sandbox/application.properties`.
+- Ensure `picota-ml` is running and reachable (default in sandbox config: `http://localhost:8090`).
 
-### Model deploy works but dataset ingestion fails
-- Confirm the dataset format matches the variables defined in the DSML model.
-- For TSV datasets: confirm there is a header row and tab separators.
-- Rows containing blank/empty values may be discarded depending on ingestion rules.
+### Training starts but fails during data preparation
+- Confirm datasets include required temporal and target columns configured in the model.
+- Re-upload the dataset if backend indicates missing stored file.
 
-### Where is the evaluation report?
-Picota writes the PDF report for each case to:
-
-- `study_cases/<case-name>/report.pdf`
-
-(See the artifacts repository for case-study folders.)
+### Where are training artifacts?
+- In `picota-ml` workspace under `<workspace>/<case_id>/tickets/<ticket_id>/`.
+- With the command above, workspace is `temp/training-workspace`.
 
 ---
 
@@ -137,16 +167,3 @@ Add your license here (or link to `LICENSE`).
 - Please use GitHub Issues in this repository for software-related questions.
 
 ---
-
-## Citation
-
-If you use Picota in academic work, please cite the Picota paper (to be updated once published):
-
-```bibtex
-@inproceedings{picota2026,
-  title     = {Picota: ...},
-  author    = {...},
-  booktitle = {MODELS Practice Track},
-  year      = {2026}
-}
-```
