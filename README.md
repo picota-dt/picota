@@ -30,6 +30,20 @@ The modeling and training workflow for case studies is executed in the Picota UI
 
 ---
 
+## Screenshots
+
+### Picota UI
+
+![Picota UI](doc/screenshots/index.png)
+
+### Metamodel
+
+![Metamodel 1](doc/screenshots/metamodel1.png)
+
+![Metamodel 2](doc/screenshots/metamodel2.png)
+
+---
+
 ## Requirements
 
 ### Core stack
